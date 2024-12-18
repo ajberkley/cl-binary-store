@@ -50,7 +50,6 @@ ub62, and ub64 (all these being supported by SBCL).
 Simple-strings are not currently compactly stored (they are stored raw as 32 bits per
 element, not as UTF-8, but I will fix that soon).
 
-hash-tables are not supported yet
 conditions are not supported yet
 maybe packages and metaclasses
 

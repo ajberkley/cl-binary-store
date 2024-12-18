@@ -168,3 +168,19 @@
     (is 'equalp
 	(restore-from-vector (store-to-vector a))
 	a)))
+
+(define-test test-hash-table
+  (let* ((ht (make-hash-table :test 'equalp))
+	 (kvs (list (cons 1234 t)
+		    (cons "blarg" 5668d0)
+		    (cons (list 7d0) (vector 1 2 3))
+		    (cons (vector (/ 3 4)) 17d0))))
+    (map nil (lambda (x)
+	       (setf (gethash (car x) ht) (cdr x)))
+	 kvs)
+    (let ((ht-restore (restore-from-vector (store-to-vector ht))))
+      (maphash (lambda (k v)
+		 (equalp (gethash k ht-restore) v))
+	       ht))))
+
+	 

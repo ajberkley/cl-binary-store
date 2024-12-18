@@ -81,6 +81,8 @@
 (defconstant +unbound-code+ (register-code 28 'restore-unbound 'store-unbound))
 
 (defconstant +pathname-code+ (register-code 29 'restore-pathname 'store-pathname 'pathname))
+
+(defconstant +hash-table-code+ (register-code 30 'restore-hash-table 'store-hash-table 'hash-table))
 ;; Special for me
 (defconstant +4-long-sb8-code+
   (register-code 99 'restore-4-long-sv-sb8 'store-4-long-sv-sb8
