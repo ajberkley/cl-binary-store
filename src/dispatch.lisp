@@ -23,17 +23,33 @@
   (defun restore-object (storage &optional (tag (restore-ub8 storage t)))
     (declare (notinline read-dispatch))
     (read-dispatch tag storage))
+
+  (defun strict-subtype-ordering (type-specs &key (key #'identity))
+    (let* ((type-groups '(number cons symbol array structure-object standard-object t))
+	   (groups (make-array (length type-groups) :initial-element nil)))
+      (loop for item in type-specs
+	    do (loop for count below (length type-groups)
+		     for type-group in type-groups
+		     until (subtypep (funcall key item) type-group)
+		     finally
+			(push item (svref groups count))))
+      (loop for g across groups
+	    appending (stable-sort (reverse g) #'subtypep :key key))))
   
   (defun make-store-object ()
     `(progn
        (declaim (sb-ext:maybe-inline store-object))
        (defun store-object (value storage)
 	 (etypecase value
-           ,@(sort (loop for type-spec being the hash-keys of *code-store-info*
+	   ;; We need to order these by subtypep, a simple sort won't work
+	   ;; because we have disjoint sets.  So first, we have to sort into
+	   ;; disjoint sets, then sort, then recombine.
+           ,@(strict-subtype-ordering
+	      (loop for type-spec being the hash-keys of *code-store-info*
 			 for func = (gethash type-spec *code-store-info*)
 			 collect (list type-spec
 				       (list func 'value 'storage)))
-	      #'subtypep :key #'first)))))
+	      :key #'first)))))
   
   (defmacro eval-make-store-object ()
     `,(make-store-object))
