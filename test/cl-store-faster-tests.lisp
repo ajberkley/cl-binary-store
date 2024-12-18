@@ -115,9 +115,10 @@
 
 (define-test test-struct-circular
   (let ((s (list (make-blarg :a 1234 :b 1d0 :d (make-array 5 :initial-element "hi"))
-		 (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo")))))
+		 (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo"))))
+	(cl-store-faster:*support-shared-list-structures* t))
     (setf (blarg-a (second s)) (first s))
-    (setf (blarg-a (first s)) (second s))
+    (setf (blarg-a (first s)) (second s)) ;; <-- this is pointing at middle of s
     (let ((result (restore-from-vector (store-to-vector s))))
       (is 'eql (blarg-a (first result)) (second result))
       (is 'eql (blarg-a (second result)) (first result))

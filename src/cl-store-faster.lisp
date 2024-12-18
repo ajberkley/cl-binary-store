@@ -17,7 +17,7 @@
 
  Extending this with your own serializer / deserializer is straightforward as it is
  expected that the default standard-object and structure-object serialization may
- not meet everyones needs.  Just look at the code in 
+ not meet everyones needs.
 
  All number types are supported, but we provide specialized compact writers for:
   ub8, ub16, ub32, ub64, fixnum, single-float, double-float

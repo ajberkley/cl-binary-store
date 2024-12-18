@@ -3,7 +3,7 @@
 
 ;; UH OH WE BROKE CIRCULARITY DETECTION EVEN WHEN THIS IS T WITH
 ;; THE ADDITIONAL PASS
-(defparameter *support-shared-list-structures* nil
+(defparameter *support-shared-list-structures* t
   "If this is T, then circular lists of all types and structures that
  share list parts will be serialized correctly.  This is very
  expensive.  When this is NIL, only the heads of lists may be multiply
@@ -25,28 +25,29 @@
 
  STORAGE can be NIL, in which case we should do no writing to it but we want to
  traverse the lists anyway to count references."
-  (tagbody
-   next-cdr
-     (or (and referrable-or-possibly-circular-p
-	      (check/store-reference cons storage))
-	 (progn
-	   (when storage
-	     (ensure-enough-room storage 3)
-	     (let ((offset (storage-offset storage))
-		   (array (storage-store storage)))
-	       (when tagged
-		 (setf (aref array offset) +cons-code+)
-		 (setf (storage-offset storage) (+ 1 offset)))))
-	   (store-object (car cons) storage)
-	   (let ((cdr (cdr cons)))
-	     (if (not (consp cdr))
-		 (store-object cdr storage)
-		 (progn ;; optimize for proper lists
-		   (setf tagged t cons cdr
-			 referrable-or-possibly-circular-p
-			 (and referrable-or-possibly-circular-p
-			      *support-shared-list-structures*))
-		   (go next-cdr))))))))
+  (let ((support-shared-list-structures *support-shared-list-structures*))
+    (tagbody
+     next-cdr
+       (or (and referrable-or-possibly-circular-p
+		(check/store-reference cons storage))
+	   (progn
+	     (when storage
+	       (ensure-enough-room storage 3)
+	       (let ((offset (storage-offset storage))
+		     (array (storage-store storage)))
+		 (when tagged
+		   (setf (aref array offset) +cons-code+)
+		   (setf (storage-offset storage) (+ 1 offset)))))
+	     (store-object (car cons) storage)
+	     (let ((cdr (cdr cons)))
+	       (if (not (consp cdr))
+		   (store-object cdr storage)
+		   (progn ;; optimize for proper lists
+		     (setf tagged t cons cdr
+			   referrable-or-possibly-circular-p
+			   (and referrable-or-possibly-circular-p
+				support-shared-list-structures))
+		     (go next-cdr)))))))))
 
 (declaim (inline restore-cons))
 ;; Has to be careful to not blow the stack

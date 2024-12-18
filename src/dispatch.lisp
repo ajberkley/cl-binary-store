@@ -41,7 +41,9 @@
     (make-array 256 :initial-element (lambda (&rest rest)
 				       (declare (ignore rest))
 				       (error "undefined dispatch slot"))))
-
+  (defvar *store-dispatch-table-names*
+    (make-array 256)
+    "For debugging, names of each code type")
   (declaim (type vector *dispatch*))
   (defvar *dispatch* (make-array 0)
     "A UB8 extendable array holding the codes of objects to be stored in order (until we
@@ -66,17 +68,19 @@
        
        ;; We can't inline store-object
        (defun store-object/storage (value storage)
-	 (declare (optimize speed safety))
+	 (declare (optimize (debug 3);; speed safety
+			    ))
 	 ;; if STORAGE is nil, we want to build up a dispatch set
 	 (if *do-explicit-reference-pass*
-	     (prog1
-		 (let ((index *dispatch-index*))
-		   (format t "Dispatching to code ~A~%" (aref *dispatch* index))
-		   (setf *dispatch-index* (+ 1 index))
-		   (funcall (the function
-				 (svref *store-dispatch-table* (aref *dispatch* index)))
-			  value storage))
-	       (incf (the fixnum *dispatch-index*)))
+	     (let ((index *dispatch-index*))
+	       #+debug-csf (format t "Dispatching to code ~A: ~A~%"
+				   (aref *dispatch* index)
+				   (svref *store-dispatch-table-names*
+					  (aref *dispatch* index)))
+	       (setf *dispatch-index* (+ 1 index))
+	       (funcall (the function
+			     (svref *store-dispatch-table* (aref *dispatch* index)))
+			value storage))
 	     (etypecase value
 	       ;; We need to order these by subtypep, a simple sort won't work
 	       ;; because we have disjoint sets.  So first, we have to sort into
@@ -98,7 +102,8 @@
 	      (loop for type-spec being the hash-keys of *code-store-info*
 		    for idx fixnum from 0
 		    for func = (gethash type-spec *code-store-info*)
-		    do (setf (svref *store-dispatch-table* idx)
+		    do (setf (svref *store-dispatch-table-names* idx) func)
+		       (setf (svref *store-dispatch-table* idx)
 			     (compile nil `(lambda (value storage)
 					     (funcall ',func value storage) ; debug
 					     ;; (,func value storage) ; normal
@@ -125,7 +130,7 @@
     (eval (make-store-object))
     (eval (make-read-dispatch)))
 
-  (defvar *do-explicit-reference-pass* t)
+  (defparameter *do-explicit-reference-pass* t)
   
   (defun store-objects (storage &rest stuff)
     (declare (inline store-object)) ;; can't inline it here which sux
@@ -134,8 +139,9 @@
 					 ))
 	  (*struct-info* (make-hash-table :test 'eql))
 	  (*dispatch*
-	    (when *do-explicit-reference-pass*
-	      (make-array 1024 :element-type '(unsigned-byte 8) :fill-pointer 0 :adjustable t))))
+	    (if *do-explicit-reference-pass*
+	      (make-array 1024 :element-type '(unsigned-byte 8) :fill-pointer 0 :adjustable t)
+	      *dispatch*)))
       ;; I guess we could also record the objects?  Hm... not worth the space costs I don't
       ;; think.  But... hm...
       ;; First reference pass and dispatch compilation

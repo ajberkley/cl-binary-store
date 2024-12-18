@@ -165,15 +165,15 @@
      (if ref-idx
 	 ;; We will have to write a reference tag out in front of
 	 ;; this object if we have not stored a reference for it
-	 ;; yet.  The way we signal that is that the ref-index
+	 ;; yet.  The way we signal that is that the ref-idx
 	 ;; is negative if we haven't written it out.
 	 (cond
 	   ((>= ref-idx 0)
 	    (store-reference ref-idx storage)
 	    t)
 	   (t
-	    #+debug-csf (format t "Updating reference id from ~A to ~A~%"
-				ref-index (- ref-index))
+	    #+debug-csf (format t "Updating reference id from ~A to ~A for a ~A~%"
+				ref-idx (- ref-idx) (type-of value))
 	    (setf ref-idx (- ref-idx))
 	    (store-reference-id-for-following-object ref-idx storage)
 	    (setf (gethash value ht) ref-idx)
@@ -182,12 +182,12 @@
 	   (let ((assigned-ref-idx (hash-table-count ht)))
 	     #+debug-csf
  	     (let ((*print-circle* t))
-	       (format t "Assigning reference id ~A to ~S (~A)~%" ref-index value
+	       (format t "Assigning reference id ~A to ~S (~A)~%" ref-idx value
 		       (type-of value)))
 	     (setf (gethash value ht) assigned-ref-idx)
 	     nil))))
     (t
-     ;; first reference collection pass, no ref-index assigned yet,
+     ;; first reference collection pass, no ref-idx assigned yet,
      ;; just keeping track of how many times an object is referenced
      ;; eventually HT will be thread local, but for now this is fine.
      (setf (gethash value ht) (+ 1 (or ref-idx 0)))
@@ -207,7 +207,6 @@
   (if *references-already-fixed*
       (values value -1)
       (let ((len (length refs)))
-	(break)
 	#+debug-csf
 	(let ((*print-circle* t))
 	  (format t "Recording reference id ~A as ~S ~%" len (if value value :delayed)))
