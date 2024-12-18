@@ -27,15 +27,23 @@
 		  (rehash-size (restore-object storage))
 		  #+sbcl(synchronized (restore-object storage))
 		  #+sbcl(weakness (restore-object storage)))
+	      ;; weakness works as far as I can discern
+	      ;; because of how we do reference restoration
 	      (make-hash-table :test test :size size
 			       :rehash-size rehash-size
 			       :rehash-threshold rehash-threshold
 			       #+sbcl :synchronized #+sbcl synchronized
 			       #+sbcl :weakness #+sbcl weakness)))))
+    ;; the keys may not be fully reified yet, so we need to
+    ;; potentially delay these settings.  Actually worse than this
+    ;; everything referred to by the KEY must be re-ified, if this is
+    ;; a non-eql hash table.  As far as I can tell, while Common Lisp
+    ;; allows some insanely build order dependent situations with
+    ;; EQUALP hash tables, but there is no way to discover or
+    ;; reproduce that at serialization or deserialization time.
     (dotimes (i hash-table-count)
-      (let ((key (restore-object storage))
-	    (value (restore-object storage)))
-	(setf (gethash key ht) value)))
+      (let ((key (restore-object storage)))
+	(restore-object-to (gethash key ht) storage)))
     ht))
 			       
 			       
