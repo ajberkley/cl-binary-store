@@ -4,13 +4,19 @@
 ;; (clear-cached-tables) if you happen
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+    (defvar *restore-dispatch-table-names*
+      (make-array 256)
+      "For debugging, names of each code type")
   (defun make-read-dispatch ()
     `(progn
        (declaim (sb-ext:maybe-inline read-dispatch))
        (defun read-dispatch (code storage)
+	 #+debug-csf (format t "Restoring from code ~A: ~A~%" code
+			     (svref *restore-dispatch-table-names* code))
 	 (case code
            ,@(loop for elt fixnum from 0
                    for value across *code-restore-info*
+		   do (setf (svref *restore-dispatch-table-names* elt) value)
                    when value
                      collect (list elt (list value 'storage)))))))
   
@@ -167,6 +173,7 @@
 
       (let ((*references-already-fixed* *do-explicit-reference-pass*)
 	    (*dispatch-index* 0))
+	#+debug-csf (format t "Compiled dispatch info for ~A objects~%" (length *dispatch*))
 	(dolist (elt stuff)
 	  (store-object/storage elt storage)))
       (flush-storage storage)))

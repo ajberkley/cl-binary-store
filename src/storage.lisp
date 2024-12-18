@@ -23,6 +23,11 @@
 			 (:conc-name storage-))
   (max 0 :type fixnum))
 
+(defmethod print-object ((rs read-storage) stream)
+  (print-unreadable-object (rs stream :type t :identity t)
+    (format stream "OFFSET: ~A MAX: ~A STORE: ~A"
+	    (storage-offset rs) (storage-max rs) (storage-store rs))))
+
 (defun storage-size (storage)
   (length (storage-store storage)))
 
@@ -69,7 +74,7 @@
     (if (< storage-end bytes)
         (if return-nil-on-eof
 	    nil
-            (error 'end-of-data))
+            (error 'end-of-data :format-control "Out of data"))
         t)))
 
 (declaim (inline ensure-enough-data))
