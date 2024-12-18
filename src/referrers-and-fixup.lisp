@@ -1,5 +1,8 @@
 (in-package :cl-store-faster)
 
+
+;; (pushnew :debug-csf *features*)
+;; (setf *features* (delete :debug-csf *Features*))
 ;; Referrers are used to handle circularity (in lists, non-specialized
 ;; vectors, structure-classes and standard-classes).  Referrers are
 ;; implicitly created during serialization and deserialization.
@@ -71,52 +74,56 @@
 	    (setf (gethash value ht) ref-index)
 	    nil)))))
 
+;; RESTORATION WORK
+
 (declaim (inline record-reference))
 (defun record-reference (value &aux (ht *references*))
-  #+debug-csf
-  (let ((*print-circle* t))
-    (format t "Recording reference id ~A as ~S~%" (hash-table-count ht) value))
-  (let ((count (hash-table-count ht)))
-    (setf (gethash count ht) value)
-    (values value count)))
+  "This is used during RESTORE.  Here we keep track of a global count of
+ references"
+  (let ((len (length ht)))
+    #+debug-csf
+    (let ((*print-circle* t))
+      (format t "Recording reference id ~A as ~S~%" len (if value value "delayed")))
+    (vector-push-extend value ht)
+    (values value len)))
 
 (declaim (inline update-reference))
 (defun update-reference (ref-id value)
+  "Used during RESTORE"
   #+debug-csf
   (let ((*print-circle* t))
     (format t "Updating reference id ~A to ~S~%" ref-id value))
-  (values (setf (gethash ref-id *references*) value)))
+  (values (setf (aref *references* ref-id) value)))
 
 (defun invalid-referrer (ref-idx)
   (cerror "skip" (format nil "reference index ~A does not refer to anything!" ref-idx)))
 
+(declaim (inline get-reference))
+(defun get-reference (ref-id)
+  (or (aref *references* ref-id) (invalid-referrer ref-id)))
+
 (declaim (inline restore-referrer))
 (defun restore-referrer (storage)
-  (let* ((ref-idx (restore-object storage))
-	 (value (gethash ref-idx *references*)))
-    (or value (invalid-referrer ref-idx))))
+  "Used during RESTORE"
+  (get-reference (restore-object storage)))
 
 (declaim (inline restore-referrer-ub8))
 (defun restore-referrer-ub8 (storage)
-  (let* ((ref-idx (restore-ub8 storage))
-	 (value (gethash ref-idx *references*)))
-    (or value (invalid-referrer ref-idx))))
+  (get-reference (restore-ub8 storage)))
 
 (declaim (inline restore-referrer-ub16))
 (defun restore-referrer-ub16 (storage)
-  (let* ((ref-idx (restore-ub16 storage))
-	 (value (gethash ref-idx *references*)))
-    (or value (invalid-referrer ref-idx))))
+  (get-reference (restore-ub16 storage)))
 
 (declaim (inline restore-referrer-ub32))
 (defun restore-referrer-ub32 (storage)
-  (let* ((ref-idx (restore-ub32 storage))
-	 (value (gethash ref-idx *references*)))
-    (or value (invalid-referrer ref-idx))))
+  (get-reference (restore-ub32 storage)))
 
-;; Due to circularities with objects that cannot be constructed
-;; before they are populated (displaced arrays) we need to be
-;; able to fix-up references after the objects are finally constructed
+;; During restoring, we cannot always construct objects before we have
+;; restored a bunch of other information (for example building displaced
+;; arrays).  So we need to be able to fix-up references to the not yet built
+;; object (which may have been restored while determining how to build the
+;; object).
 
 (declaim (inline fixup-p make-fixup fixup-list fixup-ref-id))
 (defstruct fixup

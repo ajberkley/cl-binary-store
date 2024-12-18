@@ -70,7 +70,7 @@
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all the elements."
-    (let ((*references* (make-hash-table :test 'eql)))
+    (let ((*references* (make-array 1000 :adjustable t :fill-pointer 0)))
       (let ((result
 	      (loop for code = (restore-ub8 storage t)
 		    while code

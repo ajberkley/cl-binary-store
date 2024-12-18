@@ -40,4 +40,6 @@
    #:store-to-stream
    #:restore-from-vector
    #:store-to-vector
-   #:end-of-data))
+   #:end-of-data
+   #:store-to-file
+   #:restore-from-file))

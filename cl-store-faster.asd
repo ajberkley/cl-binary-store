@@ -12,16 +12,20 @@
 	       (:file "unsigned-bytes" :depends-on ("storage"))
 	       (:file "numbers" :depends-on ("unsigned-bytes"))
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes"))
-	       (:file "cons" :depends-on ("referrers-and-fixup"))
+	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"))
 	       (:file "sbcl-utilities" :if-feature :sbcl)
-	       (:file "simple-array-sbcl" :if-feature :sbcl)
+	       (:file "simple-array-sbcl" :if-feature :sbcl
+		:depends-on ("referrers-and-fixup" "numbers"))
 	       (:file "simple-vector" :depends-on ("unsigned-bytes" "referrers-and-fixup"))
-	       (:file "symbols" :depends-on ("unsigned-bytes"))
-	       (:file "array" :depends-on ("unsigned-bytes" "cons" "symbols"
+	       (:file "symbols" :depends-on ("unsigned-bytes" "referrers-and-fixup"))
+	       (:file "array" :depends-on ("unsigned-bytes" "cons" "symbols" "numbers"
 							    "referrers-and-fixup"))
-	       (:file "pathname")
-	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup"))
+	       (:file "pathname" :depends-on ("referrers-and-fixup" "symbols" "numbers"
+								    "unsigned-bytes"))
+	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes"))
+	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes"))
 	       (:file "dispatch" :depends-on ("codes" "array" "symbols" "simple-vector" "cons"
+						      "hash-table"
 						      "referrers-and-fixup" "numbers" "pathname"
 						      "unsigned-bytes" "objects")))
   :license :BSD-3
