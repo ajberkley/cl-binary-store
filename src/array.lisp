@@ -7,7 +7,9 @@
   (let* ((has-fill-pointer (restore-object storage))
 	 (fill-pointer (when has-fill-pointer (restore-object storage)))
 	 (adjustable (restore-object storage))
-	 (dimensions (restore-cons storage nil))
+	 (array-rank (restore-object storage)) ;; restore tagged integer
+	 ;; restore tagged integers
+	 (dimensions (loop repeat array-rank collect (restore-object storage)))
 	 (displaced (restore-object storage)))
     (if displaced
 	(with-delayed-reference/fixup
@@ -38,19 +40,23 @@
   (declare (optimize speed safety) (type array array))
   (maybe-store-reference-instead (array storage)
     ;; (format t "Storing array of type ~A~%" (type-of array))
-    (store-ub8 +array+ storage nil)
-    (cond
-      ((array-has-fill-pointer-p array)
-       (store-t storage)
-       (store-tagged-unsigned-integer (fill-pointer array) storage))
-      (t
-       (store-nil storage)))
-    (store-boolean (adjustable-array-p array) storage)
-    ;; Array-dimensions cannot be shared, so don't create references
-    (store-cons (array-dimensions array) storage nil nil)
+    (when storage
+      (store-ub8 +array+ storage nil)
+      (cond
+	((array-has-fill-pointer-p array)
+	 (store-t storage)
+	 (store-tagged-unsigned-integer (fill-pointer array) storage))
+	(t
+	 (store-nil storage)))
+      (store-boolean (adjustable-array-p array) storage)
+      ;; Array-dimensions cannot be shared, so don't create references
+      (let ((array-dimensions (array-dimensions array)))
+	(store-ub8 (length array-dimensions) storage nil)
+	(dolist (a array-dimensions)
+	  (store-tagged-unsigned-integer (the fixnum a) storage))))
     (multiple-value-bind (next-array offset)
 	(array-displacement array)
-      (store-boolean next-array storage)
+      (when storage (store-boolean next-array storage))
       ;; element type may be a reference, so we store it after determining
       ;; the array displacement which allows the restore side to register
       ;; the reference for the array either as a delayed/fixup or by

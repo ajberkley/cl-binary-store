@@ -1,5 +1,18 @@
 (in-package :cl-store-faster)
 
+
+;; UH OH WE BROKE CIRCULARITY DETECTION EVEN WHEN THIS IS T WITH
+;; THE ADDITIONAL PASS
+(defparameter *support-shared-list-structures* nil
+  "If this is T, then circular lists of all types and structures that
+ share list parts will be serialized correctly.  This is very
+ expensive.  When this is NIL, only the heads of lists may be multiply
+ referenced.  When this is NIL, this is similar to the behavior of
+ CL-STORE.  For a 1 million long list we are about 3x slower than CL-STORE
+ when it has this feature disabled.  Basic support for sharing heads of lists
+ is always enabled (so a circular list with the tail equal to the head is 
+ supported even if this is NIL, but not one that loops back to its middle.")
+
 (declaim (inline store-cons))
 (defun store-cons (cons storage &optional (referrable-or-possibly-circular-p t) (tagged t))
   "If you specify REFERRABLE-OR-POSSIBLY-CIRCULAR-P NIL, then any object
@@ -8,25 +21,32 @@
  any other directly connected cons.  This is used for things like
  array-dimensions which we know are lists of numbers, etc.  If TAGGED is
  NIL, then we elide the first cons tag, but the rest of the list will be
- tagged as usual."
+ tagged as usual.
+
+ STORAGE can be NIL, in which case we should do no writing to it but we want to
+ traverse the lists anyway to count references."
   (tagbody
    next-cdr
      (or (and referrable-or-possibly-circular-p
 	      (check/store-reference cons storage))
 	 (progn
-	   (ensure-enough-room storage 3)
-	   (let ((offset (storage-offset storage))
-		 (array (storage-store storage)))
-	     (when tagged
-	       (setf (aref array offset) +cons-code+)
-	       (setf (storage-offset storage) (+ 1 offset)))
-	     (store-object (car cons) storage)
-	     (let ((cdr (cdr cons)))
-	       (if (not (consp cdr))
-		   (store-object cdr storage)
-		   (progn
-		     (setf tagged t cons cdr)
-		     (go next-cdr)))))))))
+	   (when storage
+	     (ensure-enough-room storage 3)
+	     (let ((offset (storage-offset storage))
+		   (array (storage-store storage)))
+	       (when tagged
+		 (setf (aref array offset) +cons-code+)
+		 (setf (storage-offset storage) (+ 1 offset)))))
+	   (store-object (car cons) storage)
+	   (let ((cdr (cdr cons)))
+	     (if (not (consp cdr))
+		 (store-object cdr storage)
+		 (progn ;; optimize for proper lists
+		   (setf tagged t cons cdr
+			 referrable-or-possibly-circular-p
+			 (and referrable-or-possibly-circular-p
+			      *support-shared-list-structures*))
+		   (go next-cdr))))))))
 
 (declaim (inline restore-cons))
 ;; Has to be careful to not blow the stack

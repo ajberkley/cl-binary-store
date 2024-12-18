@@ -18,14 +18,15 @@
  then will store a tag +UB8-CODE+ to storage first.  Omit TAG if your
  deserializer will know this is a UB8 value."
   (declare (optimize speed safety))
-  (ensure-enough-room storage 2)
-  (let ((array (storage-store storage))
-	(offset (storage-offset storage)))
-    (when tag
-      (setf (aref array offset) +ub8-code+)
-      (incf offset))
-    (setf (aref array offset) ub8)
-    (setf (storage-offset storage) (incf offset))))
+  (when storage
+    (ensure-enough-room storage 2)
+    (let ((array (storage-store storage))
+	  (offset (storage-offset storage)))
+      (when tag
+	(setf (aref array offset) +ub8-code+)
+	(incf offset))
+      (setf (aref array offset) ub8)
+      (setf (storage-offset storage) (incf offset)))))
 
 (declaim (inline restore-ub16))
 (defun restore-ub16 (storage)
@@ -44,31 +45,33 @@
  emit +UB16-CODE+ to STORAGE first.  Set TAG NIL if the deserializer will
  know from the context that the value is a UB16 to save a byte."
   (declare (optimize speed safety) (type (unsigned-byte 16) ub16))
-  (ensure-enough-room storage 3)
-  (let ((offset (storage-offset storage))
-        (array (storage-store storage)))
-    (declare (type (unsigned-byte 60) offset))
-    (when tag
-      (setf (aref array offset) +ub16-code+)
-      (incf offset))
-    (setf (aref array offset) (logand ub16 255))
-    (setf (aref array (incf offset)) (ash ub16 -8))
-    (setf (storage-offset storage) (incf offset))))
+  (when storage
+    (ensure-enough-room storage 3)
+    (let ((offset (storage-offset storage))
+          (array (storage-store storage)))
+      (declare (type (unsigned-byte 60) offset))
+      (when tag
+	(setf (aref array offset) +ub16-code+)
+	(incf offset))
+      (setf (aref array offset) (logand ub16 255))
+      (setf (aref array (incf offset)) (ash ub16 -8))
+      (setf (storage-offset storage) (incf offset)))))
 
 (declaim (inline restore-ub32))
 (defun restore-ub32 (storage)
   "Restore a (unsigned-byte 32) from STORAGE which has previously been stored
  by STORE-UB32."
   (declare (optimize speed safety))
-  (ensure-enough-data storage 4)
-  (let ((offset (storage-offset storage))
-        (array (storage-store storage)))
-    (declare (type (unsigned-byte 60) offset))
-    (setf (storage-offset storage) (+ 4 offset))
-    (+ (aref array offset)
-       (ash (aref array (incf offset)) 8)
-       (ash (aref array (incf offset)) 16)
-       (ash (aref array (incf offset)) 24))))
+  (when storage
+    (ensure-enough-data storage 4)
+    (let ((offset (storage-offset storage))
+          (array (storage-store storage)))
+      (declare (type (unsigned-byte 60) offset))
+      (setf (storage-offset storage) (+ 4 offset))
+      (+ (aref array offset)
+	 (ash (aref array (incf offset)) 8)
+	 (ash (aref array (incf offset)) 16)
+	 (ash (aref array (incf offset)) 24)))))
 
 (declaim (inline store-ub32))
 (defun store-ub32 (ub32 storage &optional (tag t))
@@ -76,18 +79,19 @@
  emit +UB32-CODE+ to STORAGE first.  Set TAG NIL if the deserializer will
  know from the context that the value is a UB32 to save a byte."
   (declare (optimize speed safety) (type (unsigned-byte 32) ub32))
-  (ensure-enough-room storage 5)
-  (let ((offset (storage-offset storage))
-        (array (storage-store storage)))
-    (declare (type (unsigned-byte 60) offset))
-    (when tag
-      (setf (aref array offset) +ub32-code+)
-      (incf offset))
-    (setf (aref array offset) (logand ub32 255))
-    (setf (aref array (incf offset)) (logand (ash ub32 -8) 255))
-    (setf (aref array (incf offset)) (logand (ash ub32 -16) 255))
-    (setf (aref array (incf offset)) (ash ub32 -24))
-    (setf (storage-offset storage) (incf offset))))
+  (when storage
+    (ensure-enough-room storage 5)
+    (let ((offset (storage-offset storage))
+          (array (storage-store storage)))
+      (declare (type (unsigned-byte 60) offset))
+      (when tag
+	(setf (aref array offset) +ub32-code+)
+	(incf offset))
+      (setf (aref array offset) (logand ub32 255))
+      (setf (aref array (incf offset)) (logand (ash ub32 -8) 255))
+      (setf (aref array (incf offset)) (logand (ash ub32 -16) 255))
+      (setf (aref array (incf offset)) (ash ub32 -24))
+      (setf (storage-offset storage) (incf offset)))))
 
 (declaim (inline store-tagged-unsigned-integer))
 (defun store-tagged-unsigned-integer (integer storage)

@@ -91,9 +91,11 @@
 (declaim (inline ensure-enough-room))
 (defun ensure-enough-room (storage bytes)
   "Ensure that we have room to write BYTES to STORAGE"
-  (declare (optimize speed safety) (type fixnum bytes))
-  (or (< (the fixnum (+ (storage-offset storage) bytes)) (storage-size storage))
-      (flush-writer storage bytes)))
+  (declare (optimize speed safety))
+  (or (not storage)
+      (locally (declare (type fixnum bytes))
+	(or (< (the fixnum (+ (storage-offset storage) bytes)) (storage-size storage))
+	    (flush-writer storage bytes)))))
 
 ;; User facing
 

@@ -50,6 +50,10 @@
 (defconstant +referrer-ub16-code+ (register-code 17 'restore-referrer-ub16))
 (defconstant +referrer-ub32-code+ (register-code 19 'restore-referrer-ub32))
 (defconstant +referrer-code+ (register-code 20 'restore-referrer))
+(defconstant +record-reference-ub8-code+ (register-code 40 'restore-reference-id-ub8))
+(defconstant +record-reference-ub16-code+ (register-code 41 'restore-reference-id-ub16))
+(defconstant +record-reference-ub32-code+ (register-code 42 'restore-reference-id-ub32))
+(defconstant +record-reference-code+ (register-code 43 'restore-reference-id))
 ;; SIMPLE VECTORS
 #+sbcl
 (defconstant +simple-specialized-vector+

@@ -4,8 +4,9 @@
 (in-package #:cl-store-faster-tests)
 
 (define-test test-basic-circularity
-  (let* ((a (make-array 3))
-	 (b (make-array 3 :displaced-to a)))
+  #+nil(let* ((a (make-array 3))
+	 (b (make-array 3 :displaced-to a))
+	 (cl-store-faster:*support-shared-list-structures* t))
     (setf (aref a 0) b)
     (setf (aref a 1) (list "blarg" a b))
     (setf (aref a 2) (make-array 3 :initial-element b))

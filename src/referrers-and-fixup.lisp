@@ -54,6 +54,24 @@
 ;; slowing us down.  Also if we occasionally stored an offset into the data
 ;; we could then parallelize the writing later.
 
+;; OK, so let's work on an explicit referencing pass?  First step is
+;; to re-use the store functions to do the object walking.  I think we
+;; can just replace STORE-OBJECT with a passed in function with no
+;; side-effects... but we need to be careful not to do extra work in
+;; the serializers --- we need to NO-OP out the basic storage
+;; functions (I suppose we can pass in a STORAGE which is NIL and make
+;; sure everything is INLINED which will allow the compiler to elide
+;; those paths).  Even if things aren't inlined, the test is trivial
+;; and predictable.  OK, so lets do that.
+
+;; STEP 1:
+;;  Let's do a first SERIAL pass to identify references (this can be
+;;  parallelized later with the cost of a fixup pass which can also
+;;  be parallelized).
+
+;; With the idea that we need to also potentially compute the dispatch
+;; list in the STORE-OBJECT call
+
 (defstruct referrer)
 
 (defparameter *references* nil
@@ -80,7 +98,9 @@
 (declaim (inline store-reference))
 (defun store-reference (ref-index storage)
   "We store references as the minimum possible size we can"
-  (declare (type (and (integer 0) fixnum) ref-index))
+  (declare (type (and (integer 0) fixnum) ref-index)
+	   (type (not null) storage))
+  #+debug-csf (format t "Storing reference #~A~%" ref-index)
   (ensure-enough-room storage 4)
   (let ((offset (storage-offset storage))
 	(array (storage-store storage)))
@@ -99,32 +119,100 @@
        (setf (storage-offset storage) (+ offset 1))
        (store-tagged-unsigned-integer ref-index storage)))))
 
-(defun check/store-reference (value storage &aux (ht *references*))
-  (declare (optimize speed safety))
-  (let ((ref-index (gethash value ht)))
-    (if ref-index
-	(progn (store-reference ref-index storage) t)
-	(progn
-	  (let ((ref-index (hash-table-count ht)))
-	    #+debug-csf
-	    (let ((*print-circle* t))
-	      (format t "Assigning reference id ~A to ~S (~A)~%" ref-index value
-		      (type-of value)))
-	    (setf (gethash value ht) ref-index)
-	    nil)))))
+(defun store-reference-id-for-following-object (ref-index storage)
+  (declare (type (and (integer 0) fixnum) ref-index)
+	   (type (not null) storage))
+  #+debug-csf (format t "Storing reference for following object #~A~%" ref-index)
+  (ensure-enough-room storage 4)
+  (let ((offset (storage-offset storage))
+	(array (storage-store storage)))
+    (typecase ref-index
+      ((unsigned-byte 8)
+       (store-ub8 +record-reference-ub8-code+ storage nil)
+       (store-ub8 ref-index storage nil))
+      ((unsigned-byte 16)
+       (store-ub8 +record-reference-ub16-code+ storage nil)
+       (store-ub16 ref-index storage nil))
+      ((unsigned-byte 32)
+       (store-ub8 +record-reference-ub32-code+ storage nil)
+       (store-ub32 ref-index storage nil))
+      (t
+       (setf (aref array offset) +record-reference-code+)
+       (setf (storage-offset storage) (+ offset 1))
+       (store-tagged-unsigned-integer ref-index storage)))))
+
+(declaim (inline restore-reference-id-for-following-object))
+(defun restore-reference-id-for-following-object (ref-id storage)
+  (setf (aref *references* ref-id)
+	(restore-object storage)))
+
+(defun restore-reference-id-ub8 (storage)
+  (restore-reference-id-for-following-object (restore-ub8 storage) storage))
+
+(defun restore-reference-id-ub16 (storage)
+  (restore-reference-id-for-following-object (restore-ub16 storage) storage))
+
+(defun restore-reference-id-ub32 (storage)
+  (restore-reference-id-for-following-object (restore-ub32 storage) storage))
+
+(defun restore-reference-id (storage)
+  (restore-reference-id-for-following-object (restore-object storage) storage))
+
+(defun check/store-reference (value storage &aux (ht *references*) (ref-idx (gethash value ht)))
+  (declare (optimize speed safety) (type (or null fixnum) ref-idx))
+  (cond
+    (storage
+     (if ref-idx
+	 ;; We will have to write a reference tag out in front of
+	 ;; this object if we have not stored a reference for it
+	 ;; yet.  The way we signal that is that the ref-index
+	 ;; is negative if we haven't written it out.
+	 (cond
+	   ((>= ref-idx 0)
+	    (store-reference ref-idx storage)
+	    t)
+	   (t
+	    #+debug-csf (format t "Updating reference id from ~A to ~A~%"
+				ref-index (- ref-index))
+	    (setf ref-idx (- ref-idx))
+	    (store-reference-id-for-following-object ref-idx storage)
+	    (setf (gethash value ht) ref-idx)
+	    nil))
+	 (unless *do-explicit-reference-pass*
+	   (let ((assigned-ref-idx (hash-table-count ht)))
+	     #+debug-csf
+ 	     (let ((*print-circle* t))
+	       (format t "Assigning reference id ~A to ~S (~A)~%" ref-index value
+		       (type-of value)))
+	     (setf (gethash value ht) assigned-ref-idx)
+	     nil))))
+    (t
+     ;; first reference collection pass, no ref-index assigned yet,
+     ;; just keeping track of how many times an object is referenced
+     ;; eventually HT will be thread local, but for now this is fine.
+     (setf (gethash value ht) (+ 1 (or ref-idx 0)))
+     #+debug-csf
+     (let ((*print-circle* t))
+       (format t "Reference ~A now has ~A references~%" value (gethash value ht 0)))
+     nil)))
 
 ;; RESTORATION WORK
 
-(declaim (inline record-reference))
-(defun record-reference (value &aux (ht *references*))
+(declaim (notinline record-reference))
+(defun record-reference (value &aux (refs *references*))
   "This is used during RESTORE.  Here we keep track of a global count of
  references"
-  (let ((len (length ht)))
-    #+debug-csf
-    (let ((*print-circle* t))
-      (format t "Recording reference id ~A as ~S~%" len (if value value "delayed")))
-    (vector-push-extend value ht)
-    (values value len)))
+  ;; TODO DO NOT USE A GLOBAL HERE, TOO SLOW, PASS IT IN VIA CALLS SO THAT
+  ;; IT CAN BE COMPILE TIME INLINED
+  (if *references-already-fixed*
+      (values value -1)
+      (let ((len (length refs)))
+	(break)
+	#+debug-csf
+	(let ((*print-circle* t))
+	  (format t "Recording reference id ~A as ~S ~%" len (if value value :delayed)))
+	(vector-push-extend value refs)
+	(values value len))))
 
 (declaim (inline update-reference))
 (defun update-reference (ref-id value)
@@ -132,7 +220,7 @@
   #+debug-csf
   (let ((*print-circle* t))
     (format t "Updating reference id ~A to ~S~%" ref-id value))
-  (values (setf (aref *references* ref-id) value)))
+  (values (if *references-already-fixed* value (setf (aref *references* ref-id) value))))
 
 (defun invalid-referrer (ref-idx)
   (cerror "skip" (format nil "reference index ~A does not refer to anything!" ref-idx)))
@@ -148,6 +236,7 @@
 
 (declaim (inline restore-referrer-ub8))
 (defun restore-referrer-ub8 (storage)
+  #+debug-csf (format t "REFERRER UB8~%")
   (get-reference (restore-ub8 storage)))
 
 (declaim (inline restore-referrer-ub16))
