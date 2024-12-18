@@ -2,7 +2,8 @@
 
 A fast and lightly customizable serializer/deserializer of Common Lisp
 objects to compact binary files.  (Mainly working, just a few TODO items
-remaining)
+remaining).  Currently is SBCL specific, but that shouldn't be a big deal
+to change if someone wants to.
 
 ## why?
 
