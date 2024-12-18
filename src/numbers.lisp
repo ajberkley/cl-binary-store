@@ -153,9 +153,9 @@
       (ensure-enough-room storage 1)
       (let ((offset (storage-offset storage)))
 	(setf (aref (storage-store storage) offset) +ratio-code+)
-	(setf (storage-offset storage) (+ 1 offset)))
-      (store-object (numerator ratio) storage)
-      (store-object (denominator ratio) storage))))
+	(setf (storage-offset storage) (+ 1 offset))))
+    (store-object (numerator ratio) storage)
+    (store-object (denominator ratio) storage)))
 
 (defun restore-complex (storage)
   (record-reference
@@ -168,9 +168,9 @@
       (ensure-enough-room storage 1)
       (let ((offset (storage-offset storage)))
 	(setf (aref (storage-store storage) offset) +complex-code+)
-	(setf (storage-offset storage) (+ 1 offset)))
-      (store-object (realpart complex) storage)
-      (store-object (imagpart complex) storage))))
+	(setf (storage-offset storage) (+ 1 offset))))
+    (store-object (realpart complex) storage)
+    (store-object (imagpart complex) storage)))
 
 (declaim (inline restore-complex-double-float))
 (defun restore-complex-double-float (storage)

@@ -3,9 +3,10 @@
 (defun store-hash-table (ht storage)
   (declare (optimize speed safety) (type hash-table ht))
   (maybe-store-reference-instead (ht storage)
-    (store-ub8 +hash-table-code+ storage nil)
-    (store-tagged-unsigned-integer (hash-table-count ht) storage)
-    (store-tagged-unsigned-integer (hash-table-size ht) storage)
+    (when storage
+      (store-ub8 +hash-table-code+ storage nil)
+      (store-tagged-unsigned-integer (hash-table-count ht) storage)
+      (store-tagged-unsigned-integer (hash-table-size ht) storage))
     (store-object (hash-table-test ht) storage) ;; a symbol
     (store-object (hash-table-rehash-threshold ht) storage) ;; float
     (store-object (hash-table-rehash-size ht) storage) ;; float
