@@ -51,22 +51,17 @@ symbols, hash-tables, and pathnames are supported.
 
 ## TODO
 
-Simple-strings are not currently compactly stored (they are stored raw as 32 bits per
-element, not as UTF-8, but I will fix that soon).
-
-conditions are not supported yet
-maybe packages and metaclasses
-
-handle missing package during symbol restore
-
-maybe detect class and structure change on restore?
+- [ ] simple-strings serialize/deserialize as UTF-* (not 32 bits per element)
+- [ ] maybe handle serialize/deserialize conditions
+- [ ] maybe handle serialize/deserialize packages
+- [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
+- [ ] detect class and structure change on restore (just on the struct-info restore)
+- [ ] support store/restore from raw memory (mmap, sap, etc)
 
 We waste some time recording references during serialization that
 cannot be referred to (strings of symbol-names and package-names, for
 example, as if we ran into the symbol again it would be stored as a
 reference).  Similarly a few other places we record references that
 will never be hit.
-
-Store/restore to raw memory.
 
 Some more testing and another run at speed
