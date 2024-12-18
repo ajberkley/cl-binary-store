@@ -184,5 +184,9 @@
       (maphash (lambda (k v)
 		 (equalp (gethash k ht-restore) v))
 	       ht))))
-
 	 
+(define-test test-simple-array-t-multi-dim
+  (let ((a (make-array '(1 1 1) :initial-element 3)))
+    (is 'equalp
+	a
+	(restore-from-vector (store-to-vector a)))))

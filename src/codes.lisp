@@ -66,7 +66,7 @@
 #+sbcl
 (defconstant +simple-specialized-array+
   (register-code 23 'restore-simple-specialized-array 'store-simple-specialized-array
-		 '(simple-array * *)))
+		 '(and (simple-array * *) (not (simple-array t *)))))
 
 ;; COMPLEX VECTORS AND ARRAYS
 (defconstant +array+ (register-code 24 'restore-array 'store-array 'array))

@@ -7,7 +7,7 @@
   (let* ((has-fill-pointer (restore-object storage))
 	 (fill-pointer (when has-fill-pointer (restore-object storage)))
 	 (adjustable (restore-object storage))
-	 (array-rank (restore-object storage)) ;; restore tagged integer
+	 (array-rank (the (unsigned-byte 8) (restore-ub8 storage)))
 	 ;; restore tagged integers
 	 (dimensions (loop repeat array-rank collect (restore-object storage)))
 	 (displaced (restore-object storage)))
@@ -49,9 +49,8 @@
 	(t
 	 (store-nil storage)))
       (store-boolean (adjustable-array-p array) storage)
-      ;; Array-dimensions cannot be shared, so don't create references
       (let ((array-dimensions (array-dimensions array)))
-	(store-ub8 (length array-dimensions) storage nil)
+	(store-ub8 (length array-dimensions) storage nil) ;; sbcl limits to 128
 	(dolist (a array-dimensions)
 	  (store-tagged-unsigned-integer (the fixnum a) storage))))
     (multiple-value-bind (next-array offset)
@@ -74,4 +73,4 @@
 	(t
 	 ;; We have to store the array elements even past the fill pointer
 	 (dotimes (idx (array-total-size array))
-	   (store-object (aref array idx) storage)))))))
+	   (store-object (row-major-aref array idx) storage)))))))

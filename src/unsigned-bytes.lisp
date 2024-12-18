@@ -97,12 +97,13 @@
 (defun store-tagged-unsigned-integer (integer storage)
   "Because this is stored tagged, you can restore it using
  RESTORE-OBJECT."
-  (if (< integer 256)
-      (store-ub8 integer storage t)
-      (if (< integer 65536)
-	  (store-ub16 integer storage t)
-	  (if (< integer (expt 2 32))
-	      (store-ub32 integer storage t)
-	      (if (typep integer 'fixnum)
-		  (store-fixnum integer storage t)
-		  (store-bignum integer storage))))))
+  (when storage
+    (if (< integer 256)
+	(store-ub8 integer storage t)
+	(if (< integer 65536)
+	    (store-ub16 integer storage t)
+	    (if (< integer (expt 2 32))
+		(store-ub32 integer storage t)
+		(if (typep integer 'fixnum)
+		    (store-fixnum integer storage t)
+		    (store-bignum integer storage)))))))
