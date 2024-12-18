@@ -25,6 +25,10 @@ writers for vectors and arrays of simple-bit-vectors, simple-base-string, single
 double-floats, fixnums, sb8, sb16, sb32, sb64, ub2, ub4, ub7, ub8, ub15, ub16, ub31, ub32,
 ub62, and ub64 (all these being supported by SBCL).
 
+structure-objects and standard-objects have good default serialize/deserializers.
+
+symbols, hash-tables, and pathnames are supported.
+
 ## User facing entry points
 ### (store-to-file filename &rest elements) / (restore-from-file filename)
 ### (store-to-vector &rest elements) / (restore-from-vector vector)
@@ -52,6 +56,10 @@ element, not as UTF-8, but I will fix that soon).
 
 conditions are not supported yet
 maybe packages and metaclasses
+
+handle missing package during symbol restore
+
+maybe detect class and structure change on restore?
 
 We waste some time recording references during serialization that
 cannot be referred to (strings of symbol-names and package-names, for
