@@ -3,6 +3,7 @@
 
 ;; (pushnew :debug-csf *features*)
 ;; (setf *features* (delete :debug-csf *Features*))
+
 ;; Referrers are used to handle circularity (in lists, non-specialized
 ;; vectors, structure-classes and standard-classes).  Referrers are
 ;; implicitly created during serialization and deserialization.
@@ -14,6 +15,44 @@
 ;;  `structure-class'es and slot-values thereof
 ;;  `standard-class'es and slot-values thereof
 ;;  `cons'es
+
+;; There are two methods that referrers are handled.
+;;  1) Implicitly
+;;      We assign a reference-id to every object we see during store
+;;      or restore.
+;;  2) Explicitly
+;;      We record every object we see during store.  If we see an
+;;      object multiple times then we assign it a reference id.  Then
+;;      we begin the serialization process with that information.
+;;      While the reference assignment pass is hard to parallelize the
+;;      rest of the storage can then be parallelized.  It also allows
+;;      the restoration to be parallelized (though we would need to
+;;      add some file features to allow that).  The simplest probably
+;;      is to add a set of bookmarks at the end of the buffer (probably
+;;      recorded as we flush buffers to disk / file).
+;;  3) No references allowed
+;;      While nominally this would be super fast, is it worth the small
+;;      complexity?
+
+;; I'd like to pre-compile these modes.  So probably the restore and store
+;; functions need to take information about this.  We'll probably have to move
+;; away from simple functions to some hidden parameters.  If we inline them
+;; into compiled trampolines we should get very fast performance.
+
+;; For (2), while we are doing the reference id pass, we are having to
+;; do the main dispatch work.  Why don't we compile at the same time a
+;; dispatch list?  The closure would cost at a minimum 8 bytes
+;; (widetag), reference id (8 bytes), function address (8 bytes) for
+;; each dispatch decision.  If there was no reference id (or we were
+;; working with no references allowed?) we would store the closure
+;; without it (as the inline function would be specialized to not have
+;; the information).  Is a closure needed or should we just store the
+;; dispatch indices in a specialized array?  If we did that we'd be
+;; down to 1 byte each.  But then we'd have to make a decision about
+;; reference or not at each object.  Nominally that's a fast path as
+;; references don't have very often.  OK, I like that.  It avoids
+;; slowing us down.  Also if we occasionally stored an offset into the data
+;; we could then parallelize the writing later.
 
 (defstruct referrer)
 
