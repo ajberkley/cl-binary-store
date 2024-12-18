@@ -1,7 +1,8 @@
 # cl-store-faster
 
 A fast and lightly customizable serializer/deserializer of Common Lisp
-objects to compact binary files.
+objects to compact binary files.  (Mainly working, just a few TODO items
+remaining)
 
 ## why?
 
