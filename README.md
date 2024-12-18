@@ -3,7 +3,8 @@
 A fast and lightly customizable serializer/deserializer of Common Lisp
 objects to compact binary files.  (Mainly working, just a few TODO items
 remaining).  Currently is SBCL specific, but that shouldn't be a big deal
-to change if someone wants to.
+to change if someone wants to.  This is a work in progress, so do not use
+(there is no versioning of data yet).
 
 ## why?
 
@@ -13,6 +14,16 @@ data and, well, cl-store is pretty slow.  Other options include
 hyperluminal-mem which is fast, but doesn't have the features I need
 and its really geared toward working in memory / mmapped memory which
 means streaming compression is out.
+
+## Ideas to try
+
+The design right now does implicit referencing for circularity
+detection, which means we have to build a hash table with every
+element during storing and keep a vector during restoring.  If we
+added an (optional) reference calculation path, we could not only have
+smaller references in the cal file, but then the loader would not need
+to build a vector of all the references.  The main benefit is then
+that the loading and storing can be done by parallel threads.
 
 ## General features
 
