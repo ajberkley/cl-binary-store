@@ -37,6 +37,7 @@
 (defun store-struct-info (struct-info storage)
   (declare (optimize speed safety) (type struct-info struct-info))
   (maybe-store-reference-instead (struct-info storage)
+    #+debug-csf (format t "STORE-STRUCT-INFO ~A~%" struct-info)
     (store-ub8 +struct-info-code+ storage nil)
     (store-object (struct-info-type struct-info) storage)
     (let ((slot-names (struct-info-slot-names struct-info)))
@@ -67,6 +68,7 @@
     (store-ub8 +structure-object-code+ storage nil)
     (let ((struct-info (get-struct-info struct)))
       (store-struct-info struct-info storage)
+      #+debug-csf (format t "store-struct dumping slot values~%")
       (loop for name across (struct-info-slot-names struct-info)
 	    do (store-object (slot-value struct name) storage)))))
 

@@ -100,7 +100,6 @@
   "We store references as the minimum possible size we can"
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
-  #+debug-csf (format t "Storing reference #~A~%" ref-index)
   (ensure-enough-room storage 4)
   (let ((offset (storage-offset storage))
 	(array (storage-store storage)))
@@ -169,6 +168,7 @@
 	 ;; is negative if we haven't written it out.
 	 (cond
 	   ((>= ref-idx 0)
+	    #+debug-csf (format t "Storing reference #~A for ~A~%" ref-idx (type-of value))
 	    (store-reference ref-idx storage)
 	    t)
 	   (t
@@ -190,11 +190,12 @@
      ;; first reference collection pass, no ref-idx assigned yet,
      ;; just keeping track of how many times an object is referenced
      ;; eventually HT will be thread local, but for now this is fine.
-     (setf (gethash value ht) (+ 1 (or ref-idx 0)))
+     (let ((number-of-times-referenced (setf (gethash value ht) (+ 1 (or ref-idx 0)))))
      #+debug-csf
-     (let ((*print-circle* t))
-       (format t "Reference ~A now has ~A references~%" value (gethash value ht 0)))
-     nil)))
+       (let ((*print-circle* t))
+	 (format t "Reference ~A now has ~A references~%" value number-of-times-referenced))
+       ;; If we have seen this reference before, don't do work on it
+       (> number-of-times-referenced 1)))))
 
 ;; RESTORATION WORK
 
@@ -235,7 +236,6 @@
 
 (declaim (inline restore-referrer-ub8))
 (defun restore-referrer-ub8 (storage)
-  #+debug-csf (format t "REFERRER UB8~%")
   (get-reference (restore-ub8 storage)))
 
 (declaim (inline restore-referrer-ub16))
