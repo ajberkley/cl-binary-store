@@ -51,7 +51,7 @@ symbols, hash-tables, and pathnames are supported.
 
 ## TODO
 
-- [ ] simple-strings serialize/deserialize as UTF-* (not 32 bits per element)
+- [ ] simple-strings serialize/deserialize as UTF-8 (not 32 bits per element)
 - [ ] maybe handle serialize/deserialize conditions
 - [ ] maybe handle serialize/deserialize packages
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
