@@ -1,40 +1,30 @@
 (in-package :cl-store-faster)
 
-
-;; UH OH WE BROKE CIRCULARITY DETECTION EVEN WHEN THIS IS T WITH
-;; THE ADDITIONAL PASS
 (defparameter *support-shared-list-structures* t
   "If this is T, then circular lists of all types and structures that
  share list parts will be serialized correctly.  This is very
  expensive.  When this is NIL, only the heads of lists may be multiply
- referenced.  When this is NIL, this is similar to the behavior of
- CL-STORE.  For a 1 million long list we are about 3x slower than CL-STORE
- when it has this feature disabled.  Basic support for sharing heads of lists
- is always enabled (that is multiple references to the same list and references
- with the list back to the head), but without this feature references to the
- rest of the list are not supported.
+ referenced (by elements in the list itself or other objects).  When
+ this is NIL, though this is similar to the behavior of CL-STORE where
+ circular lists make everything explode.  If you aren't storing large
+ lists this is not that expensive.  For a 1 million long list we are
+ about 3x slower than CL-STORE when it has this feature disabled.
 
- WARNING: it is very very bad to set this to NIL and then try to write out data,
- we will generally explode your disk as we do no circularity detection.")
+ WARNING: it is very very bad to set this to NIL and then try to write
+ out data with general list circularites.  Worst case we fill your disk,
+ best case you end up with multiple copies of parts of the list.")
 
 (declaim (notinline store-cons))
-(defun store-cons (cons storage &optional (referrable-or-possibly-circular-p t) (tagged t))
-  "If you specify REFERRABLE-OR-POSSIBLY-CIRCULAR-P NIL, then any object
- which is referenced in this cons (or in any other objects referred to
- in the car or rest of the list) must *not* refer back to this cons or
- any other directly connected cons.  This is used for things like
- array-dimensions which we know are lists of numbers, etc.  If TAGGED is
- NIL, then we elide the first cons tag, but the rest of the list will be
- tagged as usual.
+(defun store-cons (cons storage &optional (tagged t))
+  "If TAGGED is NIL, then we elide writing out the first cons tag, but
+ the rest of the list will be tagged as usual.
 
  STORAGE can be NIL, in which case we should do no writing to it but we want to
  traverse the lists anyway to count references."
-  (let ((support-shared-list-structures *support-shared-list-structures*))
+  (let ((support-references-to-this-cons t)) ;; always allow references to list head
     (tagbody
      next-cdr
-       (or (check/store-reference cons storage
-				  (or referrable-or-possibly-circular-p
-				      support-shared-list-structures))
+       (or (check/store-reference cons storage support-references-to-this-cons)
 	   (progn
 	     (when storage
 	       (ensure-enough-room storage 3)
@@ -43,17 +33,20 @@
 		 (when tagged
 		   (setf (aref array offset) +cons-code+)
 		   (setf (storage-offset storage) (+ 1 offset)))))
-	     #+debug-csf (format t "Storing CAR~%")
+	     #+debug-csf (format t "~A CAR~%" (if storage "Analyzing" "Storing"))
 	     (store-object (car cons) storage)
 	     (let ((cdr (cdr cons)))
 	       (if (not (consp cdr))
-		   (store-object cdr storage)
+		   (progn
+		     #+debug-csf
+		     (format t "~A non cons CDR~%" (if storage "Analyzing" "Storing"))
+		     (store-object cdr storage))
 		   (progn ;; optimize for proper lists
-		     #+debug-csf (format t "Storing CDR~%")
+		     #+debug-csf (format t "~A CDR~%" (if storage "Analyzing" "Storing"))
 		     (setf tagged t cons cdr
-			   referrable-or-possibly-circular-p
-			   (and referrable-or-possibly-circular-p
-				support-shared-list-structures))
+			   support-references-to-this-cons
+			   (and support-references-to-this-cons
+				*support-shared-list-structures*))
 		     (go next-cdr)))))))))
 
 (declaim (notinline restore-cons))

@@ -42,4 +42,8 @@
    #:store-to-vector
    #:end-of-data
    #:store-to-file
-   #:restore-from-file))
+   #:restore-from-file
+   ;; Support complex circular lists
+   #:*support-shared-list-structures*))
+
+(in-package :cl-store-faster)

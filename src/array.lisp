@@ -29,7 +29,9 @@
 (defun store-array (array storage)
   (declare (optimize speed safety) (type array array))
   (maybe-store-reference-instead (array storage)
-    ;; (format t "Storing array of type ~A~%" (type-of array))
+    #+debug-csf(format t "~A array of type ~A~%"
+		       (if storage "Storing" "Analyzing")
+		       (type-of array))
     (when storage
       (store-ub8 +array+ storage nil)
       (cond

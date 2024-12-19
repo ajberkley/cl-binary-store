@@ -8,8 +8,8 @@
 	(cl-store-faster::*support-shared-list-structures* nil))
     (setf (cddr a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
-      ;; (let ((*print-circle* t))
-      ;; 	(print result))
+      (let ((*print-circle* t))
+	(print result))
       (is '= (first result) 123)
       (is '= (second result) 456)
       (is 'eq (cddr result) result))))
@@ -29,14 +29,26 @@
   (let ((a (list 123 456))
 	(cl-store-faster::*support-shared-list-structures* t))
     (setf (cdr (last a)) (nthcdr 1 a)) ;; loop back to second element
-    (let ((result (restore-from-vector (print (store-to-vector a)))))
+    (let ((result (restore-from-vector (store-to-vector a))))
       (is '= (first result) 123)
       (is '= (cadr result) 456)
       (is 'eq (cddr result) (cdr result)))))
 
+(define-test test-simple-displaced-array-circularity
+  (let* ((a (make-array 1))
+	 (b (make-array 1 :displaced-to a))
+	 (cl-store-faster::*support-shared-list-structures* nil))
+    (setf (aref a 0) b)
+    (let ((c (restore-from-vector (store-to-vector b))))
+      (let ((*print-circle* t))
+	;; This depends on the circle printer to do the same thing :)
+	(is 'equal
+	    (format nil "~A~%" c)
+	    (format nil "~A~%" b))))))
+
 (define-test test-displaced-array-circularity
   (let* ((a (make-array 3))
-	 (b (make-array 3 :displaced-to a))
+	 (b (make-array 1 :displaced-to a))
 	 (cl-store-faster::*support-shared-list-structures* nil))
     (setf (aref a 0) b)
     (setf (aref a 1) (list "blarg" a b))

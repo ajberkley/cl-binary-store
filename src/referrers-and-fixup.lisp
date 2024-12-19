@@ -97,48 +97,58 @@
  fixnum objects in here.")
 
 (defun check/store-reference (object storage &optional (add-new-reference t)
-			      &aux (ht *references*) (ref-idx (gethash object ht)))
+			      &aux (ht *references*))
   "Returns T if we have written a short-hand reference out to the OBJECT, in which case the
  caller should NOT write OBJECT out to storage.  If NIL, then you must write the OBJECT out.
  If ADD-NEW-REFERENCE is T, in the case where this function returns NIL, we will generate a
  new reference id for this object so it can be used in the future.  The only case where
  ADD-NEW-REFERENCE should be NIL is if you are explicitly dis-allowing (for performance reasons)
  circularity."
-  (declare (optimize speed safety) (type (or null fixnum) ref-idx))
-  (cond
-    (storage
-     ;; When ref-idx is positive, it's a note that we have already written out the
-     ;; actual value, so we can just store the reference id. If it is negative,
-     ;; it means we must write out the ref-idx and the object as this is the first time
-     ;; it has appeared in the output.
-     (if ref-idx
-	 (cond
-	   ((>= ref-idx 0)
-	    #+debug-csf (format t "Storing a reference (#~A) which is to a ~A~%"
-				ref-idx (type-of object))
-	    (store-reference ref-idx storage)
-	    t)
-	   (t
-	    #+debug-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
-				(- ref-idx) (type-of object))
-	    (setf ref-idx (- ref-idx))
-	    (store-reference-id-for-following-object ref-idx storage)
-	    (setf (gethash object ht) ref-idx)
-	    nil))))
-    (t
-     ;; first reference collection pass, no ref-idx assigned yet,
-     ;; just keeping track of how many times an object is referenced
-     ;; eventually HT will be thread local, but for now this is fine.
-     (let ((number-of-times-referenced
-	     (when (or ref-idx add-new-reference)
-	       (setf (gethash object ht) (+ 1 (or ref-idx 0))))))
-       #+debug-csf
-       (when number-of-times-referenced
-	 (let ((*print-circle* t))
-	   (format t "Reference of ~S now has ~A references~%"
-		   object number-of-times-referenced)))
-       ;; If we have seen this reference before, don't do work on it
-       (and number-of-times-referenced (> number-of-times-referenced 1))))))
+  (declare (optimize speed safety))
+  (if storage ; we are in the storage phase, writing things out
+      (let ((ref-idx (gethash object ht)))
+	(declare (type (or null fixnum) ref-idx))
+	;; When ref-idx is positive, it's a note that we have already written out the
+	;; actual value, so we can just store the reference id. If it is negative,
+	;; it means we must write out the ref-idx and the object as this is the first time
+	;; it has appeared in the output.
+	(if ref-idx
+	    (cond
+	      ((>= ref-idx 0)
+	       #+debug-csf (format t "Storing a reference (#~A) which is to a ~A~%"
+				   ref-idx (type-of object))
+	       (store-reference ref-idx storage)
+	       t)
+	      (t
+	       #+debug-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
+				   (- ref-idx) (type-of object))
+	       (setf ref-idx (- ref-idx))
+	       (store-reference-id-for-following-object ref-idx storage)
+	       (setf (gethash object ht) ref-idx)
+	       nil))))
+      (let ((number-of-times-referenced (gethash object ht 0)))
+	(declare (type (unsigned-byte 8) number-of-times-referenced))
+	;; This is the reference collection pass.  We store the number of times
+	;; an object is referenced as 1 or 2, where 2 means anything more than 1.
+	#+debug-csf
+	(let ((*print-circle* t))
+	  (format t "~S ~A~%"
+		  object
+		  (ecase number-of-times-referenced
+		    (0 "has never been seen before")
+		    (1 "has been seen before once")
+		    (2 "has been seen before more than once"))))
+	;; The logic below is unnecessarily complex, speed this up.
+	(cond
+	  ((and (zerop number-of-times-referenced) add-new-reference)
+	   (setf (gethash object ht) 1)
+	   nil)
+	  ((= number-of-times-referenced 1)
+	   (setf (gethash object ht) 2)
+	   t)
+	  ((= number-of-times-referenced 2)
+	   t)
+	  (t nil)))))
 
 ;; RESTORATION WORK
 
