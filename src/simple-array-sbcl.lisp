@@ -104,10 +104,11 @@
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize speed safety))
   (let ((num-elts (restore-object storage)))
+    #+debug-csf (format t "NUM ELETS ~A~%" num-elts)
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
 	  (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
-	#+debug-csv (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
+	#+debug-csf (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
 			    (type-of sv) num-bytes num-elts encoded-element-info)
 	(ensure-enough-data storage num-bytes)
 	(let ((offset (storage-offset storage))

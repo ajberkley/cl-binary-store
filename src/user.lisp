@@ -56,6 +56,7 @@
     
 (defun restore-from-vector (vector)
   (declare (optimize speed safety))
+  #+debug-csf(format t "Restoring from a vector with ~A bytes in it~%" (length vector))
   (if (typep vector '(simple-array (unsigned-byte 8) (*)))
       (let* ((storage
 	       (%make-read-storage

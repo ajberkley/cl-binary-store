@@ -58,16 +58,16 @@
       ;;(sb-sprof:with-profiling (:report :graph)
 	(time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a)))
       (time (dotimes (x 10) (print (type-of (cl-store-faster:restore-from-file "blarg.bin"))))))
-    (gc :full t)
-    (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    ;; (gc :full t)
+    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
 
 
 ;; THIS CRASHES!
 (defun long-complex-list ()
-  (let ((a (loop repeat 1000000 collect (if (> (random 1000) 800)
+  (let ((a (loop repeat 100 collect (if (> (random 1000) 800)
 					    (random 1f0)
 					    (if (> (random 100) 50)
 						'a
@@ -81,7 +81,8 @@
       ;;(sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a)))
       (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin"))))
-    (gc :full t)
-    (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
+    ;; (gc :full t)
+    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    )
   (gc :full t))

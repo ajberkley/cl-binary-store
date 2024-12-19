@@ -153,16 +153,18 @@
 
 (defun make-read-into-storage/stream (stream)
   (lambda (storage)
-    (shift-data-to-beginning storage)
-    (let ((offset (storage-offset storage))
-	  (seq (storage-store storage)))
-      (setf (storage-max storage) (read-sequence seq stream :start offset)))))
+    (let ((seq (storage-store storage)))
+      #+debug-csf(format t "We currently have ~A..~A valid data (~A bytes)~%"
+	      (storage-offset storage) (storage-max storage)
+	      (- (storage-max storage) (storage-offset storage)))
+      (let ((new-bytes-end-at (read-sequence seq stream :start (storage-max storage))))
+	#+debug-csf(format t "We read from ~A..~A bytes~%" (storage-max storage) new-bytes-end-at)
+	(setf (storage-max storage) new-bytes-end-at)))))
 
 (defun make-write-into-storage/stream (stream)
   (lambda (storage)
     (let ((seq (storage-store& storage)))
-      #+debug-csf
-      (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
+      #+debug-csf (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
       (write-sequence seq stream :end (storage-offset storage))
       (setf (storage-offset storage) 0))))
 
@@ -192,13 +194,22 @@
     (when (> bytes (- vector-length valid-data-ends-at))
       (let* ((valid-data-starts-at (storage-offset storage))
 	     (valid-data-bytes (- valid-data-ends-at valid-data-starts-at)))
+	#+debug-csf (format t "We need to increase size or move data to beginning to ~
+                              satisfy request for ~A bytes (our vector is ~A long and ~
+                              we have used ~A..~A bytes of it which is ~A bytes)~%"
+			    bytes vector-length valid-data-starts-at valid-data-ends-at
+			    valid-data-bytes)
+
 	(cond
-	  ((> bytes (- vector-length valid-data-bytes))
+	  ((<= bytes vector-length)
+	   #+debug-csf (format t "Shifting bytes to beginning~%")
 	   (shift-data-to-beginning storage))
 	  (t
-	   (let ((new (make-array (+ bytes valid-data-bytes) :element-type '(unsigned-byte 8))))
+	   #+debug-csf (format t "Making new array of length ~A~%" bytes)
+	   (let ((new (make-array bytes :element-type '(unsigned-byte 8))))
 	     (replace new (storage-store storage) :start2 valid-data-starts-at
 						  :end2 valid-data-ends-at)
+	     (setf (storage-store storage) new)
 	     (setf (storage-offset storage) 0)
 	     (setf (storage-max storage) valid-data-bytes))))))))
 
@@ -218,13 +229,20 @@
   ())
 
 (defun refill-read-storage (storage bytes return-nil-on-eof)
-  (declare (optimize speed safety) (type fixnum bytes))
+  (declare (optimize (debug 3))
+	   (type fixnum bytes))
+  #+debug-csf (format t "Asked to read ~A bytes from storage~%" bytes)
   (maybe-increase-size-of-read-storage storage bytes)
   (let ((storage-end (the fixnum (funcall (storage-read-more-func storage) storage))))
     (if (< storage-end bytes)
         (if return-nil-on-eof
 	    nil
-            (error 'end-of-data :format-control "Out of data"))
+            (progn
+	      #+debug-csf (format t "Valid data is from ~A to ~A (~A bytes, wanted ~A)~%"
+				  (storage-offset storage) (storage-max storage)
+				  (- (storage-max storage) (storage-offset storage))
+				  bytes)
+	      (error 'end-of-data :format-control "Out of data")))
         t)))
 
 (declaim (inline ensure-enough-data))
