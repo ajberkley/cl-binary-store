@@ -27,7 +27,7 @@
   `,(eval-make-read-dispatch)
 
   (declaim (inline restore-object))
-  (defun restore-object (storage &optional (tag (restore-ub8 storage t)))
+  (defun restore-object (storage &optional (tag (maybe-restore-ub8 storage)))
     (declare (notinline read-dispatch))
     (read-dispatch tag storage))
 
@@ -75,7 +75,7 @@
   (defun make-store-object ()
     `(progn
        (declaim (notinline store-object/storage store-object/no-storage)
-		(inline store-object))
+		(inline store-object));; TODO PUT BACK TO INLINE
 
        (defun store-object (value storage)
 	 (if storage
@@ -138,7 +138,8 @@
     (eval (make-store-object))
     (eval (make-read-dispatch)))
 
-  (defun store-objects (storage &rest stuff)
+  (declaim (inline store-objects/generic))  
+  (defun store-objects/generic (storage &rest stuff)
     (declare (optimize speed safety)
 	     (inline store-object))
     (let* ((references (make-hash-table :test 'eql :size 256))
@@ -174,17 +175,22 @@
 	#+debug-csf (format t "Compiled dispatch info for ~A objects~%" (length *dispatch*))
 	(dolist (elt stuff)
 	  (store-object/storage elt storage)))
-      (flush-storage storage)))
+      (flush-write-storage storage)))
+
+  (defun store-objects/buffering-write-storage (storage &rest stuff)
+    (declare (type buffering-write-storage storage))
+    (apply #'store-objects/generic storage stuff))
+
+  ;; (defun store-objects/sap-write-storage (storage &rest stuff)
+  ;;   (declare (type sap-write-storage storage))
+  ;;   (store-objects/generic storage))
   
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all the elements."
     (let ((*references* (make-array 1024 :adjustable t :fill-pointer nil)))
-      ;; crazy references start at 1 when using explicit reference pass
-      ;; this is a footgun, fix!
-      ;; format needs to be stored in file!
       (let ((result
-	      (loop for code = (restore-ub8 storage t)
+	      (loop for code = (maybe-restore-ub8 storage)
 		    while code
 		    collect (read-dispatch code storage))))
 	(if (cdr result) result (car result))))))

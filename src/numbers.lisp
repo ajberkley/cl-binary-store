@@ -24,24 +24,13 @@
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage &optional (tag t))
   (declare (optimize speed safety) (type fixnum fixnum))
-  (when storage
-    (ensure-enough-room storage 9)
-    (let ((offset (storage-offset storage))
-          (array (storage-store storage)))
-      (declare (type (unsigned-byte 60) offset))
+  (with-write-storage (storage)
+    (let ((offset (ensure-enough-room-to-write storage 9)))
       (when tag
-	(setf (aref array offset) +fixnum-code+)
+	(storage-write-byte! storage +fixnum-code+ offset)
 	(incf offset))
-      (setf (aref array offset) (logand (ash fixnum -56) 255))
-      (setf (aref array (incf offset)) (logand (ash fixnum -48) 255))
-      (setf (aref array (incf offset)) (logand (ash fixnum -40) 255))
-      (setf (aref array (incf offset)) (logand (ash fixnum -32) 255))
-      (setf (aref array (incf offset)) (logand (ash fixnum -24) 255))
-      (setf (aref array (incf offset)) (logand (ash fixnum -16) 255))
-      (setf (aref array (incf offset)) (logand (ash fixnum -8) 255))
-      (setf (aref array (incf offset)) (logand fixnum 255))
-      (setf (storage-offset storage) (incf offset)))))
-
+      (storage-write-ub64! storage fixnum offset)
+      (setf (storage-offset storage) (+ offset 8)))))
 
 ;; Bignum code is based on code from the CL-STORE package which is
 ;; Copyright (c) 2004 Sean Ross
@@ -72,8 +61,8 @@
 
 (defun store-bignum (bignum storage)
   (maybe-store-reference-instead (bignum storage)
-    (when storage
-      (store-ub8 +bignum-code+ storage nil)
+    (with-write-storage (storage)
+      (storage-write-byte storage +bignum-code+)
       (multiple-value-bind (bits count)
 	  (num->bits bignum)
 	(declare (type fixnum count))
@@ -96,17 +85,16 @@
 (declaim (inline store-single-float))
 (defun store-single-float (single-float storage)
   (declare (optimize speed safety) (type single-float single-float))
-  (when storage
-    (ensure-enough-room storage 5)
-    (let ((offset (storage-offset storage))
-          (array (storage-store storage))
-          (temp (make-array 1 :element-type 'single-float)))
-      (declare (type (unsigned-byte 60) offset) (dynamic-extent temp))
-      (setf (aref array offset) +single-float-code+)
+  (with-write-storage (storage)
+    (let ((offset (ensure-enough-room-to-write storage 5))
+	  (temp (make-array 1 :element-type 'single-float :initial-element single-float)))
+      (declare (dynamic-extent temp))
+      (storage-write-byte! storage +single-float-code+ offset)
       (incf offset)
-      (setf (aref temp 0) single-float)
-      (copy-n-bytes array offset temp 0 4)
-      (setf (storage-offset storage) (incf offset 4)))))
+      (with-storage-sap (sap storage)
+	(sb-sys:with-pinned-objects (temp)
+	  (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))
+	(setf (storage-offset storage) (+ offset 4))))))
 
 (declaim (inline restore-double-float))
 (defun restore-double-float (storage)
@@ -122,23 +110,22 @@
       (aref a 0))))
 
 (declaim (inline store-double-float))
-(defun store-double-float (double-float storage)
+(defun store-double-float (double-float storage &optional (tag nil))
   (declare (optimize speed safety) (type double-float double-float))
   ;; We de-duplicate double-floats as there is no visible way to
   ;; determine this from common lisp, and it saves space in the image
   ;; and on disk if there are repeated numbers (like 0d0).
   (maybe-store-reference-instead (double-float storage)
-    (when storage
-      (ensure-enough-room storage 9)
-      (let ((offset (storage-offset storage))
-            (array (storage-store storage))
-            (temp (make-array 1 :element-type 'double-float)))
-	(declare (type (unsigned-byte 60) offset) (dynamic-extent temp))
-	(setf (aref array offset) +double-float-code+)
-	(incf offset)
-	(setf (aref temp 0) double-float)
-	(copy-n-bytes array offset temp 0 8)
-	(setf (storage-offset storage) (incf offset 8))))))
+    (with-write-storage (storage offset 9)
+      (when tag
+	(storage-write-byte! storage +double-float-code+ offset)
+	(incf offset))
+      (let ((temp (make-array 1 :element-type 'double-float)))
+	(declare (dynamic-extent temp))
+	(with-storage-sap (sap storage)
+	  (sb-sys:with-pinned-objects (temp)
+	    (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))
+	(setf (storage-offset storage) (+ offset 8)))))))
 
 (defun restore-ratio (storage)
   (/ (the integer (restore-object storage))
@@ -146,11 +133,8 @@
 
 (defun store-ratio (ratio storage)
   (maybe-store-reference-instead (ratio storage)
-    (when storage
-      (ensure-enough-room storage 1)
-      (let ((offset (storage-offset storage)))
-	(setf (aref (storage-store storage) offset) +ratio-code+)
-	(setf (storage-offset storage) (+ 1 offset))))
+    (with-write-storage (storage)
+      (storage-write-byte storage +ratio-code+))
     (store-object (numerator ratio) storage)
     (store-object (denominator ratio) storage)))
 
@@ -160,11 +144,8 @@
 
 (defun store-complex (complex storage)
   (maybe-store-reference-instead (complex storage)
-    (when storage
-      (ensure-enough-room storage 1)
-      (let ((offset (storage-offset storage)))
-	(setf (aref (storage-store storage) offset) +complex-code+)
-	(setf (storage-offset storage) (+ 1 offset))))
+    (with-write-storage (storage)
+      (storage-write-byte storage +complex-code+))
     (store-object (realpart complex) storage)
     (store-object (imagpart complex) storage)))
 
@@ -176,10 +157,10 @@
 (declaim (inline store-complex-double-float))
 (defun store-complex-double-float (complex-double-float storage)
   (maybe-store-reference-instead (complex-double-float storage)
-    (when storage
-      (ensure-enough-room storage 16)
-      (store-double-float (realpart complex-double-float) storage)
-      (store-double-float (imagpart complex-double-float) storage))))
+    (with-write-storage (storage)
+      (storage-write-byte storage +complex-double-float-code+)
+      (store-double-float (realpart complex-double-float) storage nil)
+      (store-double-float (imagpart complex-double-float) storage nil))))
 
 (declaim (inline restore-complex-single-float))
 (defun restore-complex-single-float (storage)
@@ -190,6 +171,6 @@
 (defun store-complex-single-float (complex-single-float storage)
   (maybe-store-reference-instead (complex-single-float storage)
     (when storage
-      (ensure-enough-room storage 8)
+      (storage-write-byte storage +complex-single-float-code+)
       (store-single-float (realpart complex-single-float) storage)
       (store-single-float (imagpart complex-single-float) storage))))

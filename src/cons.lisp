@@ -26,13 +26,9 @@
      next-cdr
        (or (check/store-reference cons storage support-references-to-this-cons)
 	   (progn
-	     (when storage
-	       (ensure-enough-room storage 3)
-	       (let ((offset (storage-offset storage))
-		     (array (storage-store storage)))
-		 (when tagged
-		   (setf (aref array offset) +cons-code+)
-		   (setf (storage-offset storage) (+ 1 offset)))))
+	     (when tagged
+	       (with-write-storage (storage)
+		 (storage-write-byte storage +cons-code+)))
 	     #+debug-csf (format t "~A CAR~%" (if storage "Analyzing" "Storing"))
 	     (store-object (car cons) storage)
 	     (let ((cdr (cdr cons)))

@@ -57,7 +57,7 @@
 	    (store-t storage)
 	    (if (symbolp elt-type)
 		(store-symbol elt-type storage)
-		(store-cons elt-type storage t t))))
+		(store-cons elt-type storage))))
       (cond
 	(next-array
 	 (store-tagged-unsigned-integer offset storage)

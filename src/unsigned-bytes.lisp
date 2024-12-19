@@ -1,13 +1,27 @@
 (in-package :cl-store-faster)
 
-(declaim (inline restore-ub8))
-(defun restore-ub8 (storage &optional (ignore-end-of-data nil))
+(declaim (inline maybe-restore-ub8))
+(defun maybe-restore-ub8 (storage)
   "Restore an (unsigned-byte 8) value from storage that has previously
  been stored by STORE-UB8.  If IGNORE-END-OF-DATA will return NIL if
  there is no more data available (this feature is used while reading
  all data from a stream to see if there is more data available)"
   (declare (optimize speed safety))
-  (and (ensure-enough-data storage 1 ignore-end-of-data)
+  (and (ensure-enough-data storage 1 t)
+       (let ((offset (storage-offset storage)))
+	 (setf (storage-offset storage) (1+ offset))
+	 (let ((res (aref (storage-store storage) offset)))
+	   ;;#+debug-csf (format t "Got a UB8: ~A~%" res)
+	   res))))
+
+(declaim (inline restore-ub8))
+(defun restore-ub8 (storage)
+  "Restore an (unsigned-byte 8) value from storage that has previously
+ been stored by STORE-UB8.  If IGNORE-END-OF-DATA will return NIL if
+ there is no more data available (this feature is used while reading
+ all data from a stream to see if there is more data available)"
+  (declare (optimize speed safety))
+  (and (ensure-enough-data storage 1)
        (let ((offset (storage-offset storage)))
 	 (setf (storage-offset storage) (1+ offset))
 	 (let ((res (aref (storage-store storage) offset)))
@@ -20,15 +34,13 @@
  then will store a tag +UB8-CODE+ to storage first.  Omit TAG if your
  deserializer will know this is a UB8 value."
   (declare (optimize speed safety))
-  (when storage
-    (ensure-enough-room storage 2)
-    (let ((array (storage-store storage))
-	  (offset (storage-offset storage)))
+  (with-write-storage (storage)
+    (let ((offset (ensure-enough-room-to-write storage 2)))
       (when tag
-	(setf (aref array offset) +ub8-code+)
+	(storage-write-byte! storage +ub8-code+ offset)
 	(incf offset))
-      (setf (aref array offset) ub8)
-      (setf (storage-offset storage) (incf offset)))))
+      (storage-write-byte! storage ub8 offset)
+      (setf (storage-offset storage) (+ 1 offset)))))
 
 (declaim (inline restore-ub16))
 (defun restore-ub16 (storage)
@@ -47,33 +59,28 @@
  emit +UB16-CODE+ to STORAGE first.  Set TAG NIL if the deserializer will
  know from the context that the value is a UB16 to save a byte."
   (declare (optimize speed safety) (type (unsigned-byte 16) ub16))
-  (when storage
-    (ensure-enough-room storage 3)
-    (let ((offset (storage-offset storage))
-          (array (storage-store storage)))
-      (declare (type (unsigned-byte 60) offset))
+  (with-write-storage (storage)
+    (let ((offset (ensure-enough-room-to-write storage 3)))
       (when tag
-	(setf (aref array offset) +ub16-code+)
+	(storage-write-byte! storage +ub16-code+ offset)
 	(incf offset))
-      (setf (aref array offset) (logand ub16 255))
-      (setf (aref array (incf offset)) (ash ub16 -8))
-      (setf (storage-offset storage) (incf offset)))))
+      (storage-write-ub16! storage ub16 offset)
+      (setf (storage-offset storage) (+ offset 2)))))
 
 (declaim (inline restore-ub32))
 (defun restore-ub32 (storage)
   "Restore a (unsigned-byte 32) from STORAGE which has previously been stored
  by STORE-UB32."
   (declare (optimize speed safety))
-  (when storage
-    (ensure-enough-data storage 4)
-    (let ((offset (storage-offset storage))
-          (array (storage-store storage)))
-      (declare (type (unsigned-byte 60) offset))
-      (setf (storage-offset storage) (+ 4 offset))
-      (+ (aref array offset)
-	 (ash (aref array (incf offset)) 8)
-	 (ash (aref array (incf offset)) 16)
-	 (ash (aref array (incf offset)) 24)))))
+  (ensure-enough-data storage 4)
+  (let ((offset (storage-offset storage))
+        (array (storage-store storage)))
+    (declare (type (unsigned-byte 60) offset))
+    (setf (storage-offset storage) (+ 4 offset))
+    (+ (aref array offset)
+       (ash (aref array (incf offset)) 8)
+       (ash (aref array (incf offset)) 16)
+       (ash (aref array (incf offset)) 24))))
 
 (declaim (inline store-ub32))
 (defun store-ub32 (ub32 storage &optional (tag t))
@@ -81,25 +88,18 @@
  emit +UB32-CODE+ to STORAGE first.  Set TAG NIL if the deserializer will
  know from the context that the value is a UB32 to save a byte."
   (declare (optimize speed safety) (type (unsigned-byte 32) ub32))
-  (when storage
-    (ensure-enough-room storage 5)
-    (let ((offset (storage-offset storage))
-          (array (storage-store storage)))
-      (declare (type (unsigned-byte 60) offset))
-      (when tag
-	(setf (aref array offset) +ub32-code+)
-	(incf offset))
-      (setf (aref array offset) (logand ub32 255))
-      (setf (aref array (incf offset)) (logand (ash ub32 -8) 255))
-      (setf (aref array (incf offset)) (logand (ash ub32 -16) 255))
-      (setf (aref array (incf offset)) (ash ub32 -24))
-      (setf (storage-offset storage) (incf offset)))))
+  (with-write-storage (storage offset 5)
+    (when tag
+      (storage-write-byte! storage +ub32-code+ offset)
+      (incf offset))
+    (storage-write-ub32! storage ub32 offset)
+    (setf (storage-offset storage) (+ offset 4))))
 
 (declaim (inline store-tagged-unsigned-integer))
 (defun store-tagged-unsigned-integer (integer storage)
   "Because this is stored tagged, you can restore it using
  RESTORE-OBJECT."
-  (when storage
+  (with-write-storage (storage)
     (if (< integer 256)
 	(store-ub8 integer storage t)
 	(if (< integer 65536)

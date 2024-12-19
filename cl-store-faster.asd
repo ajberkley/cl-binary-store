@@ -27,7 +27,9 @@
 	       (:file "dispatch" :depends-on ("codes" "array" "symbols" "simple-vector" "cons"
 						      "hash-table"
 						      "referrers-and-fixup" "numbers" "pathname"
-						      "unsigned-bytes" "objects")))
+						      "unsigned-bytes" "objects"))
+	       (:file "user" :depends-on ("dispatch" "storage"))
+	       )
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-store-faster-tests))))
 

@@ -70,6 +70,7 @@ symbols, hash-tables, and pathnames are supported.
 - [ ] support store/restore from raw memory (mmap, sap, etc)
 - [ ] very large object storage without copying
 - [ ] Parallel store and restore
+- [ ] Reduced copying if using a sap backend?
 
 Some more testing and another run at speed
 
