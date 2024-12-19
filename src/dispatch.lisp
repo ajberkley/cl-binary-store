@@ -59,7 +59,7 @@
     "For debugging, names of each code type")
   
   (declaim (type (vector (unsigned-byte 8) *) *dispatch*))
-  (defvar *dispatch* (make-array 0 :element-type '(unsigned-byte 8)))
+  (defvar *dispatch* (make-array 0 :element-type '(unsigned-byte 8))
     "A UB8 extendable array holding the codes of objects to be stored in order (until we
      parallelize the reference and dispatch compilation pass)")
 

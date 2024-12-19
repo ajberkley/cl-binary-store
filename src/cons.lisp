@@ -14,7 +14,7 @@
  out data with general list circularites.  Worst case we fill your disk,
  best case you end up with multiple copies of parts of the list.")
 
-(declaim (notinline store-cons))
+(declaim (inline store-cons))
 (defun store-cons (cons storage &optional (tagged t))
   "If TAGGED is NIL, then we elide writing out the first cons tag, but
  the rest of the list will be tagged as usual.

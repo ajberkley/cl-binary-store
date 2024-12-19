@@ -96,6 +96,7 @@
  reference-indices -> values when reading, as such ONLY store non
  fixnum objects in here.")
 
+(declaim (inline check/store-reference))
 (defun check/store-reference (object storage &optional (add-new-reference t)
 			      &aux (ht *references*))
   "Returns T if we have written a short-hand reference out to the OBJECT, in which case the
