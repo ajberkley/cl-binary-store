@@ -110,7 +110,7 @@
       (aref a 0))))
 
 (declaim (inline store-double-float))
-(defun store-double-float (double-float storage &optional (tag nil))
+(defun store-double-float (double-float storage &optional (tag t))
   (declare (optimize speed safety) (type double-float double-float))
   ;; We de-duplicate double-floats as there is no visible way to
   ;; determine this from common lisp, and it saves space in the image
@@ -120,7 +120,7 @@
       (when tag
 	(storage-write-byte! storage +double-float-code+ offset)
 	(incf offset))
-      (let ((temp (make-array 1 :element-type 'double-float)))
+      (let ((temp (make-array 1 :element-type 'double-float :initial-element double-float)))
 	(declare (dynamic-extent temp))
 	(with-storage-sap (sap storage)
 	  (sb-sys:with-pinned-objects (temp)

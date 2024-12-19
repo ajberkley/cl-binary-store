@@ -66,25 +66,34 @@
 ;; CL-STORE-FASTER: 143 ms write / 35 ms read; half system time on write
 ;; CL-STORE: 587 ms write / 643 ms read.  Not a surprise of course.
 
-;; THIS CRASHES!
+
+;; OK so CL-STORE is *TERRIBLE* on single floats
 (defun long-complex-list ()
-  (let ((a (loop repeat 3 collect (if (> (random 1000) 800)
-				      (random 1f0)
+  (let ((a (loop repeat 1000000 collect (if (> (random 1000) 800)
+				      ;; (complex 1 2)
+				      (random 1d0)
 				      (if (> (random 100) 50)
 					  'a
 					  (if (> (random 100) 50)
-					      (cons 1 2)
+					      "hello" ;; (cons 1 2)
 					      (if (= (random 2) 1)
-						  "hello"
-						  #())))))))
+						  5;; "hello"
+						  6;; "bye"
+						  ;; #()
+						  )))))))
     (gc :full t)
-    (print a)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
-      ;;(sb-sprof:with-profiling (:report :graph)
-      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a)))
-      (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin"))))
+      ;;      (sb-sprof:with-profiling (:report :graph)
+      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+    (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
+    ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
     ;; (gc :full t)
-    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
-    )
+    (time (dotimes (x 1) (cl-store:store a "blarg.bin")))
+    (time (dotimes (x 1) (cl-store:restore "blarg.bin"))))
   (gc :full t))
+
+;; CL-STORE-FASTER:  900 ms write /  225 ms read
+;; CL-STORE:       40903 ms write / 2750 ms read
+
+;; CL-STORE-FASTER: 1500 ms write /  230 ms read
+;; CL-STORE:       40800 ms write / 2700 ms read
