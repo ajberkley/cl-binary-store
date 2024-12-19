@@ -92,8 +92,8 @@
 	(store-tagged-unsigned-integer sv-length storage)
 	(multiple-value-bind (bytes-to-write encoded-element-type)
 	    (sbcl-specialized-array-element-size/bits sv)
-	  ;; (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
-	  ;; 	    (type-of sv) bytes-to-write encoded-element-type)
+	  #+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
+			      (type-of sv) bytes-to-write encoded-element-type)
 	  (store-ub8 encoded-element-type storage nil)
 	  (ensure-enough-room storage bytes-to-write)
 	  (let ((offset (storage-offset storage))
@@ -107,8 +107,8 @@
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
 	  (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
-	;; (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
-	;; 	(type-of sv) num-bytes num-elts encoded-element-info)
+	#+debug-csv (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
+			    (type-of sv) num-bytes num-elts encoded-element-info)
 	(ensure-enough-data storage num-bytes)
 	(let ((offset (storage-offset storage))
 	      (array (storage-store storage)))
@@ -130,8 +130,8 @@
       (multiple-value-bind (bytes-to-write encoded-element-type)
 	  (sbcl-specialized-array-element-size/bits sa num-elts)
 	(store-ub8 encoded-element-type storage nil)
-	;; (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
-	;;  	    (type-of sa) bytes-to-write encoded-element-type)
+	(format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
+	 	    (type-of sa) bytes-to-write encoded-element-type)
 	(ensure-enough-room storage bytes-to-write)
 	(let ((offset (storage-offset storage))
 	      (array (storage-store storage)))
@@ -149,8 +149,8 @@
     (multiple-value-bind (sa num-bytes)
 	(sbcl-make-simple-array-from-encoded-element-type
 	 encoded-element-info (reduce #'* array-dimensions) array-dimensions)
-      ;; (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
-      ;; 	(type-of sa) num-bytes array-dimensions encoded-element-info)
+      (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
+	(type-of sa) num-bytes array-dimensions encoded-element-info)
       (ensure-enough-data storage num-bytes)
       (let ((offset (storage-offset storage))
 	    (array (storage-store storage)))

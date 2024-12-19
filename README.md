@@ -68,11 +68,19 @@ symbols, hash-tables, and pathnames are supported.
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
 - [ ] detect class and structure change on restore (just on the struct-info restore)
 - [ ] support store/restore from raw memory (mmap, sap, etc)
-
-We waste some time recording references during serialization that
-cannot be referred to (strings of symbol-names and package-names, for
-example, as if we ran into the symbol again it would be stored as a
-reference).  Similarly a few other places we record references that
-will never be hit.
+- [ ] very large object storage without copying
+- [ ] Parallel store and restore
 
 Some more testing and another run at speed
+
+## Parallelization
+
+It's unlikely we would be able to hit disk bandwidths without parallelizing (both during
+store and restore).  Part of the win of parallelizing is that you can do thread local bump
+allocation for small objects so things zoom quickly.  For very simple object serialization
+we currently hit about
+
+## Random comments
+
+You'd think we could avoid storing symbol-name strings in the reference tracker, but
+it's possible to have the same symbol in multiple packages so its worth it in the end.

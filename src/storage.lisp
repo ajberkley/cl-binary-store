@@ -43,6 +43,8 @@
 (defun make-write-into-storage/stream (stream)
   (lambda (storage)
     (let ((seq (storage-store storage)))
+      #+debug-csf
+      (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
       (write-sequence seq stream :end (storage-offset storage))
       (setf (storage-offset storage) 0))))
 
@@ -51,11 +53,13 @@
   (%make-read-storage :flusher (make-read-into-storage/stream stream)))
 
 (declaim (inline make-output-storage/stream))
-(defun make-output-storage/stream (stream)
-  (%make-write-storage :flusher (make-write-into-storage/stream stream)))
+(defun make-output-storage/stream (stream &optional (buffer-size 8192))
+  (%make-write-storage :flusher (make-write-into-storage/stream stream)
+		       :store (make-array buffer-size :element-type '(unsigned-byte 8))))
 
 (defun shift-data-to-beginning (storage)
-  "Move the data in seq to the beginning and update storage-offset and storage-max.
+  "FOR RESTORE
+ Move the data in seq to the beginning and update storage-offset and storage-max.
  Returns the index where new data can be written (storage-max storage)"
   (let ((store (storage-store storage))
 	(offset (storage-offset storage))
@@ -64,16 +68,37 @@
     (setf (storage-offset storage) 0)
     (setf (storage-max storage) (- max offset))))
 
-(defun maybe-increase-size-of-storage (storage bytes)
-  (when (> bytes (storage-size storage))
-    (setf (storage-store storage) (make-array bytes :element-type '(unsigned-byte 8)))))
+(defun maybe-increase-size-of-read-storage (storage bytes)
+  (let ((vector-length (storage-size storage))
+	(valid-data-ends-at (storage-max storage)))
+    (when (> bytes (- vector-length valid-data-ends-at))
+      (let* ((valid-data-starts-at (storage-offset storage))
+	     (valid-data-bytes (- valid-data-ends-at valid-data-starts-at)))
+	(cond
+	  ((> bytes (- vector-length valid-data-bytes))
+	   (shift-data-to-beginning storage))
+	  (t
+	   (let ((new (make-array (+ bytes valid-data-bytes) :element-type '(unsigned-byte 8))))
+	     (replace new (storage-store storage) :start2 valid-data-starts-at
+						  :end2 valid-data-ends-at)
+	     (setf (storage-offset storage) 0)
+	     (setf (storage-max storage) valid-data-bytes))))))))
+
+(defun flush-then-increase-size-of-storage (storage bytes)
+  "Returns storage offset after action"
+  (funcall (storage-flusher storage) storage)
+  (cond
+    ((> bytes (storage-size storage))
+     (setf (storage-store storage) (make-array bytes :element-type '(unsigned-byte 8)))
+     (setf (storage-offset storage) 0))
+    ((storage-offset storage))))
 
 (define-condition end-of-data (simple-error)
   ())
 
-(defun refill-storage (storage bytes return-nil-on-eof)
+(defun refill-read-storage (storage bytes return-nil-on-eof)
   (declare (optimize speed safety) (type fixnum bytes))
-  (maybe-increase-size-of-storage storage bytes)
+  (maybe-increase-size-of-read-storage storage bytes)
   (let ((storage-end (the fixnum (funcall (storage-flusher storage) storage))))
     (if (< storage-end bytes)
         (if return-nil-on-eof
@@ -83,28 +108,30 @@
 
 (declaim (inline ensure-enough-data))
 (defun ensure-enough-data (storage bytes &optional (return-nil-on-eof nil))
-  "Ensure that we have at least BYTES of data in STORAGE.  May signal `end-of-data'
+  "For RESTORE operation.
+ Ensure that we have at least BYTES of data in STORAGE.  May signal `end-of-data'
  unless return-nil-on-eof is t."
   (declare (optimize speed safety) (type fixnum bytes))
   (or (<= (the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
-      (refill-storage storage bytes return-nil-on-eof)))
+      (refill-read-storage storage bytes return-nil-on-eof)))
 
 (declaim (inline flush-storage))
 (defun flush-storage (storage)
   (funcall (storage-flusher storage) storage))
 
-(defun flush-writer (storage bytes)
-  (maybe-increase-size-of-storage storage bytes)
-  (flush-storage storage))
-
-(declaim (inline ensure-enough-room))
 (defun ensure-enough-room (storage bytes)
-  "Ensure that we have room to write BYTES to STORAGE"
+  (error "FIXME, renamed to ensure-enough-room-to-write"))
+
+(declaim (inline ensure-enough-room-to-write))
+(defun ensure-enough-room-to-write (storage bytes)
+  "Ensure that we have room to write BYTES to STORAGE.  Returns storage offset."
   (declare (optimize speed safety))
   (or (not storage)
       (locally (declare (type fixnum bytes))
-	(or (< (the fixnum (+ (storage-offset storage) bytes)) (storage-size storage))
-	    (flush-writer storage bytes)))))
+	(let ((offset (storage-offset storage)))
+	  (if (< (the fixnum (+ offset bytes)) (storage-size storage))
+	      offset
+	      (flush-then-increase-size-of-storage storage bytes))))))
 
 ;; User facing
 
