@@ -1,7 +1,8 @@
 (in-package :cl-store-faster)
 
-
+;; To enable debugging execute the below line and recompile everything
 ;; (pushnew :debug-csf *features*)
+;; To disable debugging execute the below and recompile everything
 ;; (setf *features* (delete :debug-csf *Features*))
 
 ;; Referrers are used to handle circularity (in lists, non-specialized
@@ -95,124 +96,51 @@
  reference-indices -> values when reading, as such ONLY store non
  fixnum objects in here.")
 
-(declaim (inline store-reference))
-(defun store-reference (ref-index storage)
-  "We store references as the minimum possible size we can"
-  (declare (type (and (integer 0) fixnum) ref-index)
-	   (type (not null) storage))
-  (ensure-enough-room storage 4)
-  (let ((offset (storage-offset storage))
-	(array (storage-store storage)))
-    (typecase ref-index
-      ((unsigned-byte 8)
-       (store-ub8 +referrer-ub8-code+ storage nil)
-       (store-ub8 ref-index storage nil))
-      ((unsigned-byte 16)
-       (store-ub8 +referrer-ub16-code+ storage nil)
-       (store-ub16 ref-index storage nil))
-      ((unsigned-byte 32)
-       (store-ub8 +referrer-ub32-code+ storage nil)
-       (store-ub32 ref-index storage nil))
-      (t
-       (setf (aref array offset) +referrer-code+)
-       (setf (storage-offset storage) (+ offset 1))
-       (store-tagged-unsigned-integer ref-index storage)))))
-
-(defun store-reference-id-for-following-object (ref-index storage)
-  (declare (type (and (integer 0) fixnum) ref-index)
-	   (type (not null) storage))
-  #+debug-csf (format t "Storing reference for following object #~A~%" ref-index)
-  (ensure-enough-room storage 4)
-  (let ((offset (storage-offset storage))
-	(array (storage-store storage)))
-    (typecase ref-index
-      ((unsigned-byte 8)
-       (store-ub8 +record-reference-ub8-code+ storage nil)
-       (store-ub8 ref-index storage nil))
-      ((unsigned-byte 16)
-       (store-ub8 +record-reference-ub16-code+ storage nil)
-       (store-ub16 ref-index storage nil))
-      ((unsigned-byte 32)
-       (store-ub8 +record-reference-ub32-code+ storage nil)
-       (store-ub32 ref-index storage nil))
-      (t
-       (setf (aref array offset) +record-reference-code+)
-       (setf (storage-offset storage) (+ offset 1))
-       (store-tagged-unsigned-integer ref-index storage)))))
-
-(declaim (inline restore-reference-id-for-following-object))
-(defun restore-reference-id-for-following-object (ref-id storage)
-  (setf (aref *references* ref-id)
-	(restore-object storage)))
-
-(defun restore-reference-id-ub8 (storage)
-  (restore-reference-id-for-following-object (restore-ub8 storage) storage))
-
-(defun restore-reference-id-ub16 (storage)
-  (restore-reference-id-for-following-object (restore-ub16 storage) storage))
-
-(defun restore-reference-id-ub32 (storage)
-  (restore-reference-id-for-following-object (restore-ub32 storage) storage))
-
-(defun restore-reference-id (storage)
-  (restore-reference-id-for-following-object (restore-object storage) storage))
-
-(defun check/store-reference (value storage &aux (ht *references*) (ref-idx (gethash value ht)))
+(defun check/store-reference (object storage &optional (add-new-reference t)
+			      &aux (ht *references*) (ref-idx (gethash object ht)))
+  "Returns T if we have written a short-hand reference out to the OBJECT, in which case the
+ caller should NOT write OBJECT out to storage.  If NIL, then you must write the OBJECT out.
+ If ADD-NEW-REFERENCE is T, in the case where this function returns NIL, we will generate a
+ new reference id for this object so it can be used in the future.  The only case where
+ ADD-NEW-REFERENCE should be NIL is if you are explicitly dis-allowing (for performance reasons)
+ circularity."
   (declare (optimize speed safety) (type (or null fixnum) ref-idx))
   (cond
     (storage
+     ;; When ref-idx is positive, it's a note that we have already written out the
+     ;; actual value, so we can just store the reference id. If it is negative,
+     ;; it means we must write out the ref-idx and the object as this is the first time
+     ;; it has appeared in the output.
      (if ref-idx
-	 ;; We will have to write a reference tag out in front of
-	 ;; this object if we have not stored a reference for it
-	 ;; yet.  The way we signal that is that the ref-idx
-	 ;; is negative if we haven't written it out.
 	 (cond
 	   ((>= ref-idx 0)
-	    #+debug-csf (format t "Storing reference #~A for ~A~%" ref-idx (type-of value))
+	    #+debug-csf (format t "Storing a reference (#~A) which is to a ~A~%"
+				ref-idx (type-of object))
 	    (store-reference ref-idx storage)
 	    t)
 	   (t
-	    #+debug-csf (format t "Updating reference id from ~A to ~A for a ~A~%"
-				ref-idx (- ref-idx) (type-of value))
+	    #+debug-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
+				(- ref-idx) (type-of object))
 	    (setf ref-idx (- ref-idx))
 	    (store-reference-id-for-following-object ref-idx storage)
-	    (setf (gethash value ht) ref-idx)
-	    nil))
-	 (unless *do-explicit-reference-pass*
-	   (let ((assigned-ref-idx (hash-table-count ht)))
-	     #+debug-csf
- 	     (let ((*print-circle* t))
-	       (format t "Assigning reference id ~A to ~S (~A)~%" ref-idx value
-		       (type-of value)))
-	     (setf (gethash value ht) assigned-ref-idx)
-	     nil))))
+	    (setf (gethash object ht) ref-idx)
+	    nil))))
     (t
      ;; first reference collection pass, no ref-idx assigned yet,
      ;; just keeping track of how many times an object is referenced
      ;; eventually HT will be thread local, but for now this is fine.
-     (let ((number-of-times-referenced (setf (gethash value ht) (+ 1 (or ref-idx 0)))))
-     #+debug-csf
-       (let ((*print-circle* t))
-	 (format t "Reference ~A now has ~A references~%" value number-of-times-referenced))
+     (let ((number-of-times-referenced
+	     (when (or ref-idx add-new-reference)
+	       (setf (gethash object ht) (+ 1 (or ref-idx 0))))))
+       #+debug-csf
+       (when number-of-times-referenced
+	 (let ((*print-circle* t))
+	   (format t "Reference of ~S now has ~A references~%"
+		   object number-of-times-referenced)))
        ;; If we have seen this reference before, don't do work on it
-       (> number-of-times-referenced 1)))))
+       (and number-of-times-referenced (> number-of-times-referenced 1))))))
 
 ;; RESTORATION WORK
-
-(declaim (notinline record-reference))
-(defun record-reference (value &aux (refs *references*))
-  "This is used during RESTORE.  Here we keep track of a global count of
- references"
-  ;; TODO DO NOT USE A GLOBAL HERE, TOO SLOW, PASS IT IN VIA CALLS SO THAT
-  ;; IT CAN BE COMPILE TIME INLINED
-  (if *references-already-fixed*
-      (values value -1)
-      (let ((len (length refs)))
-	#+debug-csf
-	(let ((*print-circle* t))
-	  (format t "Recording reference id ~A as ~S ~%" len (if value value :delayed)))
-	(vector-push-extend value refs)
-	(values value len))))
 
 (declaim (inline update-reference))
 (defun update-reference (ref-id value)
@@ -220,14 +148,27 @@
   #+debug-csf
   (let ((*print-circle* t))
     (format t "Updating reference id ~A to ~S~%" ref-id value))
-  (values (if *references-already-fixed* value (setf (aref *references* ref-id) value))))
+  (if *references-already-fixed*
+      value
+      (let ((references *references*))
+	(setf (aref
+	       (if (array-in-bounds-p references ref-id)
+		   (setf *references*
+			 (adjust-array references
+				       (max (* 2 (length references)) (1+ ref-id))))
+		   references)
+	       ref-id)
+	      value))))
 
 (defun invalid-referrer (ref-idx)
   (cerror "skip" (format nil "reference index ~A does not refer to anything!" ref-idx)))
 
 (declaim (inline get-reference))
 (defun get-reference (ref-id)
-  (or (aref *references* ref-id) (invalid-referrer ref-id)))
+  (let ((actual-object (aref *references* ref-id)))
+  #+debug-csf (format t "Resolving reference ~A to a ~A~%"
+		      ref-id (if actual-object (type-of actual-object) 'invalid-object))
+    (or actual-object (invalid-referrer ref-id))))
 
 (declaim (inline restore-referrer))
 (defun restore-referrer (storage)
@@ -254,49 +195,50 @@
 
 (declaim (inline fixup-p make-fixup fixup-list fixup-ref-id))
 (defstruct fixup
-  (list nil)
+  (list nil :type list)
   (ref-id -1 :type fixnum))
 
 (defun fixup (fixup new-value)
   (declare (optimize speed safety))
   "Resolve a delayed object construction.  Returns new-value."
+  #+debug-csf (format t "Executing ~A fixups for reference id ~A of type ~A~%"
+		      (length (fixup-list fixup)) (fixup-ref-id fixup)
+		      (type-of new-value))
   (mapc (lambda (func)
 	  (funcall (the function func) new-value))
 	(fixup-list fixup))
   (update-reference (fixup-ref-id fixup) new-value))
 
-(defmacro with-delayed-reference/fixup (&body body)
-  "If you cannot construct the object you are deserializing at the
- beginning of the deserialization routine because you need to load more
- information, AND there is a chance that the information you load may
- contain a reference back to the as-yet-constructed object you are building,
- then you must wrap your code with this magic.  BODY must yield the fully
- constructed object"
-  (let ((fixup (gensym)))
-    `(let ((,fixup (make-fixup)))
+(defun add-reference/fixup (value/fix-up ref-id)
+  (unless (array-in-bounds-p *references* ref-id)
+    (setf *references*
+	  (adjust-array *references*
+			(max (* 2 (length *references*)) (1+ ref-id)))))
+  (setf (aref *references* ref-id) value/fix-up))
+
+(defmacro with-delayed-reference/fixup (ref-id &body body)
+  "When we know an object is going to be referred to multiple times,
+ we place it in the *references* array immediately before we even start
+ building it because it may not be buildable without restoring other objects
+ that might refer to it.  So we always stick a fixup in the references array
+ first for any of those newly created objects to hang their requests to be
+ notified of the final object once it is constructed. BODY must eventually yield
+ the fully constructed object.  Not hygenic, "
+  (let ((fixup (gensym))
+	(num (gensym)))
+    `(let* ((,num ,ref-id)
+	    (,fixup (make-fixup :ref-id ,num)))
        (declare (dynamic-extent ,fixup))
-       (setf (fixup-ref-id ,fixup) (nth-value 1 (record-reference ,fixup)))
-       #+debug-csf(format t "Fixup is now ~A~%" ,fixup)
+       (add-reference/fixup ,fixup ,num)
+       #+debug-csf(format t "Created a fixup: ~A~%" ,fixup)
        (fixup ,fixup (progn ,@body)))))
 
-(defmacro with-delayed-reference (&body body)
-  "If you cannot construct the object you are deserializing at the
- beginning of the deserialization routine because you need to load
- more information, then you must wrap your code with this to keep
- referrer ids correct.  BODY must return the final object.  IF there
- is a chance of deserializing an object during BODY that may contain a
- reference to this not yet constructed object, then you must use
- WITH-DELAYED-REFERENCE/FIXUP instead."
-  (let ((ref-id (gensym)))
-    `(let ((,ref-id (nth-value 1 (record-reference nil))))
-       (update-reference ,ref-id (progn ,@body)))))
-
-(defmacro restore-object-to (place storage)
-  "If you are deserializing an object which contains slots (for example
- an array, a list, or structure-object or a standard-object) which may
- point to other lisp objects which have yet to be fully reified, then
- please update your slots with this macro which will handle circularity
- fixups for you.
+(defmacro restore-object-to (place storage &optional tag)
+  "If you are deserializing an object which contains slots (for
+ example an array, a list, hash-table, or structure-object or a
+ standard-object) which may point to other lisp objects which have yet
+ to be fully reified, then please update your slots with this macro
+ which will handle circularity fixups for you.
 
  Note that we capture any parameters of place so you may safely use this
  in loops or with references to variables whose values may be updated later"
@@ -304,7 +246,7 @@
 	 (new-object (gensym))
 	 (variables-to-capture (cdr place))
 	 (names (loop repeat (length variables-to-capture) collect (gensym))))
-    `(let ((,restored (restore-object ,storage)))
+    `(let ((,restored (restore-object ,storage ,@(when tag (list tag)))))
        (if (fixup-p ,restored)
 	   (push
 	    (let (,@(mapcar #'list names variables-to-capture))
@@ -314,15 +256,77 @@
 	   (setf ,place ,restored)))))
 
 (defmacro maybe-store-reference-instead ((obj storage) &body body)
-  "Objects may occur multiple times during serialization or
- deserialization, so where object equality is expected (pretty much
- every object except numbers) or not determinable (double-floats,
- complex, ratios, bignum), we store references to objects we
- serialize so we can write a shorter reference to them later.  The
- counting of objects is done implicitely by matching of
- 'maybe-store-reference-instead in store routines with the use of
- 'with-delayed-reference, 'with-delayed-reference/fixup, or record-reference
- in the restore routines."
+  "Objects may be seen multiple times during serialization,
+ so where object equality after deserialization is expected (pretty
+ much every object except numbers) or not determinable (double-floats,
+ complex, ratios, bignum), we record objects along with reference ids
+ that we can refer to later in the serialization to point to the
+ original object.  The counting of objects is done explicitly in the
+ writing phase, so there is nothing to do in the reading phase except
+ to plunk objects into the right place in the *references* array."
   `(or (check/store-reference ,obj ,storage)
        (progn
 	 ,@body)))
+
+(declaim (inline store-reference))
+(defun store-reference (ref-index storage)
+  "We store references as the minimum possible size we can"
+  (declare (type (and (integer 0) fixnum) ref-index)
+	   (type (not null) storage))
+  (ensure-enough-room storage 4)
+  (let ((offset (storage-offset storage))
+	(array (storage-store storage)))
+    #+debug-csf (format t "Writing reference ~A~%" ref-index)
+    (typecase ref-index
+      ((unsigned-byte 8)
+       (store-ub8 +referrer-ub8-code+ storage nil)
+       (store-ub8 ref-index storage nil))
+      ((unsigned-byte 16)
+       (store-ub8 +referrer-ub16-code+ storage nil)
+       (store-ub16 ref-index storage nil))
+      ((unsigned-byte 32)
+       (store-ub8 +referrer-ub32-code+ storage nil)
+       (store-ub32 ref-index storage nil))
+      (t
+       (setf (aref array offset) +referrer-code+)
+       (setf (storage-offset storage) (+ offset 1))
+       (store-tagged-unsigned-integer ref-index storage)))))
+
+(defun store-reference-id-for-following-object (ref-index storage)
+  (declare (type (and (integer 0) fixnum) ref-index)
+	   (type (not null) storage))
+  (ensure-enough-room storage 4)
+  (let ((offset (storage-offset storage))
+	(array (storage-store storage)))
+    (typecase ref-index
+      ((unsigned-byte 8)
+       (store-ub8 +record-reference-ub8-code+ storage nil)
+       (store-ub8 ref-index storage nil))
+      ((unsigned-byte 16)
+       (store-ub8 +record-reference-ub16-code+ storage nil)
+       (store-ub16 ref-index storage nil))
+      ((unsigned-byte 32)
+       (store-ub8 +record-reference-ub32-code+ storage nil)
+       (store-ub32 ref-index storage nil))
+      (t
+       (setf (aref array offset) +record-reference-code+)
+       (setf (storage-offset storage) (+ offset 1))
+       (store-tagged-unsigned-integer ref-index storage)))))
+
+(declaim (inline restore-reference-id-for-following-object))
+(defun restore-reference-id-for-following-object (ref-id storage)
+  "Object may not reified before other objects refer to it"
+  (with-delayed-reference/fixup ref-id
+    (restore-object storage)))
+
+(defun restore-reference-id-ub8 (storage)
+  (restore-reference-id-for-following-object (restore-ub8 storage) storage))
+
+(defun restore-reference-id-ub16 (storage)
+  (restore-reference-id-for-following-object (restore-ub16 storage) storage))
+
+(defun restore-reference-id-ub32 (storage)
+  (restore-reference-id-for-following-object (restore-ub32 storage) storage))
+
+(defun restore-reference-id (storage)
+  (restore-reference-id-for-following-object (restore-object storage) storage))

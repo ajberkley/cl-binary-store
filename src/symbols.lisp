@@ -29,13 +29,13 @@
      (maybe-store-reference-instead (symbol storage)
        (store-ub8 +symbol-code+ storage nil)
        #+debug-csf
-       (format t "Storing ~S package ~S~%"
+       (format t "Storing symbol ~S from package ~S~%"
 	       (symbol-name symbol) (package-name (symbol-package symbol)))
        ;; TODO maybe we can skip storing reference ids for these strings?
        (store-object (symbol-name symbol) storage)
        (store-object (package-name (symbol-package symbol)) storage)))
     (t ;; symbols without a package, (symbol-package (gensym)) -> nil
-     #+debug-csf (format t "Symbol without a package ~S~%" symbol)
+     #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
      ;;these can never be the same
      (store-ub8 +gensym-code+ storage nil)
      (store-object (symbol-name symbol) storage))))
@@ -56,12 +56,11 @@
 
 (declaim (inline restore-symbol))
 (defun restore-symbol (storage)
-  (with-delayed-reference
-    (let* ((symbol-string (restore-object storage))
-	   (package-string (restore-object storage)))
-      (if (find-package package-string)
-	  (intern symbol-string package-string)
-	  (signal-missing-package symbol-string package-string)))))
+  (let* ((symbol-string (restore-object storage))
+	 (package-string (restore-object storage)))
+    (if (find-package package-string)
+	(intern symbol-string package-string)
+	(signal-missing-package symbol-string package-string))))
 
 (defun restore-gensym (storage)
   ;; Can never be referred to by anything

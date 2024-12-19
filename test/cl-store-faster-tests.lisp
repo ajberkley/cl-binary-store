@@ -3,34 +3,41 @@
 
 (in-package #:cl-store-faster-tests)
 
-(define-test test-very-basic-circularity
-  (let ((a (list 1234))
-	(cl-store-faster::*do-explicit-reference-pass* t)
-	(cl-store-faster::*support-shared-list-structures* t))
-    (setf (cdr a) a)
+(define-test test-very-basic-list-cdr-circularity
+  (let ((a (list 123 456))
+	(cl-store-faster::*support-shared-list-structures* nil))
+    (setf (cddr a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
-      (let ((*print-circle* t))
-	(print result))
-      (is 'eq (first result) result)
-      (false (cdr result)))))
+      ;; (let ((*print-circle* t))
+      ;; 	(print result))
+      (is '= (first result) 123)
+      (is '= (second result) 456)
+      (is 'eq (cddr result) result))))
 
-(define-test test-very-basic-car-circularity
-  (let ((a (list nil))
-	(cl-store-faster::*do-explicit-reference-pass* t)
+(define-test test-very-basic-list-car-circularity
+  (let ((a (list nil "abcd"))
 	(cl-store-faster::*support-shared-list-structures* nil))
     (setf (first a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
-      (let ((*print-circle* t))
-	(print result))
+      ;; (let ((*print-circle* t))
+      ;; 	(print result))
       (is 'eq (first result) result)
-      (false (cdr result)))))
-  
+      (is 'equalp (second result) "abcd")
+      (false (cddr result)))))
 
-(define-test test-basic-circularity
+(define-test test-non-basic-circularity
+  (let ((a (list 123 456))
+	(cl-store-faster::*support-shared-list-structures* t))
+    (setf (cdr (last a)) (nthcdr 1 a)) ;; loop back to second element
+    (let ((result (restore-from-vector (print (store-to-vector a)))))
+      (is '= (first result) 123)
+      (is '= (cadr result) 456)
+      (is 'eq (cddr result) (cdr result)))))
+
+(define-test test-displaced-array-circularity
   (let* ((a (make-array 3))
 	 (b (make-array 3 :displaced-to a))
-	 (cl-store-faster::*do-explicit-reference-pass* t)
-	 (cl-store-faster::*support-shared-list-structures* t))
+	 (cl-store-faster::*support-shared-list-structures* nil))
     (setf (aref a 0) b)
     (setf (aref a 1) (list "blarg" a b))
     (setf (aref a 2) (make-array 3 :initial-element b))
@@ -139,11 +146,12 @@
 
 (define-test test-struct-circular
   (let ((s (list (make-blarg :a 1234 :b 1d0 :d (make-array 5 :initial-element "hi"))
-		 (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo"))))
-	(cl-store-faster::*do-explicit-reference-pass* nil))
+		 (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo")))))
     (setf (blarg-a (second s)) (first s))
     (setf (blarg-a (first s)) (second s))
-    (let ((result (restore-from-vector (store-to-vector s))))
+    (let ((result (restore-from-vector (store-to-vector s)))
+	  (*print-circle* t))
+      (is '= (length result) 2)
       (is 'eql (blarg-a (first result)) (second result))
       (is 'eql (blarg-a (second result)) (first result))
       (setf (blarg-a (first s)) nil)

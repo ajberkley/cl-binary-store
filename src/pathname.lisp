@@ -15,11 +15,10 @@
     (store-object (pathname-version obj) storage)))
 
 (defun restore-pathname (storage)
-  (with-delayed-reference
-   (make-pathname
-    :host (restore-object storage)
-    :device (restore-object storage)
-    :directory (restore-object storage)
-    :name (restore-object storage)
-    :type (restore-object storage)
-    :version (restore-object storage))))
+  (make-pathname
+   :host (restore-object storage)
+   :device (restore-object storage)
+   :directory (restore-object storage)
+   :name (restore-object storage)
+   :type (restore-object storage)
+   :version (restore-object storage)))

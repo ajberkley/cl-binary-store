@@ -10,8 +10,12 @@
  referenced.  When this is NIL, this is similar to the behavior of
  CL-STORE.  For a 1 million long list we are about 3x slower than CL-STORE
  when it has this feature disabled.  Basic support for sharing heads of lists
- is always enabled (that is multiple references to the same list), but without
- this basic list circularity is not supported.")
+ is always enabled (that is multiple references to the same list and references
+ with the list back to the head), but without this feature references to the
+ rest of the list are not supported.
+
+ WARNING: it is very very bad to set this to NIL and then try to write out data,
+ we will generally explode your disk as we do no circularity detection.")
 
 (declaim (notinline store-cons))
 (defun store-cons (cons storage &optional (referrable-or-possibly-circular-p t) (tagged t))
@@ -28,11 +32,11 @@
   (let ((support-shared-list-structures *support-shared-list-structures*))
     (tagbody
      next-cdr
-       (or (and referrable-or-possibly-circular-p
-		(check/store-reference cons storage))
+       (or (check/store-reference cons storage
+				  (or referrable-or-possibly-circular-p
+				      support-shared-list-structures))
 	   (progn
 	     (when storage
-	       #+debug-csf (format t "Storing CONS CODE~%")
 	       (ensure-enough-room storage 3)
 	       (let ((offset (storage-offset storage))
 		     (array (storage-store storage)))
@@ -54,27 +58,21 @@
 
 (declaim (notinline restore-cons))
 ;; Has to be careful to not blow the stack
-(defun restore-cons (storage &optional (referrable-or-possibly-circular-p t))
-  (let ((support-shared-list-structures *support-shared-list-structures*)
-	(first-cons (cons nil nil)))
+(defun restore-cons (storage)
+  (let ((first-cons (cons nil nil)))
     (loop
       with cons = first-cons
       do
-	 (when referrable-or-possibly-circular-p
-	   (record-reference cons))
 	 (restore-object-to (car cons) storage)
 	 (let ((next (restore-ub8 storage)))
 	   (case next
 	     (#.+cons-code+
 	       (let ((next (cons nil nil)))
 		 (setf (cdr cons) next)
-		 (setf cons next)
-		 (setf referrable-or-possibly-circular-p
-		       (and referrable-or-possibly-circular-p
-			    support-shared-list-structures))))
+		 (setf cons next)))
 	     (#.+nil-code+
 	      (setf (cdr cons) nil)
 	      (return-from restore-cons first-cons))
 	     (t
-	      (restore-object-to (cdr cons) storage)
+	      (restore-object-to (cdr cons) storage next)
 	      (return-from restore-cons first-cons)))))))

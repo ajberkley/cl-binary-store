@@ -4,9 +4,10 @@
 ;; (clear-cached-tables) if you happen
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-    (defvar *restore-dispatch-table-names*
-      (make-array 256)
-      "For debugging, names of each code type")
+  (defvar *restore-dispatch-table-names*
+    (make-array 256)
+    "For debugging, names of each code type")
+
   (defun make-read-dispatch ()
     `(progn
        (declaim (sb-ext:maybe-inline read-dispatch))
@@ -50,17 +51,19 @@
   (defvar *store-dispatch-table-names*
     (make-array 256)
     "For debugging, names of each code type")
+  
   (declaim (type vector *dispatch*))
   (defvar *dispatch* (make-array 0)
     "A UB8 extendable array holding the codes of objects to be stored in order (until we
      parallelize the reference and dispatch compilation pass)")
 
   (defvar *dispatch-index* 0
-    "An offset into the *dispatch* table.  Should not be a global bleh.")
+    "An offset into the *dispatch* table.  Should not be a global bleh, add to function
+     parameters")
 
   (defvar *references-already-fixed* nil
-    "If t, do not attempt to record references... TODO replace me with function parameters
-     so this can get resolved at compile time")
+    "This is NIL during the reference counting phase and T when we are actually serializing data
+     TODO replace me with function parameters so this can get resolved at compile time?")
   
   (defun make-store-object ()
     `(progn
@@ -77,26 +80,15 @@
 	 (declare (optimize (debug 3);; speed safety
 			    ))
 	 ;; if STORAGE is nil, we want to build up a dispatch set
-	 (if *do-explicit-reference-pass*
-	     (let ((index *dispatch-index*))
-	       #+debug-csf (format t "Dispatching to code ~A: ~A~%"
-				   (aref *dispatch* index)
-				   (svref *store-dispatch-table-names*
-					  (aref *dispatch* index)))
-	       (setf *dispatch-index* (+ 1 index))
-	       (funcall (the function
-			     (svref *store-dispatch-table* (aref *dispatch* index)))
-			value storage))
-	     (etypecase value
-	       ;; We need to order these by subtypep, a simple sort won't work
-	       ;; because we have disjoint sets.  So first, we have to sort into
-	       ;; disjoint sets, then sort, then recombine.
-               ,@(strict-subtype-ordering
-		  (loop for type-spec being the hash-keys of *code-store-info*
-			for func = (gethash type-spec *code-store-info*)
-			collect (list type-spec
-				      (list func 'value 'storage)))
-		  :key #'first))))
+	 (let ((index *dispatch-index*))
+	   #+debug-csf (format t "Dispatching to code ~A: ~A~%"
+			       (aref *dispatch* index)
+			       (svref *store-dispatch-table-names*
+				      (aref *dispatch* index)))
+	   (setf *dispatch-index* (+ 1 index))
+	   (funcall (the function
+			 (svref *store-dispatch-table* (aref *dispatch* index)))
+		    value storage)))
        
        (defun store-object/no-storage (value)
 	 (declare (optimize speed safety))
@@ -136,8 +128,6 @@
     (eval (make-store-object))
     (eval (make-read-dispatch)))
 
-  (defparameter *do-explicit-reference-pass* t)
-  
   (defun store-objects (storage &rest stuff)
     (declare (inline store-object)) ;; can't inline it here which sux
     ;; would save one branch in store-object, but that will be hot
@@ -145,33 +135,29 @@
 					 ))
 	  (*struct-info* (make-hash-table :test 'eql))
 	  (*dispatch*
-	    (if *do-explicit-reference-pass*
-	      (make-array 1024 :element-type '(unsigned-byte 8) :fill-pointer 0 :adjustable t)
-	      *dispatch*)))
+	      (make-array 1024 :element-type '(unsigned-byte 8) :fill-pointer 0 :adjustable t)))
       ;; I guess we could also record the objects?  Hm... not worth the space costs I don't
       ;; think.  But... hm...
       ;; First reference pass and dispatch compilation
-      (when *do-explicit-reference-pass* ;; this will take 0.12 seconds on a 1.7 second thing
-	#+debug-csf (format t "Starting reference counting pass~%")
-	(dolist (elt stuff)
-	  (store-object/no-storage elt))
-	#+debug-csf (format t "Did reference counting pass~%")
-	(let ((old-ht *references*)
-	      (new-ht (make-hash-table :test 'eql))
-	      (ref-id 0))
-	  ;; Now clean up the references list
-	  ;; delete anyone who has no references
-	  #+debug-csf (format t "Generating real reference hash-table~%")
-	  (maphash (lambda (k v)
-		     (when (> v 1)
-		       (setf (gethash k new-ht) (- (incf ref-id))))) ;; signal it needs writing
-		   old-ht)
-	  (clrhash old-ht)  ; help the gc?
-	  (setf old-ht nil) ; help the gc? this should be the only necessary thing
-	  #+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht))
-	  (setf *references* new-ht)))
-
-      (let ((*references-already-fixed* *do-explicit-reference-pass*)
+      #+debug-csf (format t "Starting reference counting pass~%")
+      (dolist (elt stuff)
+	(store-object/no-storage elt))
+      #+debug-csf (format t "Did reference counting pass~%")
+      (let ((old-ht *references*)
+	    (new-ht (make-hash-table :test 'eql))
+	    (ref-id 0))
+	;; Now clean up the references list
+	;; delete anyone who has no references
+	#+debug-csf (format t "Generating real reference hash-table~%")
+	(maphash (lambda (k v)
+		   (when (> v 1)
+		     (setf (gethash k new-ht) (- (incf ref-id))))) ;; signal it needs writing
+		 old-ht)
+	(clrhash old-ht)  ; help the gc?
+	(setf old-ht nil) ; help the gc? this should be the only necessary thing
+	#+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht))
+	(setf *references* new-ht))
+      (let ((*references-already-fixed* t)
 	    (*dispatch-index* 0))
 	#+debug-csf (format t "Compiled dispatch info for ~A objects~%" (length *dispatch*))
 	(dolist (elt stuff)
@@ -181,8 +167,10 @@
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all the elements."
-    (let ((*references* (make-array 1024 :adjustable t :fill-pointer 0))
-	  (*references-already-fixed* *do-explicit-reference-pass*)) ;; format needs to be stored in file!
+    (let ((*references* (make-array 1024 :adjustable t :fill-pointer nil)))
+      ;; crazy references start at 1 when using explicit reference pass
+      ;; this is a footgun, fix!
+      ;; format needs to be stored in file!
       (let ((result
 	      (loop for code = (restore-ub8 storage t)
 		    while code

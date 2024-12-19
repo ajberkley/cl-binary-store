@@ -65,11 +65,10 @@
   (declare (optimize speed safety))
   (let ((count (restore-fixnum storage)))
     (ensure-enough-data storage (* 4 count))
-    (record-reference 
-     (* (if (< count 0) -1 1)
-	(bits->num
-	 (loop repeat (abs count)
-	       collect (restore-ub32 storage)))))))
+    (* (if (< count 0) -1 1)
+       (bits->num
+	(loop repeat (abs count)
+	      collect (restore-ub32 storage))))))
 
 (defun store-bignum (bignum storage)
   (maybe-store-reference-instead (bignum storage)
@@ -113,15 +112,14 @@
 (defun restore-double-float (storage)
   (declare (optimize speed safety))
   (ensure-enough-data storage 8)
-  (record-reference
-   (let ((offset (storage-offset storage))
-         (array (storage-store storage)))
-     (declare (type (unsigned-byte 60) offset))
-     (setf (storage-offset storage) (+ 8 offset))
-     (let ((a (make-array 1 :element-type 'double-float)))
-       (declare (dynamic-extent a))
-       (copy-n-bytes a 0 array offset 8)
-       (aref a 0)))))
+  (let ((offset (storage-offset storage))
+        (array (storage-store storage)))
+    (declare (type (unsigned-byte 60) offset))
+    (setf (storage-offset storage) (+ 8 offset))
+    (let ((a (make-array 1 :element-type 'double-float)))
+      (declare (dynamic-extent a))
+      (copy-n-bytes a 0 array offset 8)
+      (aref a 0))))
 
 (declaim (inline store-double-float))
 (defun store-double-float (double-float storage)
@@ -143,9 +141,8 @@
 	(setf (storage-offset storage) (incf offset 8))))))
 
 (defun restore-ratio (storage)
-  (record-reference
-   (/ (the integer (restore-object storage))
-      (the integer (restore-object storage)))))
+  (/ (the integer (restore-object storage))
+     (the integer (restore-object storage))))
 
 (defun store-ratio (ratio storage)
   (maybe-store-reference-instead (ratio storage)
@@ -158,9 +155,8 @@
     (store-object (denominator ratio) storage)))
 
 (defun restore-complex (storage)
-  (record-reference
-   (complex (restore-object storage)
-	    (restore-object storage))))
+  (complex (restore-object storage)
+	   (restore-object storage)))
 
 (defun store-complex (complex storage)
   (maybe-store-reference-instead (complex storage)
@@ -174,9 +170,8 @@
 
 (declaim (inline restore-complex-double-float))
 (defun restore-complex-double-float (storage)
-  (record-reference
-   (complex (restore-double-float storage)
-	    (restore-double-float storage))))
+  (complex (restore-double-float storage)
+	   (restore-double-float storage)))
 
 (declaim (inline store-complex-double-float))
 (defun store-complex-double-float (complex-double-float storage)
@@ -188,9 +183,8 @@
 
 (declaim (inline restore-complex-single-float))
 (defun restore-complex-single-float (storage)
-  (record-reference
-   (complex (restore-single-float storage)
-	    (restore-single-float storage))))
+  (complex (restore-single-float storage)
+	   (restore-single-float storage)))
 
 (declaim (inline store-complex-single-float))
 (defun store-complex-single-float (complex-single-float storage)

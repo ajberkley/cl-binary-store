@@ -10,7 +10,9 @@
   (and (ensure-enough-data storage 1 ignore-end-of-data)
        (let ((offset (storage-offset storage)))
 	 (setf (storage-offset storage) (1+ offset))
-	 (aref (storage-store storage) offset))))
+	 (let ((res (aref (storage-store storage) offset)))
+	   ;;#+debug-csf (format t "Got a UB8: ~A~%" res)
+	   res))))
 
 (declaim (inline store-ub8))
 (defun store-ub8 (ub8 storage &optional (tag t))

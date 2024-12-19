@@ -12,26 +12,16 @@
 	 (dimensions (loop repeat array-rank collect (restore-object storage)))
 	 (displaced (restore-object storage)))
     (if displaced
-	(with-delayed-reference/fixup
-	  ;; Circularity in a displaced array, where, for example the
-	  ;; array we are trying to deserialize is displaced to an
-	  ;; array which contains a reference to itself is
-	  ;; problematic.  To handle this we create a placeholder
-	  ;; reference called a 'fixup' which stores any locations that
-	  ;; would contain a reference to our yet to be created object,
-	  ;; and we "fix up" these references when we finally finish
-	  ;; building the object being referenced.
-	  (let ((element-type (restore-object storage))
-		(offset (restore-object storage))
-		(displaced-to (restore-object storage)))
-	    (make-array dimensions :element-type element-type :adjustable adjustable
-				   :fill-pointer fill-pointer :displaced-to displaced-to
-				   :displaced-index-offset offset)))
+	(let ((element-type (restore-object storage))
+	      (offset (restore-object storage))
+	      (displaced-to (restore-object storage)))
+	  (make-array dimensions :element-type element-type :adjustable adjustable
+				 :fill-pointer fill-pointer :displaced-to displaced-to
+				 :displaced-index-offset offset))
 	(let ((array
-		(with-delayed-reference
-		  (let* ((element-type (restore-object storage)))
-		    (make-array dimensions :element-type element-type :adjustable adjustable
-					   :fill-pointer fill-pointer)))))
+		(let* ((element-type (restore-object storage)))
+		  (make-array dimensions :element-type element-type :adjustable adjustable
+					 :fill-pointer fill-pointer))))
 	  (loop for idx fixnum from 0 below (array-total-size array)
 		do (restore-object-to (row-major-aref array idx) storage))
 	  array))))

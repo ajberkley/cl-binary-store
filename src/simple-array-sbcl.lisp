@@ -103,19 +103,18 @@
 
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize speed safety))
-  (record-reference
-   (let ((num-elts (restore-object storage)))
-     (let* ((encoded-element-info (restore-ub8 storage)))
-       (multiple-value-bind (sv num-bytes)
-	   (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
-	 ;; (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
-	 ;; 	(type-of sv) num-bytes num-elts encoded-element-info)
-	 (ensure-enough-data storage num-bytes)
-	 (let ((offset (storage-offset storage))
-	       (array (storage-store storage)))
-	   (copy-n-bytes sv 0 array offset num-bytes)
-	   (setf (storage-offset storage) (+ num-bytes offset))
-	   sv))))))
+  (let ((num-elts (restore-object storage)))
+    (let* ((encoded-element-info (restore-ub8 storage)))
+      (multiple-value-bind (sv num-bytes)
+	  (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
+	;; (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
+	;; 	(type-of sv) num-bytes num-elts encoded-element-info)
+	(ensure-enough-data storage num-bytes)
+	(let ((offset (storage-offset storage))
+	      (array (storage-store storage)))
+	  (copy-n-bytes sv 0 array offset num-bytes)
+	  (setf (storage-offset storage) (+ num-bytes offset))
+	  sv)))))
 
 (defun store-simple-specialized-array (sa storage)
   (declare (optimize speed safety)
@@ -143,22 +142,21 @@
 (defun restore-simple-specialized-array (storage)
   (declare (optimize speed safety))
   ;; sbcl gets confused with restore-ub8 because of the error path
-  (record-reference
-   (let* ((num-array-dimensions (the (unsigned-byte 8) (restore-ub8 storage)))
-	  (array-dimensions (loop repeat num-array-dimensions
-				  collect (restore-object storage)))
-	  (encoded-element-info (restore-ub8 storage)))
-     (multiple-value-bind (sa num-bytes)
-	 (sbcl-make-simple-array-from-encoded-element-type
-	  encoded-element-info (reduce #'* array-dimensions) array-dimensions)
-       ;; (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
-       ;; 	(type-of sa) num-bytes array-dimensions encoded-element-info)
-       (ensure-enough-data storage num-bytes)
-       (let ((offset (storage-offset storage))
-	     (array (storage-store storage)))
-	 (copy-n-bytes/array sa 0 array offset num-bytes)
-	 (setf (storage-offset storage) (+ num-bytes offset))
-	 sa)))))
+  (let* ((num-array-dimensions (the (unsigned-byte 8) (restore-ub8 storage)))
+	 (array-dimensions (loop repeat num-array-dimensions
+				 collect (restore-object storage)))
+	 (encoded-element-info (restore-ub8 storage)))
+    (multiple-value-bind (sa num-bytes)
+	(sbcl-make-simple-array-from-encoded-element-type
+	 encoded-element-info (reduce #'* array-dimensions) array-dimensions)
+      ;; (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
+      ;; 	(type-of sa) num-bytes array-dimensions encoded-element-info)
+      (ensure-enough-data storage num-bytes)
+      (let ((offset (storage-offset storage))
+	    (array (storage-store storage)))
+	(copy-n-bytes/array sa 0 array offset num-bytes)
+	(setf (storage-offset storage) (+ num-bytes offset))
+	sa))))
 
 (defun store-4-long-sv-sb8 (sv storage)
   (declare (optimize speed safety) (type (simple-array (signed-byte 8) (4)) sv))
@@ -174,10 +172,9 @@
 (defun restore-4-long-sv-sb8 (storage)
   (declare (optimize speed safety))
   (ensure-enough-data storage 4)
-  (record-reference
-   (let ((sv (make-array 4 :element-type '(signed-byte 8))))
-     (let ((offset (storage-offset storage))
-	   (array (storage-store storage)))
-       (copy-n-bytes sv 0 array offset 4)
-       (setf (storage-offset storage) (+ offset 4))
-       sv))))
+  (let ((sv (make-array 4 :element-type '(signed-byte 8))))
+    (let ((offset (storage-offset storage))
+	  (array (storage-store storage)))
+      (copy-n-bytes sv 0 array offset 4)
+      (setf (storage-offset storage) (+ offset 4))
+      sv)))

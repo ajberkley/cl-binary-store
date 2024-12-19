@@ -10,7 +10,7 @@
 (defun restore-simple-vector (storage)
   (declare (optimize speed safety))
   (let* ((num-elts (restore-object storage))
-	 (sv (record-reference (make-array num-elts))))
+	 (sv (make-array num-elts)))
     ;; It's possible that we can refer to an
     ;; object that is not fully reified yet
     ;; (the only possibility is an array displaced

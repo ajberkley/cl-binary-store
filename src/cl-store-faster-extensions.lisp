@@ -7,8 +7,6 @@
 
    ;; Complex circularity handling during restore
    #:restore-object-to
-   #:with-delayed-reference/fixup
-   #:with-delayed-reference
 
    ;; Normal circularity handling
    #:record-reference ; during restore

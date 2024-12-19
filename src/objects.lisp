@@ -37,7 +37,6 @@
 (defun store-struct-info (struct-info storage)
   (declare (optimize speed safety) (type struct-info struct-info))
   (maybe-store-reference-instead (struct-info storage)
-    #+debug-csf (format t "STORE-STRUCT-INFO ~A~%" struct-info)
     (store-ub8 +struct-info-code+ storage nil)
     (store-object (struct-info-type struct-info) storage)
     (let ((slot-names (struct-info-slot-names struct-info)))
@@ -47,7 +46,7 @@
 
 (defun restore-struct-info (storage)
   (declare (optimize (debug 3)))
-  (let ((si (record-reference (make-struct-info))))
+  (let ((si (make-struct-info)))
     (setf (struct-info-type si) (restore-object storage))
     (let ((num-slots (restore-ub32 storage)))
       (let ((names (make-array num-slots)))
@@ -68,19 +67,15 @@
     (store-ub8 +structure-object-code+ storage nil)
     (let ((struct-info (get-struct-info struct)))
       (store-struct-info struct-info storage)
-      #+debug-csf (format t "store-struct dumping slot values~%")
       (loop for name across (struct-info-slot-names struct-info)
 	    do (store-object (slot-value struct name) storage)))))
 
 (defun restore-struct (storage)
-  (let* (struct-info
-	 struct)
-    (with-delayed-reference
-      (setf struct-info (restore-object storage))
-      ;;(make-instance (struct-info-type struct-info)) ;; 2x slower
-      (setf struct (allocate-instance (find-class (struct-info-type struct-info)))))
+  (let* ((struct-info (restore-object storage))
+	 (struct ;;(make-instance (struct-info-type struct-info)) ;; 2x slower
+		 (allocate-instance (find-class (struct-info-type struct-info)))))
     (loop for name across (struct-info-slot-names struct-info)
-	  do (setf (slot-value struct name) (restore-object storage)))
+	  do (restore-object-to (slot-value struct name) storage))
     struct))
 
 ;; We use the same methods as structure-objects, but must deal with unbound slots
@@ -105,18 +100,17 @@
 		   (store-object (slot-value obj name) storage)
 		   (store-unbound storage))))))
 
+(defun (setf slot-value*) (value object name)
+  "Handle internal 'unbound-slot value"
+  (if (eq value 'unbound-slot)
+      (slot-makunbound object name)
+      (setf (slot-value object name) value)))
+
 (defun restore-standard-object (storage)
   (declare (optimize speed safety))
-  (let (struct-info
-	obj)
-    (with-delayed-reference
-      (setf struct-info (restore-object storage))
-      (setf obj (allocate-instance (find-class (struct-info-type struct-info)))))
-    (loop for name across (struct-info-slot-names struct-info)
-	  for slot-value = (restore-object storage)
-	  if (eq slot-value 'unbound-slot)
-	    do
-	       (slot-makunbound obj name)
-	  else
-	    do (setf (slot-value obj name) slot-value))
+  (let* ((struct-info (restore-object storage))
+	 (obj (allocate-instance (find-class (struct-info-type struct-info)))))
+    (map nil (lambda (name)
+	       (restore-object-to (slot-value* obj name) storage))
+	 (struct-info-slot-names struct-info))
     obj))
