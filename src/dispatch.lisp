@@ -32,7 +32,7 @@
     (read-dispatch tag storage))
 
   (defun strict-subtype-ordering (type-specs &key (key #'identity))
-    (let* ((type-groups '(number cons symbol array structure-object standard-object t))
+    (let* ((type-groups '(cons symbol number array structure-object standard-object t))
 	   (groups (make-array (length type-groups) :initial-element nil)))
       (loop for item in type-specs
 	    do (loop for count below (length type-groups)
@@ -43,6 +43,8 @@
       (loop for g across groups
 	    appending (stable-sort (reverse g) #'subtypep :key key))))
 
+  (defconstant +precompute-dispatch+ nil)
+  
   (declaim (type simple-vector *store-dispatch-table*))
   (defvar *store-dispatch-table*
     (make-array 256 :initial-element (lambda (&rest rest)
@@ -75,20 +77,27 @@
 	     (store-object/storage value storage)
 	     (store-object/no-storage value)))
        
-       ;; We can't inline store-object
        (defun store-object/storage (value storage)
 	 (declare (optimize (debug 3);; speed safety
 			    ))
-	 ;; if STORAGE is nil, we want to build up a dispatch set
-	 (let ((index *dispatch-index*))
-	   #+debug-csf (format t "Dispatching to code ~A: ~A~%"
-			       (aref *dispatch* index)
-			       (svref *store-dispatch-table-names*
-				      (aref *dispatch* index)))
-	   (setf *dispatch-index* (+ 1 index))
-	   (funcall (the function
-			 (svref *store-dispatch-table* (aref *dispatch* index)))
-		    value storage)))
+	 ,(if +precompute-dispatch+
+	      `(let ((index *dispatch-index*))
+		 #+debug-csf (format t "Dispatching to code ~A: ~A~%"
+				     (aref *dispatch* index)
+				     (svref *store-dispatch-table-names*
+					    (aref *dispatch* index)))
+		 (setf *dispatch-index* (+ 1 index))
+		 (funcall (the function
+			       (svref *store-dispatch-table* (aref *dispatch* index)))
+			  value storage))
+	      `(etypecase
+		   value
+		   ,@(strict-subtype-ordering
+		      (loop for type-spec being the hash-keys of *code-store-info*
+			    for idx fixnum from 0
+			    for func = (gethash type-spec *code-store-info*)
+			    collect (list type-spec `(,func value storage)))
+		      :key #'first))))
        
        (defun store-object/no-storage (value)
 	 (declare (optimize speed safety))
@@ -104,18 +113,12 @@
 		       (setf (svref *store-dispatch-table* idx)
 			     (compile nil `(lambda (value storage)
 					     (funcall ',func value storage) ; debug
-					     ;; (,func value storage) ; normal
+					     ;;(,func value storage) ; normal
 					     )))
 		       ;; this way the compiler knows storage is nil and
 		       ;; we have compile time clean-up and dispatch.
 		    collect (list type-spec
-				  `(vector-push-extend ,idx *dispatch*)
-				  ;; TODO: WE COULD HAVE THE MACRO THAT BUILDS
-				  ;; THE STORAGE FUNCTIONS NOTE THAT THERE ARE
-				  ;; NO NESTED CALLS INSIDE TO AVOID THIS CALL
-				  ;; AND THE (WHEN STORAGE) WRAPPERS IN EACH
-				  ;; FUNCTION.  Though if they are inline this
-				  ;; will be fine...
+				  (when +precompute-dispatch+ `(vector-push-extend ,idx *dispatch*))
 				  `(,func value nil)))
 	      :key #'first)))))
   
@@ -129,13 +132,17 @@
     (eval (make-read-dispatch)))
 
   (defun store-objects (storage &rest stuff)
-    (declare (inline store-object)) ;; can't inline it here which sux
+    (declare (optimize speed safety)
+	     (inline store-object))
     ;; would save one branch in store-object, but that will be hot
-    (let ((*references* (make-hash-table :test 'eql :size 1024
-					 ))
-	  (*struct-info* (make-hash-table :test 'eql))
-	  (*dispatch*
-	      (make-array 1024 :element-type '(unsigned-byte 8) :fill-pointer 0 :adjustable t)))
+    (let* ((references (make-hash-table :test 'eql :size 256))
+	   (*references* references)
+	   (struct-info (make-hash-table :test 'eql))
+	   (*struct-info* struct-info)
+	   (dispatch (when +precompute-dispatch+
+		       (make-array 65536 :element-type '(unsigned-byte 8) :fill-pointer 0 :adjustable t)))
+	   (*dispatch* (if +precompute-dispatch+ dispatch *dispatch*)))
+      (declare (dynamic-extent dispatch struct-info references))
       ;; I guess we could also record the objects?  Hm... not worth the space costs I don't
       ;; think.  But... hm...
       ;; First reference pass and dispatch compilation
@@ -146,11 +153,12 @@
       (let ((old-ht *references*)
 	    (new-ht (make-hash-table :test 'eql))
 	    (ref-id 0))
+	(declare (type fixnum ref-id))
 	;; Now clean up the references list
 	;; delete anyone who has no references
 	#+debug-csf (format t "Generating real reference hash-table~%")
 	(maphash (lambda (k v)
-		   (when (> v 1)
+		   (when (> (the fixnum v) 1)
 		     (setf (gethash k new-ht) (- (incf ref-id))))) ;; signal it needs writing
 		 old-ht)
 	(clrhash old-ht)  ; help the gc?

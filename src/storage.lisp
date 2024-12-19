@@ -8,7 +8,8 @@
 
 ;; We provide a stream interface and a vector interface for users to use.
 
-(declaim (inline storage-store storage-offset storage-flusher storage-size storage-max))
+(declaim (inline storage-store storage-offset storage-flusher storage-size storage-max
+		 %make-write-storage))
 
 (defstruct (write-storage (:constructor %make-write-storage) (:conc-name storage-))
   (store (make-array 8192 :element-type '(unsigned-byte 8))
@@ -16,8 +17,9 @@
   (offset 0 :type fixnum) ;; index of the next valid input or location for output
   ;; When called with storage, flusher writes-out or reads-in the data in seq and
   ;; updates offset and max and returns the number of valid bytes in storage if reading
-  (flusher))
+  (flusher (constantly nil) :type function))
 
+(declaim (inline %make-read-storage))
 (defstruct (read-storage (:constructor %make-read-storage)
 			 (:include write-storage)
 			 (:conc-name storage-))
@@ -44,9 +46,11 @@
       (write-sequence seq stream :end (storage-offset storage))
       (setf (storage-offset storage) 0))))
 
+(declaim (inline make-input-storage/stream))
 (defun make-input-storage/stream (stream)
   (%make-read-storage :flusher (make-read-into-storage/stream stream)))
 
+(declaim (inline make-output-storage/stream))
 (defun make-output-storage/stream (stream)
   (%make-write-storage :flusher (make-write-into-storage/stream stream)))
 
@@ -106,13 +110,18 @@
 
 ;; STREAMS
 (defun store-to-stream (stream &rest elements)
-  (declare (dynamic-extent elements))
+  (declare (dynamic-extent elements) (optimize speed safety))
   (let ((storage (make-output-storage/stream stream)))
+    (declare (dynamic-extent storage))
     (apply #'store-objects storage elements)
-    (flush-storage storage)))
+    (flush-storage storage)
+    (values)))
 
 (defun restore-from-stream (stream)
-  (restore-objects (make-input-storage/stream stream)))
+  (declare (optimize speed safety))
+  (let ((input-storage (make-input-storage/stream stream)))
+    (declare (dynamic-extent input-storage))
+    (restore-objects input-storage)))
 
 ;; UB8 VECTORS
 (defun make-write-into-adjustable-ub8-vector (vector)
@@ -135,39 +144,52 @@
       (setf (storage-offset storage) 0))))
 
 (defun make-output-storage/ub8 ()
-  (let ((output-vector (make-array 8 :element-type '(unsigned-byte 8)
-				   :adjustable t :fill-pointer 0)))
-    (values (%make-write-storage :flusher (make-write-into-adjustable-ub8-vector output-vector))
-	    output-vector)))
+  (declare (optimize speed safety))
+)
 
 (defun store-to-vector (&rest elements)
-  (declare (dynamic-extent elements))
+  (declare (dynamic-extent elements) (optimize speed safety))
   "Returns an (array (unsigned-byte 8) (*)) with the data"
-  (multiple-value-bind (storage vector)
-      (make-output-storage/ub8)
-    (apply #'store-objects storage elements)
-    (flush-storage storage)
-    vector))
+    (let* ((output-vector (make-array 8 :element-type '(unsigned-byte 8)
+					:adjustable t :fill-pointer 0))
+	   (write-storage
+	     (%make-write-storage
+	      :flusher (make-write-into-adjustable-ub8-vector output-vector))))
+      (declare (dynamic-extent write-storage))
+      (apply #'store-objects write-storage elements)
+      (flush-storage write-storage)
+      output-vector))
     
 (defun restore-from-vector (vector)
+  (declare (optimize speed safety))
   (if (typep vector '(simple-array (unsigned-byte 8) (*)))
       (let* ((storage
-	       (%make-read-storage :flusher (lambda (storage)
-					      (- (storage-max storage) (storage-offset storage)))
-				   :store vector
-				   :max (length vector))))
+	       (%make-read-storage
+		:flusher (lambda (storage)
+			   (the fixnum (- (storage-max storage) (storage-offset storage))))
+		:store vector
+		:max (length vector))))
+	(declare (dynamic-extent storage))
 	(restore-objects storage))
       (flexi-streams:with-input-from-sequence (str vector)
 	(let ((storage (make-input-storage/stream str)))
+	  (declare (dynamic-extent storage))
 	  (restore-objects storage)))))
 
 (defun store-to-file (filename &rest elements)
-  (with-open-file (str filename :direction :output :if-exists :supersede :if-does-not-exist :create
-		       :element-type '(unsigned-byte 8))
-    (apply #'store-objects (make-output-storage/stream str) elements)))
+  (declare (optimize speed safety))
+  (with-open-file (str filename :direction :output
+				:if-exists :supersede
+				:element-type '(unsigned-byte 8))
+    (let ((output-storage (make-output-storage/stream str)))
+      (declare (dynamic-extent output-storage))
+      (apply #'store-objects output-storage elements))))
 
 (defun restore-from-file (filename)
+  (declare (optimize speed safety))
   (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
-    (restore-objects (make-input-storage/stream str))))
+    (let ((input-storage (make-input-storage/stream str)))
+      (declare (dynamic-extent input-storage))
+      (restore-objects input-storage))))
 
 ;; TODO: SAP VECTORS / MMAPPED MEMORY
