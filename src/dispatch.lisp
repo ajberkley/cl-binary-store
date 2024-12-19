@@ -43,7 +43,11 @@
       (loop for g across groups
 	    appending (stable-sort (reverse g) #'subtypep :key key))))
 
-  (defconstant +precompute-dispatch+ nil)
+  (defconstant +precompute-dispatch+ nil
+    "Leave this at nil.  If it is T we try to avoid the etypecase dispatch
+     by precomputing the dispatch.  This actually slows things down slightly
+     during the actual storage!  It's like the jump-table is slower or the
+     looking up the dispatch index is too slow?")
   
   (declaim (type simple-vector *store-dispatch-table*))
   (defvar *store-dispatch-table*
@@ -54,11 +58,12 @@
     (make-array 256)
     "For debugging, names of each code type")
   
-  (declaim (type vector *dispatch*))
-  (defvar *dispatch* (make-array 0)
+  (declaim (type (vector (unsigned-byte 8) *) *dispatch*))
+  (defvar *dispatch* (make-array 0 :element-type '(unsigned-byte 8)))
     "A UB8 extendable array holding the codes of objects to be stored in order (until we
      parallelize the reference and dispatch compilation pass)")
 
+  (declaim (type (unsigned-byte 50) *dispatch-index*))
   (defvar *dispatch-index* 0
     "An offset into the *dispatch* table.  Should not be a global bleh, add to function
      parameters")
@@ -78,8 +83,7 @@
 	     (store-object/no-storage value)))
        
        (defun store-object/storage (value storage)
-	 (declare (optimize (debug 3);; speed safety
-			    ))
+	 (declare (optimize speed safety))
 	 ,(if +precompute-dispatch+
 	      `(let ((index *dispatch-index*))
 		 #+debug-csf (format t "Dispatching to code ~A: ~A~%"
@@ -87,9 +91,10 @@
 				     (svref *store-dispatch-table-names*
 					    (aref *dispatch* index)))
 		 (setf *dispatch-index* (+ 1 index))
-		 (funcall (the function
-			       (svref *store-dispatch-table* (aref *dispatch* index)))
-			  value storage))
+		 (locally (declare (optimize (speed 3) (safety 0)))
+		   (funcall (the function
+				 (svref *store-dispatch-table* (aref *dispatch* index)))
+			    value storage)))
 	      `(etypecase
 		   value
 		   ,@(strict-subtype-ordering
@@ -118,7 +123,9 @@
 		       ;; this way the compiler knows storage is nil and
 		       ;; we have compile time clean-up and dispatch.
 		    collect (list type-spec
-				  (when +precompute-dispatch+ `(vector-push-extend ,idx *dispatch*))
+				  (when +precompute-dispatch+
+				    (locally (declare (optimize (speed 3) (safety 0)))
+				    `(vector-push-extend ,idx *dispatch*)))
 				  `(,func value nil)))
 	      :key #'first)))))
   
@@ -134,7 +141,6 @@
   (defun store-objects (storage &rest stuff)
     (declare (optimize speed safety)
 	     (inline store-object))
-    ;; would save one branch in store-object, but that will be hot
     (let* ((references (make-hash-table :test 'eql :size 256))
 	   (*references* references)
 	   (struct-info (make-hash-table :test 'eql))
@@ -143,8 +149,6 @@
 		       (make-array 65536 :element-type '(unsigned-byte 8) :fill-pointer 0 :adjustable t)))
 	   (*dispatch* (if +precompute-dispatch+ dispatch *dispatch*)))
       (declare (dynamic-extent dispatch struct-info references))
-      ;; I guess we could also record the objects?  Hm... not worth the space costs I don't
-      ;; think.  But... hm...
       ;; First reference pass and dispatch compilation
       #+debug-csf (format t "Starting reference counting pass~%")
       (dolist (elt stuff)
