@@ -83,14 +83,15 @@
       (aref a 0))))
 
 (declaim (inline store-single-float))
-(defun store-single-float (single-float storage)
+(defun store-single-float (single-float storage &optional (tag t))
   (declare (optimize speed safety) (type single-float single-float))
   (with-write-storage (storage)
     (let ((offset (ensure-enough-room-to-write storage 5))
 	  (temp (make-array 1 :element-type 'single-float :initial-element single-float)))
       (declare (dynamic-extent temp))
-      (storage-write-byte! storage +single-float-code+ offset)
-      (incf offset)
+      (when tag
+	(storage-write-byte! storage +single-float-code+ offset)
+	(incf offset))
       (with-storage-sap (sap storage)
 	(sb-sys:with-pinned-objects (temp)
 	  (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))
@@ -172,5 +173,5 @@
   (maybe-store-reference-instead (complex-single-float storage)
     (when storage
       (storage-write-byte storage +complex-single-float-code+)
-      (store-single-float (realpart complex-single-float) storage)
-      (store-single-float (imagpart complex-single-float) storage))))
+      (store-single-float (realpart complex-single-float) storage nil)
+      (store-single-float (imagpart complex-single-float) storage nil))))

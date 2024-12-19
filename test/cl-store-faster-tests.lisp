@@ -242,3 +242,28 @@
 	 (cl-store-faster::store-to-vector
 	  non-proper-list))
 	non-proper-list)))
+
+(define-test test-simple-double-float
+  (let ((df 3.1415d0))
+    (is '= df
+	(restore-from-vector
+	 (store-to-vector df)))))
+
+(define-test test-simple-single-float
+  (let ((sf 3.1415f0))
+    (is '= sf
+	(restore-from-vector
+	 (store-to-vector sf)))))
+
+(define-test test-complex
+  (let ((complex-numbers
+	  (list
+	   (complex 1 2)
+	   (complex 3f0 4f0)
+	   (complex -5d0 3d0)
+	   (complex (/ 1 2) 17)
+	   (complex 1f0 2d0))))
+    (is 'equal
+	complex-numbers
+	(restore-from-vector
+	 (store-to-vector complex-numbers)))))
