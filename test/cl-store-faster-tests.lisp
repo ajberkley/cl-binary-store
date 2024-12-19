@@ -234,3 +234,11 @@
     (is 'equalp
 	a
 	(restore-from-vector (store-to-vector a)))))
+
+(define-test test-non-proper-list
+  (let ((non-proper-list '(1 . 2)))
+    (is 'equal
+	(cl-store-faster::restore-from-vector
+	 (cl-store-faster::store-to-vector
+	  non-proper-list))
+	non-proper-list)))

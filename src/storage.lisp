@@ -133,6 +133,7 @@
   (store (make-array 8192 :element-type '(unsigned-byte 8))
    :type (simple-array (unsigned-byte 8) (*)))
   (max 0 :type fixnum)
+  ;; read-func must return the number of bytes available
   (read-more-func (lambda (read-storage) (declare (ignore read-storage)) (error "not implemented"))
    :type function))
 
@@ -159,7 +160,8 @@
 	      (- (storage-max storage) (storage-offset storage)))
       (let ((new-bytes-end-at (read-sequence seq stream :start (storage-max storage))))
 	#+debug-csf(format t "We read from ~A..~A bytes~%" (storage-max storage) new-bytes-end-at)
-	(setf (storage-max storage) new-bytes-end-at)))))
+	(setf (storage-max storage) new-bytes-end-at)
+	(- new-bytes-end-at (storage-offset storage))))))
 
 (defun make-write-into-storage/stream (stream)
   (lambda (storage)
@@ -231,10 +233,11 @@
 (defun refill-read-storage (storage bytes return-nil-on-eof)
   (declare (optimize (debug 3))
 	   (type fixnum bytes))
-  #+debug-csf (format t "Asked to read ~A bytes from storage~%" bytes)
+  #+debug-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A~%"
+		      bytes return-nil-on-eof)
   (maybe-increase-size-of-read-storage storage bytes)
   (let ((storage-end (the fixnum (funcall (storage-read-more-func storage) storage))))
-    (if (< storage-end bytes)
+    (if (< (- storage-end (storage-offset storage)) bytes)
         (if return-nil-on-eof
 	    nil
             (progn

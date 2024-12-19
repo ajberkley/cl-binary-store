@@ -7,12 +7,12 @@
  there is no more data available (this feature is used while reading
  all data from a stream to see if there is more data available)"
   (declare (optimize speed safety))
-  (and (ensure-enough-data storage 1 t)
-       (let ((offset (storage-offset storage)))
-	 (setf (storage-offset storage) (1+ offset))
-	 (let ((res (aref (storage-store storage) offset)))
-	   ;;#+debug-csf (format t "Got a UB8: ~A~%" res)
-	   res))))
+  (let ((result (and (ensure-enough-data storage 1 t)
+		     (let ((offset (storage-offset storage)))
+		       (setf (storage-offset storage) (1+ offset))
+		       (let ((res (aref (storage-store storage) offset)))
+			 res)))))
+    result))
 
 (declaim (inline restore-ub8))
 (defun restore-ub8 (storage)
@@ -25,7 +25,6 @@
        (let ((offset (storage-offset storage)))
 	 (setf (storage-offset storage) (1+ offset))
 	 (let ((res (aref (storage-store storage) offset)))
-	   ;;#+debug-csf (format t "Got a UB8: ~A~%" res)
 	   res))))
 
 (declaim (inline store-ub8))
