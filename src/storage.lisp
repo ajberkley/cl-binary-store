@@ -55,7 +55,7 @@
      
 (declaim (inline storage-write-byte storage-write-byte!
 		 storage-write-ub16! storage-write-ub32!
-		 storage-write-ub64!))
+		 storage-write-ub64! storage-write-sb64!))
 
 (defun storage-write-byte! (storage byte &optional offset)
   "If you pass in offset, then you are also responsible for incrementing it"
@@ -105,6 +105,24 @@
      (let ((offset (or offset (storage-offset storage))))
        (setf (sb-sys:sap-ref-64 (storage-sap& storage) offset) ub64)
        (when offset (setf (storage-offset storage) (+ 8 offset)))))))
+
+(defun storage-write-sb64! (storage sb64 &optional offset)
+  (typecase storage
+    (buffering-write-storage
+     (let ((offset (or offset (storage-offset storage))))
+       (with-storage-sap (sap storage)
+	 (setf (sb-sys:signed-sap-ref-64 sap offset) sb64))
+       (when offset (setf (storage-offset storage) (+ 8 offset)))))
+    (sap-write-storage
+     (let ((offset (or offset (storage-offset storage))))
+       (setf (sb-sys:signed-sap-ref-64 (storage-sap& storage) offset) sb64)
+       (when offset (setf (storage-offset storage) (+ 8 offset)))))))
+
+(declaim (inline storage-read-sb64!))
+(defun storage-read-sb64! (storage offset)
+  (let ((array (storage-store storage)))
+    (sb-sys:with-pinned-objects (array)
+      (sb-sys:signed-sap-ref-64 (sb-sys:vector-sap array) offset))))
 
 (defun storage-write-byte (storage byte)
   (ensure-enough-room-to-write storage 1)

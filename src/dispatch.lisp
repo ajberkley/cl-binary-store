@@ -32,7 +32,9 @@
     (read-dispatch tag storage))
 
   (defun strict-subtype-ordering (type-specs &key (key #'identity))
-    (let* ((type-groups '(cons symbol number array structure-object standard-object t))
+    ;; This doesn't actually work
+    (let* ((type-groups '(cons symbol integer;; fixnum bignum
+			  array number structure-object standard-object t))
 	   (groups (make-array (length type-groups) :initial-element nil)))
       (loop for item in type-specs
 	    do (loop for count below (length type-groups)
@@ -101,7 +103,15 @@
 		      (loop for type-spec being the hash-keys of *code-store-info*
 			    for idx fixnum from 0
 			    for func = (gethash type-spec *code-store-info*)
-			    collect (list type-spec `(,func value storage)))
+			    collect (list type-spec
+					  #+debug-csf
+					  `(format t 
+						   ,(format nil
+							    "Dispatching to code ~A: ~A~~%"
+							    idx
+							    (aref *store-dispatch-table-names*
+								  idx)))
+					  `(,func value storage)))
 		      :key #'first))))
        
        (defun store-object/no-storage (value)
@@ -117,6 +127,10 @@
 		    do (setf (svref *store-dispatch-table-names* idx) func)
 		       (setf (svref *store-dispatch-table* idx)
 			     (compile nil `(lambda (value storage)
+					     #+debug-csf
+					     (format t
+						     ,(format nil "Dispatching to code ~A: ~A~~%"
+							      idx (aref *store-dispatch-table-names* idx)))
 					     (funcall ',func value storage) ; debug
 					     ;;(,func value storage) ; normal
 					     )))
@@ -188,10 +202,15 @@
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all the elements."
-    (let ((*references* (make-array 1024 :adjustable t :fill-pointer nil)))
-      (let ((result
-	      (loop for code = (maybe-restore-ub8 storage)
-		    while code
-		    collect (read-dispatch code storage))))
-	(if (cdr result) result (car result))))))
-
+    (let* ((references (make-array 1024 :adjustable t :fill-pointer nil))
+	   (*references* references))
+      (declare (dynamic-extent references))
+      (let* ((first-code (maybe-restore-ub8 storage))
+	     (first-result (when first-code (read-dispatch first-code storage))))
+	(when first-code
+	  (let ((rest (loop for code = (maybe-restore-ub8 storage)
+			    while code
+			    collect (read-dispatch code storage))))
+	    (if rest
+		(cons first-result rest)
+		first-result)))))))

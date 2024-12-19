@@ -1,25 +1,70 @@
 (in-package :cl-store-faster)
 
-;; See also unsigned-bytes.lisp for smaller numbers
+;; See also unsigned-bytes.lisp for smaller unsigned numbers
+
+(declaim (inline store-sb8))
+(defun store-sb8 (sb8 storage &optional (tag t))
+  "Store an (integer -255 0) value SB8 to STORAGE.  If TAG is true,
+ then will store a tag +SB8-CODE+ to storage first.  Omit TAG if your
+ deserializer will know this is a SB8 value.  It's a bit odd to have these,
+ but the dispatch cost is negligible... we use the tag bit as the sign bit."
+  (declare (optimize speed safety) (type (integer -255 0) sb8))
+  (with-write-storage (storage)
+    (let ((offset (ensure-enough-room-to-write storage 2)))
+      (when tag
+	(storage-write-byte! storage +sb8-code+ offset)
+	(incf offset))
+      (storage-write-byte! storage (- sb8) offset)
+      (setf (storage-offset storage) (+ offset 1)))))
+
+(declaim (inline store-sb16))
+(defun store-sb16 (sb16 storage &optional (tag t))
+  (declare (optimize speed safety) (type (integer -65535 0) sb16))
+  (with-write-storage (storage)
+    (let ((offset (ensure-enough-room-to-write storage 3)))
+      (when tag
+	(storage-write-byte! storage +sb16-code+ offset)
+	(incf offset))
+      (storage-write-ub16! storage (- sb16) offset)
+      (setf (storage-offset storage) (+ offset 2)))))
+
+(declaim (inline store-sb32))
+(defun store-sb32 (sb32 storage &optional (tag t))
+  (declare (optimize speed safety) (type (integer -4294967295 0) sb32))
+  (with-write-storage (storage)
+    (let ((offset (ensure-enough-room-to-write storage 5)))
+      (when tag
+	(storage-write-byte! storage +sb32-code+ offset)
+	(incf offset))
+      (storage-write-ub32! storage (- sb32) offset)
+      (setf (storage-offset storage) (+ offset 4)))))
+
+(declaim (inline restore-sb8))
+(defun restore-sb8 (storage)
+  "Despite the name, restore an (integer -255 0) value from storage
+ that has previously been stored by STORE-SB8"
+  (- (restore-ub8 storage)))
+
+(declaim (inline restore-sb16))
+(defun restore-sb16 (storage)
+  "Restore an (integer -65535 0) value from storage that has previously
+ been stored by STORE-SB16."
+  (- (restore-ub16 storage)))
+
+(declaim (inline restore-sb32))
+(defun restore-sb32 (storage)
+  "Restore an (integer -4294967295 0) value from storage that has previously
+ been stored by STORE-UB32."
+  (- (restore-ub32 storage)))
+
 
 (declaim (inline restore-fixnum))
 (defun restore-fixnum (storage)
   (declare (optimize speed safety))
   (ensure-enough-data storage 8)
-  (let ((offset (storage-offset storage))
-        (array (storage-store storage)))
-    ;; May be faster here to blit the data
-    ;; instead of reading bytes.
+  (let ((offset (storage-offset storage)))
     (setf (storage-offset storage) (+ 8 offset))
-    (the fixnum
-	 (+ (ash (aref array offset) 56)
-	    (ash (aref array (incf offset)) 48)
-	    (ash (aref array (incf offset)) 40)
-	    (ash (aref array (incf offset)) 32)
-	    (ash (aref array (incf offset)) 24)
-	    (ash (aref array (incf offset)) 16)
-	    (ash (aref array (incf offset)) 8)
-	    (aref array (incf offset))))))
+    (the fixnum (storage-read-sb64! storage offset))))
 
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage &optional (tag t))
@@ -29,7 +74,7 @@
       (when tag
 	(storage-write-byte! storage +fixnum-code+ offset)
 	(incf offset))
-      (storage-write-ub64! storage fixnum offset)
+      (storage-write-sb64! storage fixnum offset)
       (setf (storage-offset storage) (+ offset 8)))))
 
 ;; Bignum code is based on code from the CL-STORE package which is
@@ -129,10 +174,12 @@
 	(setf (storage-offset storage) (+ offset 8)))))))
 
 (defun restore-ratio (storage)
+  (declare (optimize speed safety))
   (/ (the integer (restore-object storage))
      (the integer (restore-object storage))))
 
 (defun store-ratio (ratio storage)
+  (declare (optimize speed safety))
   (maybe-store-reference-instead (ratio storage)
     (with-write-storage (storage)
       (storage-write-byte storage +ratio-code+))
@@ -152,11 +199,13 @@
 
 (declaim (inline restore-complex-double-float))
 (defun restore-complex-double-float (storage)
+  (declare (optimize speed safety))
   (complex (restore-double-float storage)
 	   (restore-double-float storage)))
 
 (declaim (inline store-complex-double-float))
 (defun store-complex-double-float (complex-double-float storage)
+  (declare (optimize speed safety) (type (complex double-float) complex-double-float))
   (maybe-store-reference-instead (complex-double-float storage)
     (with-write-storage (storage)
       (storage-write-byte storage +complex-double-float-code+)
@@ -165,11 +214,13 @@
 
 (declaim (inline restore-complex-single-float))
 (defun restore-complex-single-float (storage)
+  (declare (optimize speed safety))
   (complex (restore-single-float storage)
 	   (restore-single-float storage)))
 
 (declaim (inline store-complex-single-float))
 (defun store-complex-single-float (complex-single-float storage)
+  (declare (optimize speed safety) (type (complex single-float) complex-single-float))
   (maybe-store-reference-instead (complex-single-float storage)
     (when storage
       (storage-write-byte storage +complex-single-float-code+)

@@ -2,10 +2,8 @@
 
 (declaim (inline maybe-restore-ub8))
 (defun maybe-restore-ub8 (storage)
-  "Restore an (unsigned-byte 8) value from storage that has previously
- been stored by STORE-UB8.  If IGNORE-END-OF-DATA will return NIL if
- there is no more data available (this feature is used while reading
- all data from a stream to see if there is more data available)"
+  "Maybe restore an (unsigned-byte 8) value from storage that has previously
+ been stored by STORE-UB8.  If there is no more data available will return NIL."
   (declare (optimize speed safety))
   (let ((result (and (ensure-enough-data storage 1 t)
 		     (let ((offset (storage-offset storage)))
@@ -17,9 +15,7 @@
 (declaim (inline restore-ub8))
 (defun restore-ub8 (storage)
   "Restore an (unsigned-byte 8) value from storage that has previously
- been stored by STORE-UB8.  If IGNORE-END-OF-DATA will return NIL if
- there is no more data available (this feature is used while reading
- all data from a stream to see if there is more data available)"
+ been stored by STORE-UB8."
   (declare (optimize speed safety))
   (and (ensure-enough-data storage 1)
        (let ((offset (storage-offset storage)))

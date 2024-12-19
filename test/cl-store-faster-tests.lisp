@@ -267,3 +267,30 @@
 	complex-numbers
 	(restore-from-vector
 	 (store-to-vector complex-numbers)))))
+
+(define-test test-ratio
+  (let ((ratios (list (/ 1 2) (/ 4 -5))))
+    (is 'equal
+	ratios
+	(restore-from-vector
+	 (store-to-vector ratios)))))
+
+(define-test test-sb8
+  (is '= -127 (restore-from-vector (store-to-vector -127)))
+  (is '= -255 (restore-from-vector (store-to-vector -255))))
+
+(define-test test-sb16
+  (is '= -32768 (restore-from-vector (store-to-vector -32768)))
+  (is '= -65535 (restore-from-vector (store-to-vector -65535))))
+
+(define-test test-sb32
+  (let ((num (- (expt 2 31))))
+    (is '= num (restore-from-vector (store-to-vector num))))
+  (let ((num (- (1- (expt 2 32)))))
+    (is '= num (restore-from-vector (store-to-vector num)))))
+
+(define-test test-fixnum
+  (let* ((num (expt 2 59))
+	 (mnum (- num)))
+    (is '= num (restore-from-vector (store-to-vector num)))
+    (is '= mnum (restore-from-vector (store-to-vector mnum)))))
