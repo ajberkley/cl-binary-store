@@ -69,12 +69,14 @@
 
 (defun long-complex-list ()
   (let ((a (loop repeat 1000000 collect (if (> (random 1000) 800)
-					    (random 1d0)
+					    1234
+					    ;; (complex 1d0) ;; cl-store chokes
+					    ;; (random 1d0) ;; cl-store chokes
 					    (if (> (random 100) 50)
 						;;(random 1f0) ;; <- makes cl-store take forever!
 						'blarg
 						(if (> (random 100) 50)
-						    (cons (random 30) (random 50f0))
+						    (cons (random 30) 2)
 						    (if (= (random 2) 1)
 							"hello"
 							;; (random 1f0) slows cl-store crazily
@@ -87,16 +89,16 @@
     ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
     ;; (gc :full t)
     ;;(sb-sprof:with-profiling (:report :graph)
-    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
 
-;; Without the random 1f0, otherwise cl-store takes like 100 seconds
-;; CL-STORE-FASTER: 1800 ms write /  345 ms read
-;; CL-STORE:        3700 ms write / 3500 ms read
+;; Without the random single floats, otherwise cl-store takes forever
+;; CL-STORE-FASTER: 925 ms write /  265 ms read
+;; CL-STORE:       1400 ms write / 1400 ms read
 
-(defun long-complex-list ()
+(defun long-random-double-float-list ()
   (let ((a (loop repeat 1000000 collect (random 1d0))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
@@ -104,11 +106,14 @@
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
     (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
     ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
-    ;; (gc :full t)
+    (gc :full t)
     ;;(sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    (time (dotimes (x 1) (cl-store:restore "blarg.bin"))))
+    (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
   (gc :full t))
+;; long-random-double-float-list
+;; CL-STORE-FASTER: 3500 ms write /   315 ms read
+;; CL-STORE:       12700 ms write / 11000 ms read
 
 (defun single-float-hash-test ()
   (let ((ht (Make-hash-table :test 'eql)))
