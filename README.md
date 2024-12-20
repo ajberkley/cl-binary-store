@@ -15,15 +15,47 @@ hyperluminal-mem which is fast, but doesn't have the features I need
 and its really geared toward working in memory / mmapped memory which
 means streaming compression is out.
 
-## Ideas to try
+## Ideas
 
-The design right now does implicit referencing for circularity
-detection, which means we have to build a hash table with every
-element during storing and keep a vector during restoring.  If we
-added an (optional) reference calculation path, we could not only have
-smaller references in the cal file, but then the loader would not need
-to build a vector of all the references.  The main benefit is then
-that the loading and storing can be done by parallel threads.
+### Explicit references
+
+The original design mirrored cl-store with implicit referencing in the
+file where restoration had to mirror storage to count references.
+That's slow, so I switched to an explicit reference labelling scheme
+where only multiply-referenced objects need to be tracked on restore.
+This speeds up restore on some work load by 10x at the cost of a
+reference counting phase on the serialization side.  Turns out this
+costs almost no time since we had to do the work anyway.  Most of the
+serialization work turns out to be hash-table lookups and updates.
+
+The neat thing that an explicit referencing scheme does is allow
+parallelization on restore.  But now that restore is super fast, I'm
+not going to jump into that first.  First I'm going to work on
+parallelization of storage.
+
+### Parallelization during reference counting step
+
+This step will require locked hash tables.  That's very likely to be a
+bottle-neck, but we can alleviate that slightly by splitting the hash
+tables out into an eq table for standard-objects, structure-objects,
+conses, numbers, and symbols (or some smaller number of these).  We
+have to dispatch by type anyway so we can carry along the correct hash
+tables (some serializers will want multiple type --- like symbols).
+For now I will assume the user has split up objects they want to
+serialize into chunks --- if they pass us an initial list we have to
+do some work to split it up.  A vector is easier.
+
+### Parallelization during serialization
+
+This step isn't perfectly parallelizable due to whatever stream
+backend we have (but we'd like to hit disk or network limitations),
+but the main challenge here is we haven't written out all references
+yet --- they are written out in a first come first serve basis.  The
+reference hash table is now used to keep track of whether a reference
+has been written out or not (we will keep the split hash table scheme
+as during reference counting for simplicity).  Here we can still store
+the reference -> reference-id in a read only hash table and use a
+separate ub8 reference vector with a 0/1 atomic update.
 
 ## General features
 
@@ -76,12 +108,30 @@ Some more testing and another run at speed
 
 ## Parallelization
 
-It's unlikely we would be able to hit disk bandwidths without parallelizing (both during
-store and restore).  Part of the win of parallelizing is that you can do thread local bump
-allocation for small objects so things zoom quickly.  For very simple object serialization
-we currently hit about
+It's unlikely we would be able to hit disk bandwidths without
+parallelizing (both during store and restore).  Part of the win of
+parallelizing is that you can do thread local bump allocation for
+small objects so things zoom quickly.  For a single thread and small
+intrinsic objects we can hit >1M-objects per second, which isn't
+terrible, but not nearly what I'd like.
+
+The storage phase is the slowest phase 
 
 ## Random comments
 
-You'd think we could avoid storing symbol-name strings in the reference tracker, but
-it's possible to have the same symbol in multiple packages so its worth it in the end.
+Using single floats makes cl-store grind to a halt --- it's something
+bad in eql hash tables with mixed objects with a few single floats
+around.  The hash function for single floats is not amazing, but I
+don't think that's the problem.  Also, the final hash table we
+construct in these tests has a good bucket / object ratio, so it can't
+be collisions...  but a million objects can take ten seconds.  I don't
+see an easy way to instrument the hash table code, so I'm going to
+just ignore this for now.  We don't hash single floats in this package
+because they are immediates so any deduplication is not useful.  It
+would shrink the file size by maximally 3 bytes per single float
+(assuming we have less than 256 reference ids in the file) but not
+worth it.
+
+You'd think we could avoid storing symbol-name strings in the
+reference tracker, but it's possible to have the same symbol name in
+multiple packages so its worth it in the end.
