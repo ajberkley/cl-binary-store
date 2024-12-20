@@ -80,10 +80,6 @@
   #+precompute-dispatch (defvar *dispatch-index* 0
 			  "An offset into the *dispatch* table.  Should not be a global bleh, add to function parameters")
 
-  (defvar *references-already-fixed* nil
-    "This is NIL during the reference counting phase and T when we are actually serializing data
-     TODO replace me with function parameters so this can get resolved at compile time?")
-  
   (defun make-store-object ()
     `(progn
        (declaim (notinline store-object/storage store-object/no-storage)
@@ -195,8 +191,7 @@
 	(setf old-ht nil) ; help the gc? this should be the only necessary thing
 	#+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht))
 	(setf *references* new-ht))
-      (let ((*references-already-fixed* t)
-	    #+precompute-dispatch (*dispatch-index* 0)
+      (let (#+precompute-dispatch (*dispatch-index* 0)
 	    #+precompute-dispatch (*dispatch-compiled*
 				   (make-array (length *dispatch*)
 					       :element-type '(unsigned-byte 8)
