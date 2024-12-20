@@ -1,24 +1,34 @@
 (in-package :cl-store-faster)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *code-store-info* (make-hash-table :test 'equalp))
-  (defparameter *code-restore-info* (make-array 256 :initial-element nil))
+  ;; Maps code -> code-info or type -> code-info
+  (defparameter *code-info* (make-hash-table :test 'equalp))
 
+  (defstruct code-info
+    (code 255 :type (unsigned-byte 8))
+    (restore-func-name 'error :type symbol)
+    (store-func-name 'error :type symbol)
+    (type nil)
+    (store-references nil)
+    (restore-references nil))
   ;; meh, need maybe keys or a better way of doing this.
   (defun register-code (code &key restore store type store-references restore-references)
     (declare (type (or symbol function) restore)
 	     (type (or null symbol function) store)
 	     (type (unsigned-byte 8) code))
-    (when store
+    (let ((code-info (make-code-info
+		      :code code
+		      :restore-func-name restore
+		      :store-func-name store
+		      :type type
+		      :store-references store-references
+		      :restore-references restore-references)))
       (when type
-	(unless (or (null (gethash type *code-store-info*))
-		    (equal (gethash type *code-store-info*) (cons store store-references)))
+	(unless (or (null (gethash type *code-info*))
+		    (equalp (gethash type *code-info*) code-info))
 	  (cerror "OVERRIDE-STORE" (format nil "Store function for ~A already exists" type)))
-	(setf (gethash type *code-store-info*) (cons store store-references))))
-    (unless (or (null (svref *code-restore-info* code))
-		(equal (svref *code-restore-info* code) (cons restore restore-references)))
-      (cerror "OVERRIDE" (format nil "Restore code ~A already exists!" code)))
-    (setf (svref *code-restore-info* code) (cons restore restore-references))
+	(setf (gethash type *code-info*) code-info))
+      (setf (gethash code *code-info*) code-info))
     code))
 
 ;; NUMBERS
@@ -37,20 +47,21 @@
 (defconstant +fixnum-code+ (register-code 6 :restore 'restore-fixnum :store 'store-fixnum
 					  :type 'fixnum :store-references nil))
 (defconstant +bignum-code+ (register-code 7 :restore 'restore-bignum :store 'store-bignum
-					  :type 'bignum :store-references t))
+					  :type 'bignum :store-references :number))
 (defconstant +single-float-code+ (register-code 8 :restore 'restore-single-float
 						  :store 'store-single-float
 						  :type 'single-float :store-references nil))
 (defconstant +double-float-code+ (register-code 9 :restore 'restore-double-float
 						  :store 'store-double-float
 						  :type 'double-float
-						  :store-references t
+						  :store-references :number
 						  :restore-references nil))
 (defconstant +ratio-code+ (register-code 10 :restore 'restore-ratio :store 'store-ratio
-					 :type 'ratio :store-references t :restore-references t))
+					    :type 'ratio :store-references :number
+					    :restore-references :number))
 (defconstant +complex-code+ (register-code 11 :restore 'restore-complex :store 'store-complex
-					      :type 'complex :store-references t
-					      :restore-references t))
+					      :type 'complex :store-references :number
+					      :restore-references :number))
 ;; STRUCTURE-OBJECTS (defstruct) and STANDARD-CLASS (defclass)
 (defconstant +structure-object-code+
   (register-code 12 :restore 'restore-struct :store 'store-struct

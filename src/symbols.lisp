@@ -24,6 +24,7 @@
 
 (declaim (inline store-symbol))
 (defun store-symbol (symbol storage references)
+  (declare (notinline store-simple-specialized-vector))
   (let ((symbol-package (symbol-package symbol)))
     (cond
       (symbol-package
@@ -32,13 +33,14 @@
 	 #+debug-csf
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
-	 (store-object (symbol-name symbol) storage references)
-	 (store-object (package-name symbol-package) storage references)))
+	 (store-simple-specialized-vector (the string (symbol-name symbol)) storage nil)
+	 (store-simple-specialized-vector (the string (package-name symbol-package))
+					  storage references)))
       (t ;; symbols without a package, (symbol-package (gensym)) -> nil
        #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
        ;;these can never be the same
        (store-ub8 +gensym-code+ storage nil)
-       (store-object (symbol-name symbol) storage references)))))
+       (store-simple-specialized-vector (the string (symbol-name symbol)) storage nil)))))
 
 (define-condition missing-package (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)

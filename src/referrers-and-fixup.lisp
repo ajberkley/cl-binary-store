@@ -1,10 +1,5 @@
 (in-package :cl-store-faster)
 
-;; To enable debugging execute the below line and recompile everything
-;; (pushnew :debug-csf *features*)
-;; To disable debugging execute the below and recompile everything
-;; (setf *features* (delete :debug-csf *Features*))
-
 ;; Referrers are used to handle circularity (in lists, non-specialized
 ;; vectors, structure-classes and standard-classes).  Referrers are
 ;; implicitly created during serialization and deserialization.
@@ -109,20 +104,6 @@
  new reference id for this object so it can be used in the future.  The only case where
  ADD-NEW-REFERENCE should be NIL is if you are explicitly dis-allowing (for performance reasons)
  circularity."
-  ;; If we want to parallelize during writing we either have to lock
-  ;; this table which is brutal or we have to write out references
-  ;; first.  Let's suppose we write out references first for now.
-  ;; That's not going to fully solve the problem... References are
-  ;; just to the cons, not the whole list, so we'd be writing out the
-  ;; cons, but not filling it in until later.  Same if it was a
-  ;; vector, we'd write a vector of size X with no data.  This means
-  ;; we probably want to capture every call to store-object in the
-  ;; reference counting phase and record not just the dispatch id
-  ;; (though that seems not to help) but every object.  Once we have
-  ;; every object, we can store them out of order and rely on fixups?
-  ;; But then in a list, for example, we'd have to store references to
-  ;; each cons... that's no good!
-  ;; OK, need some new ideas.
   (declare (optimize speed safety))
   (if storage ; we are in the storage phase, writing things out
       (let ((ref-idx (gethash object references)))
@@ -322,6 +303,7 @@
 	 (storage-write-byte! +referrer-code+ storage nil)
 	 (store-tagged-unsigned-fixnum ref-index storage))))))
 
+(declaim (inline store-reference-id-for-following-object))
 (defun store-reference-id-for-following-object (ref-index storage)
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))

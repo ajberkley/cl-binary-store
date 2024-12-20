@@ -1,10 +1,5 @@
 (in-package :cl-store-faster)
 
-;; For debug
-;; (push :debug-csf *features*)
-;; Disable debug
-;; (setf *features* (delete :debug-csf *features*))
-
 ;; Since reading is very fast now, let's work on writing.
 ;; We can parallelize if storing multiple objects --- we could
 ;; start after the reference counting phase, but it looks like that's
@@ -12,21 +7,28 @@
 ;; at best.  That's nice, and forces me to work out the parallel
 ;; disk writing, but...
 
-(unless lparallel:*kernel*
-  (setf lparallel:*kernel* (lparallel:make-kernel 4 :spin-count 0)))
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-read-dispatch-table (code)
     `(case ,code
-       ,@(loop for elt fixnum from 0
-               for func-info across *code-restore-info*
-	       for func-name = (car func-info)
-	       for needs-references = (cdr func-info)
-               when func-name
-		 collect (list elt
-			       #+debug-csf `(format t
-						    ,(format nil "Restoring from code ~A: ~A~~%"
-							     elt func-name))
-			       `(,func-name storage ,@(when needs-references '(references)))))))
+       ,@(sort
+	  (let ((restore-codes nil))
+	    (maphash (lambda (k code-info)
+		       (when (numberp k)
+			 (let ((code (code-info-code code-info))
+			       (func-name (code-info-restore-func-name code-info))
+			       (needs-references (code-info-restore-references code-info)))
+			   (push (list
+				  code
+				  #+debug-csf
+				  `(format
+				    t
+				    ,(format nil "Restoring from code ~A: ~A~~%" code func-name))
+				  `(,func-name storage
+					       ,@(when needs-references '(references))))
+				 restore-codes))))
+		     *code-info*)
+	    restore-codes)
+	  #'< :key #'first)))
   
   (defmacro make-read-dispatch ()
     `(progn
@@ -44,7 +46,7 @@
     ;; because we have disjoint sets.  So first, we have to sort into
     ;; disjoint sets, then sort, then recombine.
     (let* ((type-groups '(cons symbol integer ;; fixnum bignum
-			  array number structure-object standard-object t))
+			  vector array number structure-object standard-object t))
 	   (groups (make-array (length type-groups) :initial-element nil)))
       (loop for item in type-specs
 	    do (loop for count below (length type-groups)
@@ -60,25 +62,32 @@
  storage code can delete the actual storage code when not used"
     `(etypecase value
        ,@(strict-subtype-ordering
-	  (loop for type-spec being the hash-keys of *code-store-info*
-		for idx fixnum from 0
-		for func-info = (gethash type-spec *code-store-info*)
-		for func-name = (car func-info)
-		for takes-references = (cdr func-info)
-		collect (list
-			 type-spec
-			 #+debug-csf
-			 `(format t ,(format nil
-					     "Dispatching to code ~A: ~A~~%"
-					     idx func-name))
-			 ;; symbol call when debugging for no inline
-			 #+debug-csf
-			 (locally (declare (notinline ,(car func-info)))
-			   `(funcall ',(car func-info) ,value ,storage
-				     ,@(when (cdr func-info) `(,references))))
-			 #-debug-csf
-			 `(locally (declare (inline ,func-name))
-			    (,func-name ,value ,storage ,@(when takes-references `(,references))))))
+	  (let ((type-dispatch-table nil))
+	    (maphash (lambda (k code-info)
+		       (when (not (numberp k))
+			 (let ((type-spec (code-info-type code-info))
+			       #+debug-csf (code (code-info-code code-info))
+			       (func-name (code-info-store-func-name code-info))
+			       (takes-references (code-info-store-references code-info)))
+			   (push
+			    (list
+			     type-spec
+			     #+debug-csf
+			     `(format t ,(format nil
+						 "Dispatching to code ~A: ~A~~%"
+						 code func-name))
+			     ;; symbol call when debugging for no inline
+			     #+debug-csf
+			     (locally (declare (notinline ,(car func-info)))
+			       `(funcall ',(car func-info) ,value ,storage
+					 ,@(when (cdr func-info) `(,references))))
+			     #-debug-csf
+			     `(locally (declare (inline ,func-name))
+				(,func-name ,value ,storage
+					    ,@(when takes-references `(,references)))))
+			    type-dispatch-table))))
+		     *code-info*)
+	    type-dispatch-table)
 	  :key #'first)))
 
   (declaim (inline store-object/storage)) ;; to propagate storage / references
@@ -86,19 +95,24 @@
     (generate-store-object value storage references))
   
   (declaim (inline store-object/no-storage))
-  (defun store-object/no-storage (value references!)
-    (generate-store-object value nil references!))
-  
+  (defun store-object/no-storage (value references)
+    (generate-store-object value nil references))
+
+  ;; Just synchronizing references slows us to 1.2 seconds and BIG slow down
+  ;; while actually parallelizing the reference counting pass.
+  ;; Normal: 483 ms, just synchronized hash-table single threaded 1.2 seconds.
+  ;; brutal.  I suppose we could go lock-less eql hashing instead of eq hashing
+  ;; for our objects
   (declaim (inline store-objects/generic)) ;; so storage can be specialized down the chain
   (defun store-objects/generic (storage &rest stuff)
     (declare (optimize speed safety))
-    (let* ((references (make-hash-table :test 'eql :size 256))
-	   (struct-info (make-hash-table :test 'eql))
+    (let* ((references (make-hash-table :test 'eql :size 256 :synchronized nil))
+	   (struct-info (make-hash-table :test 'eql :synchronized nil))
 	   (*struct-info* struct-info))
       (declare (dynamic-extent struct-info references))
-      #+debug-csf (format t "Starting reference counting pass~%")
+      #+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length rest))
       (dolist (elt stuff)
-	(store-object/no-storage elt references))
+       	(store-object/no-storage elt references))
       #+debug-csf (format t "Finished reference counting pass~%")
       (let ((new-ht (make-hash-table :test 'eql))
 	    (ref-id 0))

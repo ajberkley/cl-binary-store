@@ -45,6 +45,8 @@ For now I will assume the user has split up objects they want to
 serialize into chunks --- if they pass us an initial list we have to
 do some work to split it up.  A vector is easier.
 
+So, so far this is abysmal
+
 ### Parallelization during serialization
 
 This step isn't perfectly parallelizable due to whatever stream

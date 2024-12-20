@@ -82,24 +82,30 @@
 				 (the (integer 0 64) (or actual-bits (second type)))))
 			 8)))))
 
-(defun store-simple-specialized-vector (sv storage references)
+(declaim (inline store-simple-specialized-vector))
+(defun store-simple-specialized-vector (sv storage &optional references)
   (declare (optimize speed safety)
 	   (type (simple-array * (*)) sv))
-  (maybe-store-reference-instead (sv storage references)
-    (with-write-storage (storage)
-      (storage-write-byte storage +simple-specialized-vector+)
-      (let ((sv-length (length sv)))
-	(store-tagged-unsigned-fixnum sv-length storage)
-	(multiple-value-bind (bytes-to-write encoded-element-type)
-	    (sbcl-specialized-array-element-size/bits sv)
-	  #+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
-			      (type-of sv) bytes-to-write encoded-element-type)
-	  (storage-write-byte storage encoded-element-type)
-	  (let ((offset (ensure-enough-room-to-write storage bytes-to-write)))
-	    (with-storage-sap (sap storage)
-	      (sb-sys:with-pinned-objects (sv)
-		(copy-sap sap offset (sb-sys:vector-sap sv) 0 bytes-to-write)))
-	    (setf (storage-offset storage) (+ offset bytes-to-write))))))))
+  (labels ((write-it ()
+	     (with-write-storage (storage)
+	       (storage-write-byte storage +simple-specialized-vector+)
+	       (let ((sv-length (length sv)))
+		 (store-tagged-unsigned-fixnum sv-length storage)
+		 (multiple-value-bind (bytes-to-write encoded-element-type)
+		     (sbcl-specialized-array-element-size/bits sv)
+		   #+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
+				       (type-of sv) bytes-to-write encoded-element-type)
+		   (storage-write-byte storage encoded-element-type)
+		   (let ((offset (ensure-enough-room-to-write storage bytes-to-write)))
+		     (with-storage-sap (sap storage)
+		       (sb-sys:with-pinned-objects (sv)
+			 (copy-sap sap offset (sb-sys:vector-sap sv) 0 bytes-to-write)))
+		     (setf (storage-offset storage) (+ offset bytes-to-write))))))))
+    (declare (inline write-it))
+    (if references
+	(maybe-store-reference-instead (sv storage references)
+	  (write-it))
+	(write-it))))
 
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize speed safety))
@@ -131,7 +137,7 @@
 	(multiple-value-bind (bytes-to-write encoded-element-type)
 	    (sbcl-specialized-array-element-size/bits sa num-elts)
 	  (storage-write-byte storage encoded-element-type)
-	  (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
+	  #+debug-csf (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
 	 	  (type-of sa) bytes-to-write encoded-element-type)
 	  (let ((offset (ensure-enough-room-to-write storage bytes-to-write)))
 	    (sb-kernel:with-array-data ((backing-array sa) (start) (end))
@@ -152,7 +158,7 @@
     (multiple-value-bind (sa num-bytes)
 	(sbcl-make-simple-array-from-encoded-element-type
 	 encoded-element-info (reduce #'* array-dimensions) array-dimensions)
-      (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
+      #+debug-csf (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
 	(type-of sa) num-bytes array-dimensions encoded-element-info)
       (ensure-enough-data storage num-bytes)
       (let ((offset (storage-offset storage))
