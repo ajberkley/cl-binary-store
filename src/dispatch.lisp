@@ -45,7 +45,7 @@
       (loop for g across groups
 	    appending (stable-sort (reverse g) #'subtypep :key key))))
 
-  (defconstant +precompute-dispatch+ nil
+  (defconstant +precompute-dispatch+ t
     "Leave this at nil.  If it is T we try to avoid the etypecase dispatch
      by precomputing the dispatch.  This actually slows things down slightly
      during the actual storage!  It's like the jump-table is slower or the
@@ -64,6 +64,9 @@
   (defvar *dispatch* (make-array 0 :element-type '(unsigned-byte 8))
     "A UB8 extendable array holding the codes of objects to be stored in order (until we
      parallelize the reference and dispatch compilation pass)")
+
+  (declaim (type (simple-array (unsigned-byte 8) (*)) *dispatch-compiled*))
+  (defvar *dispatch-compiled* (make-array 0 :element-type '(unsigned-byte 8)))
 
   (declaim (type (unsigned-byte 50) *dispatch-index*))
   (defvar *dispatch-index* 0
@@ -95,7 +98,7 @@
 		 (setf *dispatch-index* (+ 1 index))
 		 (locally (declare (optimize (speed 3) (safety 0)))
 		   (funcall (the function
-				 (svref *store-dispatch-table* (aref *dispatch* index)))
+				 (svref *store-dispatch-table* (aref *dispatch-compiled* index)))
 			    value storage)))
 	      `(etypecase
 		   value
@@ -187,7 +190,10 @@
 	#+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht))
 	(setf *references* new-ht))
       (let ((*references-already-fixed* t)
-	    (*dispatch-index* 0))
+	    (*dispatch-index* 0)
+	    (*dispatch-compiled* (make-array (length *dispatch*)
+					     :element-type '(unsigned-byte 8)
+					     :initial-contents *dispatch*)))
 	#+debug-csf (format t "Compiled dispatch info for ~A objects~%" (length *dispatch*))
 	(dolist (elt stuff)
 	  (store-object/storage elt storage)))

@@ -2,7 +2,7 @@
 (require 'sb-sprof)
 
 (defun long-simple-list ()
-  (let ((a (loop repeat 1000000 collect '123)))
+  (let ((a (loop repeat 1000000 collect 123)))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
       ;;(sb-sprof:with-profiling (:report :graph)
@@ -21,14 +21,14 @@
 ;; cl-store-faster generates 3MB files, cl-store generates 4MB files.
 ;; WHICH         |  WRITING  |  READING  | TEST
 ;;---------------+-----------+-----------+
-;;cl-store       |     650 ms|     700 ms| 10x 1M long list of 'a
-;;cl-store-faster|     750 ms|     150 ms| 10x 1M long list of 'a with precomputed dispatch
+;;cl-store       |     625 ms|     700 ms| 10x 1M long list of 'a
+;;cl-store-faster|     575 ms|     150 ms| 10x 1M long list of 'a with precomputed dispatch
 ;;cl-store-faster|     475 ms|     150 ms| 10x 1M long list of 'a with no precomputed dispatch
-;;cl-store       |     675 ms|     730 ms| 10x 1M long list of 123
-;;cl-store-faster|     325 ms|     115 ms| 10x 1M long list of 123
+;;cl-store       |     675 ms|     675 ms| 10x 1M long list of 123
+;;cl-store-faster|     425 ms|     115 ms| 10x 1M long list of 123 with precomputed dispatch
+;;cl-store-faster|     325 ms|     115 ms| 10x 1M long list of 123 with no precomputed dispatch
 
-
-;; pre-computed dispatch is slower :(
+;; pre-computed dispatch is slower... probably access to the dispatch list
 ;; Because of the dispatch array we cons a bit more on writing and it's actually slower!
 ;; Part of the problem is we are doing 1 million entries into the array, and it's not
 ;; a simple array.  we access globals multiple times to get to it.  So probably 10 ns
