@@ -4,6 +4,11 @@
 ;; Do not enable this, it slows things down and is a work in progress
 ;; (setf *features* (delete :precompute-dispatch *features*))
 
+;; For debug
+;; (push :debug-csf *features*)
+;; Disable debug
+;; (setf *features* (delete :debug-csf *features*))
+
 ;; Since reading is very fast now, let's work on writing.
 ;; We can parallelize if storing multiple objects --- we could
 ;; start after the reference counting phase, but it looks like that's
@@ -19,15 +24,19 @@
   (defun make-read-dispatch ()
     `(progn
        (declaim (sb-ext:maybe-inline read-dispatch))
-       (defun read-dispatch (code storage)
+       (defun read-dispatch (code storage references)
 	 #+debug-csf (format t "Restoring from code ~A: ~A~%" code
 			     (svref *restore-dispatch-table-names* code))
 	 (case code
            ,@(loop for elt fixnum from 0
-                   for value across *code-restore-info*
-		   do (setf (svref *restore-dispatch-table-names* elt) value)
-                   when value
-                     collect (list elt (list value 'storage)))))))
+                   for func-info across *code-restore-info*
+		   for func-name = (car func-info)
+		   for needs-references = (cdr func-info)
+		   do (setf (svref *restore-dispatch-table-names* elt) func-name)
+                   when func-name
+                     collect (list elt `(,func-name storage
+					 ,@(when needs-references
+					     '(references)))))))))
   
   (defmacro eval-make-read-dispatch ()
     `,(make-read-dispatch))
@@ -35,9 +44,9 @@
   `,(eval-make-read-dispatch)
 
   (declaim (inline restore-object))
-  (defun restore-object (storage &optional (tag (maybe-restore-ub8 storage)))
+  (defun restore-object (storage references &optional (tag (maybe-restore-ub8 storage)))
     (declare (notinline read-dispatch))
-    (read-dispatch tag storage))
+    (read-dispatch tag storage references))
 
   (defun strict-subtype-ordering (type-specs &key (key #'identity))
     ;; This sort of works, but some weird issues I haven't debugged yet
@@ -45,7 +54,6 @@
     ;; We need to order these by subtypep, a simple sort won't work
     ;; because we have disjoint sets.  So first, we have to sort into
     ;; disjoint sets, then sort, then recombine.
-
     (let* ((type-groups '(cons symbol integer;; fixnum bignum
 			  array number structure-object standard-object t))
 	   (groups (make-array (length type-groups) :initial-element nil)))
@@ -85,12 +93,12 @@
        (declaim (notinline store-object/storage store-object/no-storage)
 		(inline store-object))
 
-       (defun store-object (value storage)
+       (defun store-object (value storage references)
 	 (if storage
-	     (store-object/storage value storage)
-	     (store-object/no-storage value)))
+	     (store-object/storage value storage references)
+	     (store-object/no-storage value references)))
        
-       (defun store-object/storage (value storage)
+       (defun store-object/storage (value storage references)
 	 (declare (optimize speed safety))
 	 #+precompute-dispatch
 	 (let ((index *dispatch-index*))
@@ -109,7 +117,7 @@
 	   ,@(strict-subtype-ordering
 	      (loop for type-spec being the hash-keys of *code-store-info*
 		    for idx fixnum from 0
-		    for func = (gethash type-spec *code-store-info*)
+		    for func-info = (gethash type-spec *code-store-info*)
 		    collect (list type-spec
 				  #+debug-csf
 				  `(format t 
@@ -118,35 +126,34 @@
 						    idx
 						    (aref *store-dispatch-table-names*
 							  idx)))
-				  #+debug-csf `(funcall ',func value storage)
-				  #-debug-csf `(,func value storage)
-				  ))
+				  #+debug-csf `(funcall ',(car func-info) value storage
+							,@(when (cdr func-info) '(references)))
+				  #-debug-csf `(,(car func-info) value storage
+						      ,@(if (cdr func-info) '(references)))))
 	      :key #'first)))
        
-       (defun store-object/no-storage (value)
+       (defun store-object/no-storage (value references)
 	 (declare (optimize speed safety))
 	 (etypecase value
            ,@(strict-subtype-ordering
 	      (loop for type-spec being the hash-keys of *code-store-info*
 		    for idx fixnum from 0
-		    for func = (gethash type-spec *code-store-info*)
-		    do (setf (svref *store-dispatch-table-names* idx) func)
+		    for func-info = (gethash type-spec *code-store-info*)
+		    do (setf (svref *store-dispatch-table-names* idx) (car func-info))
 		       #+precompute-dispatch (setf (svref *store-dispatch-table* idx)
 			     (compile nil `(lambda (value storage)
 					     #+debug-csf
 					     (format t
 						     ,(format nil "Dispatching to code ~A: ~A~~%"
 							      idx (aref *store-dispatch-table-names* idx)))
-					     #+debug-csf (funcall ',func value storage)
-					     #-debug-csf(,func value storage)
+					     #+debug-csf (funcall ',func-info value storage ,@(when (cdr func) '(references)))
+					     #-debug-csf(,func value storage ,@(when (cdr func) '(references)))
 					     )))
-		       ;; this way the compiler knows storage is nil and
-		       ;; we have compile time clean-up and dispatch.
 		    collect (list type-spec
 				  #+precompute-dispatch
 				    `(locally (declare (optimize (speed 3) (safety 0)))
 				       (vector-push-extend ,idx *dispatch*))
-				  `(,func value nil)))
+				  `(,(car func-info) value nil ,@(when (cdr func-info) '(references)))))
 	      :key #'first)))))
   
   (defmacro eval-make-store-object ()
@@ -163,7 +170,6 @@
     (declare (optimize speed safety)
 	     (inline store-object))
     (let* ((references (make-hash-table :test 'eql :size 256))
-	   (*references* references)
 	   (struct-info (make-hash-table :test 'eql))
 	   (*struct-info* struct-info)
 	   #+precompute-dispatch
@@ -174,10 +180,9 @@
       ;; First reference pass and dispatch compilation
       #+debug-csf (format t "Starting reference counting pass~%")
       (dolist (elt stuff)
-	(store-object/no-storage elt))
+	(store-object/no-storage elt references))
       #+debug-csf (format t "Did reference counting pass~%")
-      (let ((old-ht *references*)
-	    (new-ht (make-hash-table :test 'eql))
+      (let ((new-ht (make-hash-table :test 'eql))
 	    (ref-id 0))
 	(declare (type fixnum ref-id))
 	;; Now clean up the references list
@@ -186,11 +191,10 @@
 	(maphash (lambda (k v)
 		   (when (> (the fixnum v) 1)
 		     (setf (gethash k new-ht) (- (incf ref-id))))) ;; signal it needs writing
-		 old-ht)
-	(clrhash old-ht)  ; help the gc?
-	(setf old-ht nil) ; help the gc? this should be the only necessary thing
-	#+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht))
-	(setf *references* new-ht))
+		 references)
+	(clrhash references)  ; help the gc?
+	(setf references new-ht) ; help the gc? this should be the only necessary thing
+	#+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht)))
       (let (#+precompute-dispatch (*dispatch-index* 0)
 	    #+precompute-dispatch (*dispatch-compiled*
 				   (make-array (length *dispatch*)
@@ -198,7 +202,7 @@
 					       :initial-contents *dispatch*)))
 	#+debug-csf (format t "Compiled dispatch info for ~A objects~%" (length *dispatch*))
 	(dolist (elt stuff)
-	  (store-object/storage elt storage)))
+	  (store-object/storage elt storage references)))
       (flush-write-storage storage)))
 
   (defun store-objects/buffering-write-storage (storage &rest stuff)
@@ -212,15 +216,16 @@
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all the elements."
-    (let* ((references (make-array 1024))
-	   (*references* references))
-      (declare (dynamic-extent references))
-      (let* ((first-code (maybe-restore-ub8 storage))
-	     (first-result (when first-code (read-dispatch first-code storage))))
-	(when first-code
-	  (let ((rest (loop for code = (maybe-restore-ub8 storage)
-			    while code
-			    collect (read-dispatch code storage))))
-	    (if rest
-		(cons first-result rest)
-		first-result)))))))
+    ;; OH OH WHAT IF SOMEONE EXTENDS REFERENCES!?
+    (let* ((references-vector (make-array 1024))
+	   (references (make-references :vector references-vector))
+	   (first-code (maybe-restore-ub8 storage))
+	   (first-result (when first-code (read-dispatch first-code storage references))))
+      (declare (dynamic-extent references references-vector))
+      (when first-code
+	(let ((rest (loop for code = (maybe-restore-ub8 storage)
+			  while code
+			  collect (read-dispatch code storage references))))
+	  (if rest
+	      (cons first-result rest)
+	      first-result))))))

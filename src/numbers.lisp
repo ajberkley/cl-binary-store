@@ -104,8 +104,8 @@
 	(loop repeat (abs count)
 	      collect (restore-ub32 storage))))))
 
-(defun store-bignum (bignum storage)
-  (maybe-store-reference-instead (bignum storage)
+(defun store-bignum (bignum storage references)
+  (maybe-store-reference-instead (bignum storage references)
     (with-write-storage (storage)
       (storage-write-byte storage +bignum-code+)
       (multiple-value-bind (bits count)
@@ -156,12 +156,12 @@
       (aref a 0))))
 
 (declaim (inline store-double-float))
-(defun store-double-float (double-float storage &optional (tag t))
+(defun store-double-float (double-float storage references &optional (tag t))
   (declare (optimize speed safety) (type double-float double-float))
   ;; We de-duplicate double-floats as there is no visible way to
   ;; determine this from common lisp, and it saves space in the image
   ;; and on disk if there are repeated numbers (like 0d0).
-  (maybe-store-reference-instead (double-float storage)
+  (maybe-store-reference-instead (double-float storage references)
     (with-write-storage (storage offset 9)
       (when tag
 	(storage-write-byte! storage +double-float-code+ offset)
@@ -173,29 +173,29 @@
 	    (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))
 	(setf (storage-offset storage) (+ offset 8)))))))
 
-(defun restore-ratio (storage)
+(defun restore-ratio (storage references)
   (declare (optimize speed safety))
-  (/ (the integer (restore-object storage))
-     (the integer (restore-object storage))))
+  (/ (the integer (restore-object storage references))
+     (the integer (restore-object storage references))))
 
-(defun store-ratio (ratio storage)
+(defun store-ratio (ratio storage references)
   (declare (optimize speed safety))
-  (maybe-store-reference-instead (ratio storage)
+  (maybe-store-reference-instead (ratio storage references)
     (with-write-storage (storage)
       (storage-write-byte storage +ratio-code+))
-    (store-object (numerator ratio) storage)
-    (store-object (denominator ratio) storage)))
+    (store-object (numerator ratio) storage references)
+    (store-object (denominator ratio) storage references)))
 
-(defun restore-complex (storage)
-  (complex (restore-object storage)
-	   (restore-object storage)))
+(defun restore-complex (storage references)
+  (complex (restore-object storage references)
+	   (restore-object storage references)))
 
-(defun store-complex (complex storage)
-  (maybe-store-reference-instead (complex storage)
+(defun store-complex (complex storage references)
+  (maybe-store-reference-instead (complex storage references)
     (with-write-storage (storage)
       (storage-write-byte storage +complex-code+))
-    (store-object (realpart complex) storage)
-    (store-object (imagpart complex) storage)))
+    (store-object (realpart complex) storage references)
+    (store-object (imagpart complex) storage references)))
 
 (declaim (inline restore-complex-double-float))
 (defun restore-complex-double-float (storage)
@@ -204,13 +204,13 @@
 	   (restore-double-float storage)))
 
 (declaim (inline store-complex-double-float))
-(defun store-complex-double-float (complex-double-float storage)
+(defun store-complex-double-float (complex-double-float storage references)
   (declare (optimize speed safety) (type (complex double-float) complex-double-float))
-  (maybe-store-reference-instead (complex-double-float storage)
+  (maybe-store-reference-instead (complex-double-float storage references)
     (with-write-storage (storage)
       (storage-write-byte storage +complex-double-float-code+)
-      (store-double-float (realpart complex-double-float) storage nil)
-      (store-double-float (imagpart complex-double-float) storage nil))))
+      (store-double-float (realpart complex-double-float) storage references nil)
+      (store-double-float (imagpart complex-double-float) storage references nil))))
 
 (declaim (inline restore-complex-single-float))
 (defun restore-complex-single-float (storage)
@@ -219,9 +219,9 @@
 	   (restore-single-float storage)))
 
 (declaim (inline store-complex-single-float))
-(defun store-complex-single-float (complex-single-float storage)
+(defun store-complex-single-float (complex-single-float storage references)
   (declare (optimize speed safety) (type (complex single-float) complex-single-float))
-  (maybe-store-reference-instead (complex-single-float storage)
+  (maybe-store-reference-instead (complex-single-float storage references)
     (when storage
       (storage-write-byte storage +complex-single-float-code+)
       (store-single-float (realpart complex-single-float) storage nil)

@@ -21,6 +21,7 @@
    #:store-ub16
    #:store-ub32
    #:store-fixnum
+   #:store-tagged-unsigned-fixnum
    #:store-tagged-unsigned-integer
 
    #:store-double-float

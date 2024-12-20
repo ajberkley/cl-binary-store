@@ -15,7 +15,7 @@
  best case you end up with multiple copies of parts of the list.")
 
 (declaim (inline store-cons))
-(defun store-cons (cons storage &optional (tagged t))
+(defun store-cons (cons storage references &optional (tagged t))
   "If TAGGED is NIL, then we elide writing out the first cons tag, but
  the rest of the list will be tagged as usual.
 
@@ -24,35 +24,34 @@
   (let ((support-references-to-this-cons t)) ;; always allow references to list head
     (tagbody
      next-cdr
-       (or (check/store-reference cons storage support-references-to-this-cons)
-	   (progn
-	     (when tagged
-	       (with-write-storage (storage)
-		 (storage-write-byte storage +cons-code+)))
-	     #+debug-csf (format t "~A CAR~%" (if storage "Analyzing" "Storing"))
-	     (store-object (car cons) storage)
-	     (let ((cdr (cdr cons)))
-	       (if (not (consp cdr))
-		   (progn
-		     #+debug-csf
-		     (format t "~A non cons CDR~%" (if storage "Analyzing" "Storing"))
-		     (store-object cdr storage))
-		   (progn ;; optimize for proper lists
-		     #+debug-csf (format t "~A CDR~%" (if storage "Analyzing" "Storing"))
-		     (setf tagged t cons cdr
-			   support-references-to-this-cons
-			   (and support-references-to-this-cons
-				*support-shared-list-structures*))
-		     (go next-cdr)))))))))
+       (maybe-store-reference-instead (cons storage references support-references-to-this-cons)
+	 (when tagged
+	   (with-write-storage (storage)
+	     (storage-write-byte storage +cons-code+)))
+	 #+debug-csf (format t "~A CAR~%" (if storage "Analyzing" "Storing"))
+	 (store-object (car cons) storage references)
+	 (let ((cdr (cdr cons)))
+	   (if (not (consp cdr))
+	       (progn
+		 #+debug-csf
+		 (format t "~A non cons CDR~%" (if storage "Analyzing" "Storing"))
+		 (store-object cdr storage references))
+	       (progn ;; optimize for proper lists
+		 #+debug-csf (format t "~A CDR~%" (if storage "Analyzing" "Storing"))
+		 (setf tagged t cons cdr
+		       support-references-to-this-cons
+		       (and support-references-to-this-cons
+			    *support-shared-list-structures*))
+		 (go next-cdr))))))))
 
 (declaim (notinline restore-cons))
 ;; Has to be careful to not blow the stack
-(defun restore-cons (storage)
+(defun restore-cons (storage references)
   (let ((first-cons (cons nil nil)))
     (loop
       with cons = first-cons
       do
-	 (restore-object-to (car cons) storage)
+	 (restore-object-to (car cons) storage references)
 	 (let ((next (restore-ub8 storage)))
 	   #+debug-csf (format t "CDR is a ~A~%" next)
 	   (case next
@@ -64,5 +63,5 @@
 	      (setf (cdr cons) nil)
 	      (return-from restore-cons first-cons))
 	     (t
-	      (restore-object-to (cdr cons) storage next)
+	      (restore-object-to (cdr cons) storage references next)
 	      (return-from restore-cons first-cons)))))))

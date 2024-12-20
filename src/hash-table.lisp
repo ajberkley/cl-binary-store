@@ -1,32 +1,32 @@
 (in-package :cl-store-faster)
 
-(defun store-hash-table (ht storage)
+(defun store-hash-table (ht storage references)
   (declare (optimize speed safety) (type hash-table ht))
-  (maybe-store-reference-instead (ht storage)
+  (maybe-store-reference-instead (ht storage references)
     (when storage
       (store-ub8 +hash-table-code+ storage nil)
-      (store-tagged-unsigned-integer (hash-table-count ht) storage)
-      (store-tagged-unsigned-integer (hash-table-size ht) storage))
-    (store-object (hash-table-test ht) storage) ;; a symbol
-    (store-object (hash-table-rehash-threshold ht) storage) ;; float
-    (store-object (hash-table-rehash-size ht) storage) ;; float
+      (store-tagged-unsigned-fixnum (hash-table-count ht) storage)
+      (store-tagged-unsigned-fixnum (hash-table-size ht) storage))
+    (store-object (hash-table-test ht) storage references) ;; a symbol
+    (store-object (hash-table-rehash-threshold ht) storage references) ;; float
+    (store-object (hash-table-rehash-size ht) storage references) ;; float
     #+sbcl (store-boolean (sb-ext:hash-table-synchronized-p ht) storage)
-    #+sbcl (store-object (sb-ext:hash-table-weakness ht) storage)
+    #+sbcl (store-object (sb-ext:hash-table-weakness ht) storage references)
     (maphash (lambda (k v)
-	       (store-object k storage)
-	       (store-object v storage))
+	       (store-object k storage references)
+	       (store-object v storage references))
 	     ht)))
 
-(defun restore-hash-table (storage)
+(defun restore-hash-table (storage references)
   ;; These integers
-  (let ((hash-table-count (restore-object storage))
+  (let ((hash-table-count (restore-object storage references))
 	(ht
-	  (let ((size (restore-object storage))
-		(test (restore-object storage))
-		(rehash-threshold (restore-object storage))
-		(rehash-size (restore-object storage))
-		#+sbcl(synchronized (restore-object storage))
-		#+sbcl(weakness (restore-object storage)))
+	  (let ((size (restore-object storage references))
+		(test (restore-object storage references))
+		(rehash-threshold (restore-object storage references))
+		(rehash-size (restore-object storage references))
+		#+sbcl(synchronized (restore-object storage references))
+		#+sbcl(weakness (restore-object storage references)))
 	    ;; weakness works as far as I can discern
 	    ;; because of how we do reference restoration
 	    (make-hash-table :test test :size size
@@ -42,8 +42,8 @@
     ;; EQUALP hash tables, but there is no way to discover or
     ;; reproduce that at serialization or deserialization time.
     (dotimes (i hash-table-count)
-      (let ((key (restore-object storage)))
-	(restore-object-to (gethash key ht) storage)))
+      (let ((key (restore-object storage references)))
+	(restore-object-to (gethash key ht) storage references)))
     ht))
 			       
 			       

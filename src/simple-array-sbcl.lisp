@@ -82,14 +82,14 @@
 				 (the (integer 0 64) (or actual-bits (second type)))))
 			 8)))))
 
-(defun store-simple-specialized-vector (sv storage)
+(defun store-simple-specialized-vector (sv storage references)
   (declare (optimize speed safety)
 	   (type (simple-array * (*)) sv))
-  (maybe-store-reference-instead (sv storage)
+  (maybe-store-reference-instead (sv storage references)
     (with-write-storage (storage)
       (storage-write-byte storage +simple-specialized-vector+)
       (let ((sv-length (length sv)))
-	(store-tagged-unsigned-integer sv-length storage)
+	(store-tagged-unsigned-fixnum sv-length storage)
 	(multiple-value-bind (bytes-to-write encoded-element-type)
 	    (sbcl-specialized-array-element-size/bits sv)
 	  #+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
@@ -103,7 +103,7 @@
 
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize speed safety))
-  (let ((num-elts (restore-object storage)))
+  (let ((num-elts (restore-object storage nil)))
     #+debug-csf (format t "NUM ELETS ~A~%" num-elts)
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
@@ -117,17 +117,17 @@
 	  (setf (storage-offset storage) (+ num-bytes offset))
 	  sv)))))
 
-(defun store-simple-specialized-array (sa storage)
+(defun store-simple-specialized-array (sa storage references)
   (declare (optimize speed safety)
 	   (type (simple-array * *) sa))
-  (maybe-store-reference-instead (sa storage)
+  (maybe-store-reference-instead (sa storage references)
     (with-write-storage (storage)
       (storage-write-byte storage +simple-specialized-array+)
       (let ((array-dimensions (array-dimensions sa))
 	    (num-elts (array-total-size sa)))
 	(storage-write-byte storage (length array-dimensions))
 	(dolist (a array-dimensions)
-	  (store-tagged-unsigned-integer (the fixnum a) storage))
+	  (store-tagged-unsigned-fixnum (the fixnum a) storage))
 	(multiple-value-bind (bytes-to-write encoded-element-type)
 	    (sbcl-specialized-array-element-size/bits sa num-elts)
 	  (storage-write-byte storage encoded-element-type)
@@ -147,7 +147,7 @@
   ;; sbcl gets confused with restore-ub8 because of the error path
   (let* ((num-array-dimensions (the (unsigned-byte 8) (restore-ub8 storage)))
 	 (array-dimensions (loop repeat num-array-dimensions
-				 collect (restore-object storage)))
+				 collect (restore-object storage nil)))
 	 (encoded-element-info (restore-ub8 storage)))
     (multiple-value-bind (sa num-bytes)
 	(sbcl-make-simple-array-from-encoded-element-type

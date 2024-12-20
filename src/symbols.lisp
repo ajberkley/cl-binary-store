@@ -23,22 +23,22 @@
   t)
 
 (declaim (inline store-symbol))
-(defun store-symbol (symbol storage)
+(defun store-symbol (symbol storage references)
   (cond
     ((symbol-package symbol)
-     (maybe-store-reference-instead (symbol storage)
+     (maybe-store-reference-instead (symbol storage references)
        (store-ub8 +symbol-code+ storage nil)
        #+debug-csf
        (format t "Storing symbol ~S from package ~S~%"
 	       (symbol-name symbol) (package-name (symbol-package symbol)))
        ;; TODO maybe we can skip storing reference ids for these strings?
-       (store-object (symbol-name symbol) storage)
-       (store-object (package-name (symbol-package symbol)) storage)))
+       (store-object (symbol-name symbol) storage references)
+       (store-object (package-name (symbol-package symbol)) storage references)))
     (t ;; symbols without a package, (symbol-package (gensym)) -> nil
      #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
      ;;these can never be the same
      (store-ub8 +gensym-code+ storage nil)
-     (store-object (symbol-name symbol) storage))))
+     (store-object (symbol-name symbol) storage references))))
 
 (define-condition missing-package (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
@@ -55,14 +55,14 @@
 			      :package-string package-string)))
 
 (declaim (inline restore-symbol))
-(defun restore-symbol (storage)
-  (let* ((symbol-string (restore-object storage))
-	 (package-string (restore-object storage)))
+(defun restore-symbol (storage references)
+  (let* ((symbol-string (restore-object storage references))
+	 (package-string (restore-object storage references)))
     (if (find-package package-string)
 	(intern symbol-string package-string)
 	(signal-missing-package symbol-string package-string))))
 
-(defun restore-gensym (storage)
+(defun restore-gensym (storage references)
   ;; Can never be referred to by anything
-  (let ((symbol-string (restore-object storage)))
+  (let ((symbol-string (restore-object storage references)))
     (make-symbol symbol-string)))

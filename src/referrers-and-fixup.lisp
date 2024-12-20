@@ -75,6 +75,10 @@
 
 (defstruct referrer)
 
+(declaim (inline references-vector))
+(defstruct references
+  (vector (make-array nil) :type simple-vector))
+
 (defparameter *references* nil
   "An EQL hash-table that is locally bound during store, and a
  simple-vector during restore.
@@ -98,17 +102,30 @@
  fixnum objects in here.")
 
 (declaim (inline check/store-reference))
-(defun check/store-reference (object storage &optional (add-new-reference t)
-			      &aux (ht *references*))
+(defun check/store-reference (object storage references &optional (add-new-reference t))
   "Returns T if we have written a short-hand reference out to the OBJECT, in which case the
  caller should NOT write OBJECT out to storage.  If NIL, then you must write the OBJECT out.
  If ADD-NEW-REFERENCE is T, in the case where this function returns NIL, we will generate a
  new reference id for this object so it can be used in the future.  The only case where
  ADD-NEW-REFERENCE should be NIL is if you are explicitly dis-allowing (for performance reasons)
  circularity."
+  ;; If we want to parallelize during writing we either have to lock
+  ;; this table which is brutal or we have to write out references
+  ;; first.  Let's suppose we write out references first for now.
+  ;; That's not going to fully solve the problem... References are
+  ;; just to the cons, not the whole list, so we'd be writing out the
+  ;; cons, but not filling it in until later.  Same if it was a
+  ;; vector, we'd write a vector of size X with no data.  This means
+  ;; we probably want to capture every call to store-object in the
+  ;; reference counting phase and record not just the dispatch id
+  ;; (though that seems not to help) but every object.  Once we have
+  ;; every object, we can store them out of order and rely on fixups?
+  ;; But then in a list, for example, we'd have to store references to
+  ;; each cons... that's no good!
+  ;; OK, need some new ideas.
   (declare (optimize speed safety))
   (if storage ; we are in the storage phase, writing things out
-      (let ((ref-idx (gethash object ht)))
+      (let ((ref-idx (gethash object references)))
 	(declare (type (or null fixnum) ref-idx))
 	;; When ref-idx is positive, it's a note that we have already written out the
 	;; actual value, so we can just store the reference id. If it is negative,
@@ -126,9 +143,9 @@
 				   (- ref-idx) (type-of object))
 	       (setf ref-idx (- ref-idx))
 	       (store-reference-id-for-following-object ref-idx storage)
-	       (setf (gethash object ht) ref-idx)
+	       (setf (gethash object references) ref-idx)
 	       nil))))
-      (let ((number-of-times-referenced (gethash object ht 0)))
+      (let ((number-of-times-referenced (gethash object references 0)))
 	(declare (type (unsigned-byte 8) number-of-times-referenced))
 	;; This is the reference collection pass.  We store the number of times
 	;; an object is referenced as 1 or 2, where 2 means anything more than 1.
@@ -143,10 +160,10 @@
 	;; The logic below is unnecessarily complex, speed this up.
 	(cond
 	  ((and (zerop number-of-times-referenced) add-new-reference)
-	   (setf (gethash object ht) 1)
+	   (setf (gethash object references) 1)
 	   nil)
 	  ((= number-of-times-referenced 1)
-	   (setf (gethash object ht) 2)
+	   (setf (gethash object references) 2)
 	   t)
 	  ((= number-of-times-referenced 2)
 	   t)
@@ -154,49 +171,56 @@
 
 ;; RESTORATION WORK
 
+(declaim (inline ensure-references-vector))
+(defun ensure-references-vector (references ref-id)
+  "Return / resize references-vector which can hold ref-id"
+  (let* ((vec (references-vector references))
+	 (len (length vec)))
+    (if (<= len ref-id)
+	(setf vec
+	      (setf (references-vector references)
+		    (adjust-array vec
+				  (max (the fixnum (* 2 len))
+				       (the fixnum (1+ ref-id))))))
+	vec)))
+
 (declaim (inline update-reference))
-(defun update-reference (ref-id value)
+(defun update-reference (ref-id value references)
   "Used during RESTORE"
-  (declare (optimize speed safety))
+  (declare (optimize speed safety) (type fixnum ref-id))
   #+debug-csf
   (let ((*print-circle* t))
     (format t "Updating reference id ~A to ~S~%" ref-id value))
-  (let ((references *references*))
-    (setf (svref
-	   (if (array-in-bounds-p references ref-id)
-	       (setf *references*
-		     (adjust-array references
-				   (max (* 2 (length references)) (1+ ref-id))))
-	       references)
-	   ref-id)
-	  value)))
+  (let ((vec (ensure-references-vector references ref-id)))
+    (locally (declare (optimize (speed 3) (safety 0)))
+      (setf (svref vec ref-id) value))))
 
 (defun invalid-referrer (ref-idx)
   (cerror "skip" (format nil "reference index ~A does not refer to anything!" ref-idx)))
 
 (declaim (inline get-reference))
-(defun get-reference (ref-id)
-  (let ((actual-object (aref *references* ref-id)))
+(defun get-reference (ref-id references)
+  (declare (optimize speed safety))
+  (let ((actual-object (svref (references-vector references) ref-id)))
   #+debug-csf (format t "Resolving reference ~A to a ~A~%"
 		      ref-id (if actual-object (type-of actual-object) 'invalid-object))
     (or actual-object (invalid-referrer ref-id))))
 
 (declaim (inline restore-referrer))
-(defun restore-referrer (storage)
-  "Used during RESTORE"
-  (get-reference (restore-object storage)))
+(defun restore-referrer (storage references)
+  (get-reference (restore-object storage references) references))
 
 (declaim (inline restore-referrer-ub8))
-(defun restore-referrer-ub8 (storage)
-  (get-reference (restore-ub8 storage)))
+(defun restore-referrer-ub8 (storage references)
+  (get-reference (restore-ub8 storage) references))
 
 (declaim (inline restore-referrer-ub16))
-(defun restore-referrer-ub16 (storage)
-  (get-reference (restore-ub16 storage)))
+(defun restore-referrer-ub16 (storage references)
+  (get-reference (restore-ub16 storage) references))
 
 (declaim (inline restore-referrer-ub32))
-(defun restore-referrer-ub32 (storage)
-  (get-reference (restore-ub32 storage)))
+(defun restore-referrer-ub32 (storage references)
+  (get-reference (restore-ub32 storage) references))
 
 ;; During restoring, we cannot always construct objects before we have
 ;; restored a bunch of other information (for example building displaced
@@ -209,7 +233,7 @@
   (list nil :type list)
   (ref-id -1 :type fixnum))
 
-(defun fixup (fixup new-value)
+(defun fixup (fixup new-value references)
   (declare (optimize speed safety))
   "Resolve a delayed object construction.  Returns new-value."
   #+debug-csf (format t "Executing ~A fixups for reference id ~A of type ~A~%"
@@ -218,21 +242,9 @@
   (mapc (lambda (func)
 	  (funcall (the function func) new-value))
 	(fixup-list fixup))
-  (update-reference (fixup-ref-id fixup) new-value))
+  (update-reference (fixup-ref-id fixup) new-value references))
 
-(defun add-reference/fixup (value/fix-up ref-id)
-  (declare (optimize speed safety) (type fixnum ref-id))
-  (let ((references *references*))
-    (declare (type simple-vector references))
-    (unless (< (length references) ref-id)
-      (setf references
-	    (setf *references*
-		  (adjust-array references
-				(max (the fixnum (* 2 (length references)))
-				     (the fixnum (1+ ref-id)))))))
-    (setf (svref references ref-id) value/fix-up)))
-
-(defmacro with-delayed-reference/fixup (ref-id &body body)
+(defmacro with-delayed-reference/fixup ((ref-id references) &body body)
   "When we know an object is going to be referred to multiple times,
  we place it in the *references* array immediately before we even start
  building it because it may not be buildable without restoring other objects
@@ -245,11 +257,11 @@
     `(let* ((,num ,ref-id)
 	    (,fixup (make-fixup :ref-id ,num)))
        (declare (dynamic-extent ,fixup))
-       (add-reference/fixup ,fixup ,num)
+       (update-reference ,num ,fixup ,references)
        #+debug-csf(format t "Created a fixup: ~A~%" ,fixup)
-       (fixup ,fixup (progn ,@body)))))
+       (fixup ,fixup (progn ,@body) references))))
 
-(defmacro restore-object-to (place storage &optional tag)
+(defmacro restore-object-to (place storage references &optional tag)
   "If you are deserializing an object which contains slots (for
  example an array, a list, hash-table, or structure-object or a
  standard-object) which may point to other lisp objects which have yet
@@ -262,7 +274,7 @@
 	 (new-object (gensym))
 	 (variables-to-capture (cdr place))
 	 (names (loop repeat (length variables-to-capture) collect (gensym))))
-    `(let ((,restored (restore-object ,storage ,@(when tag (list tag)))))
+    `(let ((,restored (restore-object ,storage ,references ,@(when tag (list tag)))))
        (if (fixup-p ,restored)
 	   (push
 	    (let (,@(mapcar #'list names variables-to-capture))
@@ -271,7 +283,8 @@
 	    (fixup-list ,restored))
 	   (setf ,place ,restored)))))
 
-(defmacro maybe-store-reference-instead ((obj storage) &body body)
+(defmacro maybe-store-reference-instead ((obj storage references &optional (add-new-reference t))
+					 &body body)
   "Objects may be seen multiple times during serialization,
  so where object equality after deserialization is expected (pretty
  much every object except numbers) or not determinable (double-floats,
@@ -280,7 +293,7 @@
  original object.  The counting of objects is done explicitly in the
  writing phase, so there is nothing to do in the reading phase except
  to plunk objects into the right place in the *references* array."
-  `(or (check/store-reference ,obj ,storage)
+  `(or (check/store-reference ,obj ,storage ,references ,add-new-reference)
        (progn
 	 ,@body)))
 
@@ -307,7 +320,7 @@
 	 (setf (storage-offset storage) (+ 4 offset)))
 	(t
 	 (storage-write-byte! +referrer-code+ storage nil)
-	 (store-tagged-unsigned-integer ref-index storage))))))
+	 (store-tagged-unsigned-fixnum ref-index storage))))))
 
 (defun store-reference-id-for-following-object (ref-index storage)
   (declare (type (and (integer 0) fixnum) ref-index)
@@ -330,22 +343,23 @@
 	 (setf (storage-offset storage) (+ 4 offset)))
 	(t
 	 (storage-write-byte! +record-reference-code+ storage nil)
-	 (store-tagged-unsigned-integer ref-index storage))))))
+	 (store-tagged-unsigned-fixnum ref-index storage))))))
 
 (declaim (inline restore-reference-id-for-following-object))
-(defun restore-reference-id-for-following-object (ref-id storage)
+(defun restore-reference-id-for-following-object (ref-id storage references)
   "Object may not reified before other objects refer to it"
-  (with-delayed-reference/fixup ref-id
-    (restore-object storage)))
+  (with-delayed-reference/fixup (ref-id references)
+    (restore-object storage references)))
 
-(defun restore-reference-id-ub8 (storage)
-  (restore-reference-id-for-following-object (restore-ub8 storage) storage))
+(defun restore-reference-id-ub8 (storage references)
+  (restore-reference-id-for-following-object (restore-ub8 storage) storage references))
 
-(defun restore-reference-id-ub16 (storage)
-  (restore-reference-id-for-following-object (restore-ub16 storage) storage))
+(defun restore-reference-id-ub16 (storage references)
+  (restore-reference-id-for-following-object (restore-ub16 storage) storage references))
 
-(defun restore-reference-id-ub32 (storage)
-  (restore-reference-id-for-following-object (restore-ub32 storage) storage))
+(defun restore-reference-id-ub32 (storage references)
+  (restore-reference-id-for-following-object (restore-ub32 storage) storage references))
 
-(defun restore-reference-id (storage)
-  (restore-reference-id-for-following-object (restore-object storage) storage))
+(defun restore-reference-id (storage references)
+  (restore-reference-id-for-following-object (restore-object storage references)
+					     storage references))
