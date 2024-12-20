@@ -37,10 +37,6 @@
 		 :end2 (storage-offset storage)))
       (setf (storage-offset storage) 0))))
 
-(defun make-output-storage/ub8 ()
-  (declare (optimize speed safety))
-)
-
 (defun store-to-vector (&rest elements)
   (declare (dynamic-extent elements) (optimize speed safety))
   "Returns an (array (unsigned-byte 8) (*)) with the data"

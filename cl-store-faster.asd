@@ -4,7 +4,7 @@
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :long-name "Fast serialization / deserialization library"
   :pathname "src/"
-  :depends-on (#:flexi-streams)
+  :depends-on (#:flexi-streams #:lparallel)
   :components ((:file "cl-store-faster")
 	       (:file "cl-store-faster-extensions")
 	       (:file "codes")
@@ -27,7 +27,7 @@
 	       (:file "dispatch" :depends-on ("codes" "array" "symbols" "simple-vector" "cons"
 						      "hash-table"
 						      "referrers-and-fixup" "numbers" "pathname"
-						      "unsigned-bytes" "objects"))
+						      "unsigned-bytes" "objects" "storage"))
 	       (:file "user" :depends-on ("dispatch" "storage"))
 	       )
   :license :BSD-3

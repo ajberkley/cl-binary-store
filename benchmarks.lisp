@@ -22,23 +22,14 @@
 ;; WHICH         |  WRITING  |  READING  | TEST
 ;;---------------+-----------+-----------+
 ;;cl-store       |     625 ms|     700 ms| 10x 1M long list of 'a
-;;cl-store-faster|     575 ms|     150 ms| 10x 1M long list of 'a with precomputed dispatch
 ;;cl-store-faster|     475 ms|     150 ms| 10x 1M long list of 'a with no precomputed dispatch
 ;;cl-store       |     675 ms|     675 ms| 10x 1M long list of 123
-;;cl-store-faster|     425 ms|     115 ms| 10x 1M long list of 123 with precomputed dispatch
 ;;cl-store-faster|     325 ms|     115 ms| 10x 1M long list of 123 with no precomputed dispatch
 
-;; pre-computed dispatch is slower... probably access to the dispatch list
-;; Because of the dispatch array we cons a bit more on writing and it's actually slower!
-;; Part of the problem is we are doing 1 million entries into the array, and it's not
-;; a simple array.  we access globals multiple times to get to it.  So probably 10 ns
-;; wasted each which adds up 100 ms or so.  Not so easy to fix given how fast things are,
-;; it's weird that its faster to do the etypecase dispatch twice, but SBCL has precompiled
-;; it to a perfect hash, so hard to beat!
-
-;; Anyhow without the precomputed dispatch we are nominally storing 30 MB in 0.5 second which
-;; is 60 MB/sec which is nowhere close enough to disk bandwidth limited (this is roughly 20 ns
-;; per element, but this is a cache hot operation, so all the dispatch is zoomed through).
+;; We are nominally storing 80 M objects in 0.5 second, 160M
+;; objects/second or 65 ns per object (of course this is a branch
+;; predictor and cache hot test).  Or roughly 60 MB for second, which
+;; still is nowhere near disk speed limited, so we should work harder
 
 ;; WARNING: sbcl hashing on single floats is terrible, so cl-store does not finish
 (defun long-float-array (&optional (random nil))
