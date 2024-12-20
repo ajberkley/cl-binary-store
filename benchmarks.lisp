@@ -74,7 +74,7 @@
 					    ;; (random 1d0) ;; cl-store chokes
 					    (if (> (random 100) 50)
 						;;(random 1f0) ;; <- makes cl-store take forever!
-						'blarg
+						"hi" ;;'blarg
 						(if (> (random 100) 50)
 						    (cons (random 30) 2)
 						    (if (= (random 2) 1)
@@ -83,14 +83,14 @@
 							#())))))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
-      ;;      (sb-sprof:with-profiling (:report :graph)
-      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
-    (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
+      (sb-sprof:with-profiling (:report :graph)
+       (time (dotimes (x 30) (cl-store-faster:store-to-file "blarg.bin" a)))))
+      ;;(time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
     ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
     ;; (gc :full t)
     ;;(sb-sprof:with-profiling (:report :graph)
-    (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
 

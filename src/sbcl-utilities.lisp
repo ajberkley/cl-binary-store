@@ -8,6 +8,7 @@
 (declaim (inline copy-sap))
 (defun copy-sap (target-sap target-offset source-sap source-offset n)
   (case n
+    (0)
     (1
      (setf (sb-sys:sap-ref-8 target-sap target-offset)
 	   (sb-sys:sap-ref-8 source-sap source-offset)))

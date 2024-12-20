@@ -182,7 +182,9 @@
 	(- new-bytes-end-at (storage-offset storage))))))
 
 (defun make-write-into-storage/stream (stream)
+  (declare (optimize speed safety))
   (lambda (storage)
+    (declare (optimize speed safety))
     (let ((seq (storage-store& storage)))
       #+debug-csf (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
       (write-sequence seq stream :end (storage-offset storage))
@@ -234,10 +236,11 @@
 	     (setf (storage-max storage) valid-data-bytes))))))))
 
 (declaim (ftype (function (buffering-write-storage fixnum) (values fixnum &optional))
-		flush-then-increase-size-of-storage))
+		flush-then-maybe-increase-size-of-storage))
 
-(defun flush-then-increase-size-of-storage (storage bytes)
+(defun flush-then-maybe-increase-size-of-storage (storage bytes)
   "Returns storage offset after action"
+  (declare (optimize speed safety))
   (funcall (storage-flusher storage) storage)
   (if (> bytes (storage-size storage))
       (progn
@@ -291,7 +294,7 @@
        (let ((offset (storage-offset storage)))
 	 (if (< (the fixnum (+ offset bytes)) (storage-size storage))
 	     offset
-	     (flush-then-increase-size-of-storage storage bytes)))))
+	     (flush-then-maybe-increase-size-of-storage storage bytes)))))
     (sap-write-storage
      (let ((offset (storage-offset storage)))
        (assert (<= (the fixnum (+ offset bytes)) (storage-sap-size& storage)))

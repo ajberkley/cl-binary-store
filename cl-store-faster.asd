@@ -10,8 +10,8 @@
 	       (:file "codes")
 	       (:file "storage")
 	       (:file "unsigned-bytes" :depends-on ("storage"))
-	       (:file "numbers" :depends-on ("unsigned-bytes"))
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes"))
+	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"))
 	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"))
 	       (:file "sbcl-utilities" :if-feature :sbcl)
 	       (:file "simple-array-sbcl" :if-feature :sbcl
