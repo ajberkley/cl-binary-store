@@ -40,8 +40,9 @@
 ;; is 60 MB/sec which is nowhere close enough to disk bandwidth limited (this is roughly 20 ns
 ;; per element, but this is a cache hot operation, so all the dispatch is zoomed through).
 
-(defun long-double-float-array ()
-  (let ((a (coerce (loop repeat 1000000 collect 1d0)
+;; WARNING: sbcl hashing on single floats is terrible, so cl-store does not finish
+(defun long-float-array (&optional (random nil))
+  (let ((a (coerce (loop repeat 1000000 collect (if random (random 1d0) 1d0))
 		   '(simple-array double-float (*)))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
@@ -53,34 +54,43 @@
     (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
+;; Double float non-random (you can see the hot branch predicted path going zoom
+;; CL-STORE-FASTER: 145 ms write /  35 ms read; half is system time on write
+;; CL-STORE:        600 ms write / 625 ms read.  Not a surprise of course.
+;; Double-float random (here we are puthash limited tracking double-float references)
+;; CL-STORE-FASTER:   767 ms write /    40 ms read
+;; CL-STORE:        11400 ms write / 10825 ms read (this is because double float storing is slow)
+;; Single float non-random
+;; CL-STORE-FASTER:    83 ms write /    20 ms read
+;; CL-STORE:           50 ms write /    67 ms read (because it is de-duplicating single floats!)
+;; Single float random
+;; CL-STORE-FASTER:   100 ms write /    25 ms read (half is system time on write)
+;; CL-STORE:          DNF ms write /   DNF ms read (terrible single float hashing on SBCL)
 
-;; CL-STORE-FASTER: 143 ms write / 35 ms read; half system time on write
-;; CL-STORE: 587 ms write / 643 ms read.  Not a surprise of course.
 
-
-;; OK so CL-STORE is *TERRIBLE* on single floats
+;; Avoid random single floats, terrible!  Also terribly slow if you add in some random
+;; double floats.  Not sure what is going on with cl-store
 (defun long-complex-list ()
   (let ((a (loop repeat 1000000 collect (if (> (random 1000) 800)
-				      ;; (complex 1 2)
-				      (random 1d0)
-				      (if (> (random 100) 50)
-					  'a
-					  (if (> (random 100) 50)
-					      "hello" ;; (cons 1 2)
-					      (if (= (random 2) 1)
-						  5;; "hello"
-						  6;; "bye"
-						  ;; #()
-						  )))))))
+					    (complex 1 2)
+					    ;;(random 1d0) ;; if this, cl-store takes forever!
+					    (if (> (random 100) 50)
+						'blarg
+						(if (> (random 100) 50)
+						    (cons 1 2)
+						    (if (= (random 2) 1)
+							"hello"
+							#())))))))
     (gc :full t)
-    (let ((cl-store-faster::*support-shared-list-structures* nil))
+    (let ((cl-store-faster::*support-shared-list-structures* t))
       ;;      (sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
     (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
     ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
     ;; (gc :full t)
-    (time (dotimes (x 1) (cl-store:store a "blarg.bin")))
-    (time (dotimes (x 1) (cl-store:restore "blarg.bin"))))
+    ;;(sb-sprof:with-profiling (:report :graph)
+      (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
   (gc :full t))
 
 ;; CL-STORE-FASTER:  900 ms write /  225 ms read
@@ -88,3 +98,4 @@
 
 ;; CL-STORE-FASTER: 1500 ms write /  230 ms read
 ;; CL-STORE:       40800 ms write / 2700 ms read
+
