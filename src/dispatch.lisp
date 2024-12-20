@@ -111,7 +111,9 @@
 							    idx
 							    (aref *store-dispatch-table-names*
 								  idx)))
-					  `(,func value storage)))
+					  #+debug-csf `(funcall ',func value storage)
+					  #-debug-csf `(,func value storage)
+					  ))
 		      :key #'first))))
        
        (defun store-object/no-storage (value)
@@ -131,8 +133,8 @@
 					     (format t
 						     ,(format nil "Dispatching to code ~A: ~A~~%"
 							      idx (aref *store-dispatch-table-names* idx)))
-					     (funcall ',func value storage) ; debug
-					     ;;(,func value storage) ; normal
+					     #+debug-csf (funcall ',func value storage)
+					     #-debug-csf(,func value storage)
 					     )))
 		       ;; this way the compiler knows storage is nil and
 		       ;; we have compile time clean-up and dispatch.
