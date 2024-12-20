@@ -4,6 +4,13 @@
 ;; Do not enable this, it slows things down and is a work in progress
 ;; (setf *features* (delete :precompute-dispatch *features*))
 
+;; Since reading is very fast now, let's work on writing.
+;; We can parallelize if storing multiple objects --- we could
+;; start after the reference counting phase, but it looks like that's
+;; maybe 1/3rd of the total time, so we'd get only a 2-3x speed-up
+;; at best.  That's nice, and forces me to work out the parallel
+;; disk writing, but...
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *restore-dispatch-table-names*
     (make-array 256)
@@ -33,7 +40,12 @@
     (read-dispatch tag storage))
 
   (defun strict-subtype-ordering (type-specs &key (key #'identity))
-    ;; This doesn't actually work
+    ;; This sort of works, but some weird issues I haven't debugged yet
+    ;; with the type hierarchy.
+    ;; We need to order these by subtypep, a simple sort won't work
+    ;; because we have disjoint sets.  So first, we have to sort into
+    ;; disjoint sets, then sort, then recombine.
+
     (let* ((type-groups '(cons symbol integer;; fixnum bignum
 			  array number structure-object standard-object t))
 	   (groups (make-array (length type-groups) :initial-element nil)))
@@ -46,8 +58,8 @@
       (loop for g across groups
 	    appending (stable-sort (reverse g) #'subtypep :key key))))
 
-  (declaim (type simple-vector *store-dispatch-table*))
-  (defvar *store-dispatch-table*
+  #+precompute-dispatch (declaim (type simple-vector *store-dispatch-table*))
+  #+precompute-dispatch (defvar *store-dispatch-table*
     (make-array 256 :initial-element (lambda (&rest rest)
 				       (declare (ignore rest))
 				       (error "undefined dispatch slot"))))
@@ -65,7 +77,7 @@
 			  (make-array 0 :element-type '(unsigned-byte 8)))
 
   #+precompute-dispatch (declaim (type (unsigned-byte 50) *dispatch-index*))
-  #+precompute-dispathc (defvar *dispatch-index* 0
+  #+precompute-dispatch (defvar *dispatch-index* 0
 			  "An offset into the *dispatch* table.  Should not be a global bleh, add to function parameters")
 
   (defvar *references-already-fixed* nil
@@ -85,16 +97,16 @@
        (defun store-object/storage (value storage)
 	 (declare (optimize speed safety))
 	 #+precompute-dispatch
-	 `(let ((index *dispatch-index*))
-	    #+debug-csf (format t "Dispatching to code ~A: ~A~%"
-				(aref *dispatch* index)
-				(svref *store-dispatch-table-names*
-				       (aref *dispatch* index)))
-	    (setf *dispatch-index* (+ 1 index))
-	    (locally (declare (optimize (speed 3) (safety 0)))
-	      (funcall (the function
-			    (svref *store-dispatch-table* (aref *dispatch-compiled* index)))
-		       value storage)))
+	 (let ((index *dispatch-index*))
+	   #+debug-csf (format t "Dispatching to code ~A: ~A~%"
+			       (aref *dispatch* index)
+			       (svref *store-dispatch-table-names*
+				      (aref *dispatch* index)))
+	   (setf *dispatch-index* (+ 1 index))
+	   (locally (declare (optimize (speed 3) (safety 0)))
+	     (funcall (the function
+			   (svref *store-dispatch-table* (aref *dispatch-compiled* index)))
+		      value storage)))
 	 #-precompute-dispatch
 	 (etypecase
 	     value
@@ -118,15 +130,12 @@
        (defun store-object/no-storage (value)
 	 (declare (optimize speed safety))
 	 (etypecase value
-	   ;; We need to order these by subtypep, a simple sort won't work
-	   ;; because we have disjoint sets.  So first, we have to sort into
-	   ;; disjoint sets, then sort, then recombine.
            ,@(strict-subtype-ordering
 	      (loop for type-spec being the hash-keys of *code-store-info*
 		    for idx fixnum from 0
 		    for func = (gethash type-spec *code-store-info*)
 		    do (setf (svref *store-dispatch-table-names* idx) func)
-		       (setf (svref *store-dispatch-table* idx)
+		       #+precompute-dispatch (setf (svref *store-dispatch-table* idx)
 			     (compile nil `(lambda (value storage)
 					     #+debug-csf
 					     (format t
@@ -139,8 +148,8 @@
 		       ;; we have compile time clean-up and dispatch.
 		    collect (list type-spec
 				  #+precompute-dispatch
-				    (locally (declare (optimize (speed 3) (safety 0)))
-				      `(vector-push-extend ,idx *dispatch*))
+				    `(locally (declare (optimize (speed 3) (safety 0)))
+				       (vector-push-extend ,idx *dispatch*))
 				  `(,func value nil)))
 	      :key #'first)))))
   
@@ -208,7 +217,7 @@
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all the elements."
-    (let* ((references (make-array 1024 :adjustable t :fill-pointer nil))
+    (let* ((references (make-array 1024))
 	   (*references* references))
       (declare (dynamic-extent references))
       (let* ((first-code (maybe-restore-ub8 storage))

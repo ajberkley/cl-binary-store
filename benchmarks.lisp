@@ -42,8 +42,8 @@
 
 ;; WARNING: sbcl hashing on single floats is terrible, so cl-store does not finish
 (defun long-float-array (&optional (random nil))
-  (let ((a (coerce (loop repeat 1000000 collect (if random (random 1d0) 1d0))
-		   '(simple-array double-float (*)))))
+  (let ((a (coerce (loop repeat 1000000 collect (if random (random 1f0) 1f0))
+		   '(simple-array single-float (*)))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
       ;;(sb-sprof:with-profiling (:report :graph)
@@ -54,7 +54,7 @@
     (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
-;; Double float non-random (you can see the hot branch predicted path going zoom
+;; Double float non-random (you can see the hot branch predicted path going zoom)
 ;; CL-STORE-FASTER: 145 ms write /  35 ms read; half is system time on write
 ;; CL-STORE:        600 ms write / 625 ms read.  Not a surprise of course.
 ;; Double-float random (here we are puthash limited tracking double-float references)
@@ -62,27 +62,44 @@
 ;; CL-STORE:        11400 ms write / 10825 ms read (this is because double float storing is slow)
 ;; Single float non-random
 ;; CL-STORE-FASTER:    83 ms write /    20 ms read
-;; CL-STORE:           50 ms write /    67 ms read (because it is de-duplicating single floats!)
+;; CL-STORE:          540 ms write /   670 ms read
 ;; Single float random
 ;; CL-STORE-FASTER:   100 ms write /    25 ms read (half is system time on write)
-;; CL-STORE:          DNF ms write /   DNF ms read (terrible single float hashing on SBCL)
+;; CL-STORE:          DNF ms write /   DNF ms read (terrible single float hashing stuff? on SBCL)
 
-
-;; Avoid random single floats, terrible!  Also terribly slow if you add in some random
-;; double floats.  Not sure what is going on with cl-store
 (defun long-complex-list ()
   (let ((a (loop repeat 1000000 collect (if (> (random 1000) 800)
-					    (complex 1 2)
-					    ;;(random 1d0) ;; if this, cl-store takes forever!
+					    (random 1d0)
 					    (if (> (random 100) 50)
+						;;(random 1f0) ;; <- makes cl-store take forever!
 						'blarg
 						(if (> (random 100) 50)
-						    (cons 1 2)
+						    (cons (random 30) (random 50f0))
 						    (if (= (random 2) 1)
 							"hello"
+							;; (random 1f0) slows cl-store crazily
 							#())))))))
     (gc :full t)
-    (let ((cl-store-faster::*support-shared-list-structures* t))
+    (let ((cl-store-faster::*support-shared-list-structures* nil))
+      ;;      (sb-sprof:with-profiling (:report :graph)
+      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+    (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
+    ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
+    ;; (gc :full t)
+    ;;(sb-sprof:with-profiling (:report :graph)
+    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    )
+  (gc :full t))
+
+;; Without the random 1f0, otherwise cl-store takes like 100 seconds
+;; CL-STORE-FASTER: 1800 ms write /  345 ms read
+;; CL-STORE:        3700 ms write / 3500 ms read
+
+(defun long-complex-list ()
+  (let ((a (loop repeat 1000000 collect (random 1d0))))
+    (gc :full t)
+    (let ((cl-store-faster::*support-shared-list-structures* nil))
       ;;      (sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
     (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
@@ -90,12 +107,25 @@
     ;; (gc :full t)
     ;;(sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
+    (time (dotimes (x 1) (cl-store:restore "blarg.bin"))))
   (gc :full t))
 
-;; CL-STORE-FASTER:  900 ms write /  225 ms read
-;; CL-STORE:       40903 ms write / 2750 ms read
-
-;; CL-STORE-FASTER: 1500 ms write /  230 ms read
-;; CL-STORE:       40800 ms write / 2700 ms read
+(defun single-float-hash-test ()
+  (let ((ht (Make-hash-table :test 'eql)))
+    (loop repeat 1000000
+	  ;;for val = (expt 2d0 (- (random 616d0) 308d0))
+	  for val = (if (> (random 1000) 800)
+			(random 1f0)
+			(random 1f0))
+	  do (incf (gethash (sxhash val) ht 0)))
+    (let ((sum 0)
+	  (max 0))
+      (maphash (lambda (k v)
+		 (setf max (max v max))
+		 (incf sum v))
+	       ht)
+      (format t "HT size is ~A, maximum collisions is ~A, average collisions ~A~%"
+	      (hash-table-size ht)
+	      max
+	      (* 1f0 (/ sum (hash-table-count ht)))))))
 

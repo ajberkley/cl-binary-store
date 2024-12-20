@@ -76,7 +76,8 @@
 (defstruct referrer)
 
 (defparameter *references* nil
-  "An EQL hash-table that is locally bound during store or restore.
+  "An EQL hash-table that is locally bound during store, and a
+ simple-vector during restore.
 
  Used to store objects we restore which may be referenced later
  (or in a circular manner).
@@ -156,20 +157,19 @@
 (declaim (inline update-reference))
 (defun update-reference (ref-id value)
   "Used during RESTORE"
+  (declare (optimize speed safety))
   #+debug-csf
   (let ((*print-circle* t))
     (format t "Updating reference id ~A to ~S~%" ref-id value))
-  (if *references-already-fixed*
-      value
-      (let ((references *references*))
-	(setf (aref
-	       (if (array-in-bounds-p references ref-id)
-		   (setf *references*
-			 (adjust-array references
-				       (max (* 2 (length references)) (1+ ref-id))))
-		   references)
-	       ref-id)
-	      value))))
+  (let ((references *references*))
+    (setf (svref
+	   (if (array-in-bounds-p references ref-id)
+	       (setf *references*
+		     (adjust-array references
+				   (max (* 2 (length references)) (1+ ref-id))))
+	       references)
+	   ref-id)
+	  value)))
 
 (defun invalid-referrer (ref-idx)
   (cerror "skip" (format nil "reference index ~A does not refer to anything!" ref-idx)))
@@ -221,11 +221,16 @@
   (update-reference (fixup-ref-id fixup) new-value))
 
 (defun add-reference/fixup (value/fix-up ref-id)
-  (unless (array-in-bounds-p *references* ref-id)
-    (setf *references*
-	  (adjust-array *references*
-			(max (* 2 (length *references*)) (1+ ref-id)))))
-  (setf (aref *references* ref-id) value/fix-up))
+  (declare (optimize speed safety) (type fixnum ref-id))
+  (let ((references *references*))
+    (declare (type simple-vector references))
+    (unless (< (length references) ref-id)
+      (setf references
+	    (setf *references*
+		  (adjust-array references
+				(max (the fixnum (* 2 (length references)))
+				     (the fixnum (1+ ref-id)))))))
+    (setf (svref references ref-id) value/fix-up)))
 
 (defmacro with-delayed-reference/fixup (ref-id &body body)
   "When we know an object is going to be referred to multiple times,
