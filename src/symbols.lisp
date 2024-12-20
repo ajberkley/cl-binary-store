@@ -24,21 +24,21 @@
 
 (declaim (inline store-symbol))
 (defun store-symbol (symbol storage references)
-  (cond
-    ((symbol-package symbol)
-     (maybe-store-reference-instead (symbol storage references)
-       (store-ub8 +symbol-code+ storage nil)
-       #+debug-csf
-       (format t "Storing symbol ~S from package ~S~%"
-	       (symbol-name symbol) (package-name (symbol-package symbol)))
-       ;; TODO maybe we can skip storing reference ids for these strings?
-       (store-object (symbol-name symbol) storage references)
-       (store-object (package-name (symbol-package symbol)) storage references)))
-    (t ;; symbols without a package, (symbol-package (gensym)) -> nil
-     #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
-     ;;these can never be the same
-     (store-ub8 +gensym-code+ storage nil)
-     (store-object (symbol-name symbol) storage references))))
+  (let ((symbol-package (symbol-package symbol)))
+    (cond
+      (symbol-package
+       (maybe-store-reference-instead (symbol storage references)
+	 (store-ub8 +symbol-code+ storage nil)
+	 #+debug-csf
+	 (format t "Storing symbol ~S from package ~S~%"
+		 (symbol-name symbol) (package-name (symbol-package symbol)))
+	 (store-object (symbol-name symbol) storage references)
+	 (store-object (package-name symbol-package) storage references)))
+      (t ;; symbols without a package, (symbol-package (gensym)) -> nil
+       #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
+       ;;these can never be the same
+       (store-ub8 +gensym-code+ storage nil)
+       (store-object (symbol-name symbol) storage references)))))
 
 (define-condition missing-package (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
