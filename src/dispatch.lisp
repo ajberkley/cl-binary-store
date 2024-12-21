@@ -78,9 +78,9 @@
 						 code func-name))
 			     ;; symbol call when debugging for no inline
 			     #+debug-csf
-			     (locally (declare (notinline ,(car func-info)))
-			       `(funcall ',(car func-info) ,value ,storage
-					 ,@(when (cdr func-info) `(,references))))
+			     `(locally (declare (notinline ,func-name))
+			       (funcall ',func-name ,value ,storage
+					,@(when takes-references `(,references))))
 			     #-debug-csf
 			     `(locally (declare (inline ,func-name))
 				(,func-name ,value ,storage
@@ -110,7 +110,7 @@
 	   (struct-info (make-hash-table :test 'eql :synchronized nil))
 	   (*struct-info* struct-info))
       (declare (dynamic-extent struct-info references))
-      #+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length rest))
+      #+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
       (dolist (elt stuff)
        	(store-object/no-storage elt references))
       #+debug-csf (format t "Finished reference counting pass~%")
@@ -139,7 +139,7 @@
     (apply #'store-objects/generic storage stuff))
 
   (declaim (inline restore-object))
-  (defun restore-object (storage references &optional (tag (maybe-restore-ub8 storage)))
+  (defun restore-object (storage references &optional (tag (restore-ub8 storage)))
     (declare (notinline read-dispatch))
     (read-dispatch tag storage references))
 
@@ -153,7 +153,7 @@
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all elements restored."
-    (let* ((references-vector (make-array 1024))
+    (let* ((references-vector (make-array 1024 :initial-element nil)) ;; not needed but helps with debuggingfe
 	   (references (make-references :vector references-vector))
 	   (first-code (maybe-restore-ub8 storage))
 	   (first-result (when first-code (read-dispatch first-code storage references))))

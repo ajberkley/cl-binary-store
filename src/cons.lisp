@@ -53,7 +53,6 @@
       do
 	 (restore-object-to (car cons) storage references)
 	 (let ((next (restore-ub8 storage)))
-	   #+debug-csf (format t "CDR is a ~A~%" next)
 	   (case next
 	     (#.+cons-code+
 	       (let ((next (cons nil nil)))

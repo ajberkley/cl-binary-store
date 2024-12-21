@@ -33,14 +33,18 @@
 	 #+debug-csf
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
-	 (store-simple-specialized-vector (the string (symbol-name symbol)) storage nil)
-	 (store-simple-specialized-vector (the string (package-name symbol-package))
-					  storage references)))
+	 (store-object (symbol-name symbol) storage nil)
+	 (store-object (package-name symbol-package) storage references)
+	 ;; (store-string/no-refs (symbol-name symbol) storage)
+	 ;; (store-string (package-name symbol-package) storage references)
+	 ))
       (t ;; symbols without a package, (symbol-package (gensym)) -> nil
        #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
        ;;these can never be the same
        (store-ub8 +gensym-code+ storage nil)
-       (store-simple-specialized-vector (the string (symbol-name symbol)) storage nil)))))
+       (store-object (symbol-name symbol) storage nil)
+       ;; (store-string/no-refs (symbol-name symbol) storage)
+       ))))
 
 (define-condition missing-package (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
@@ -58,13 +62,15 @@
 
 (declaim (inline restore-symbol))
 (defun restore-symbol (storage references)
-  (let* ((symbol-string (restore-object storage references))
+  (let* ((symbol-string (restore-object storage nil);; (restore-string storage)
+			)
 	 (package-string (restore-object storage references)))
-    (if (find-package package-string)
-	(intern symbol-string package-string)
-	(signal-missing-package symbol-string package-string))))
+      (if (find-package package-string)
+	  (intern symbol-string package-string)
+	  (signal-missing-package symbol-string package-string))))
 
-(defun restore-gensym (storage references)
+(defun restore-gensym (storage)
   ;; Can never be referred to by anything
-  (let ((symbol-string (restore-object storage references)))
+  (let ((symbol-string (restore-object storage nil);; (restore-string storage)
+		       ))
     (make-symbol symbol-string)))

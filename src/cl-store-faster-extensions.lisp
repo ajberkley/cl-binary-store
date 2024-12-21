@@ -48,6 +48,9 @@
    #:store-simple-specialized-vector
    #:restore-simple-specialized-vector
 
+   #:store-string
+   #:restore-string
+   
    #:store-simple-vector
    #:restore-simple-vector
 

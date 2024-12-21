@@ -1,35 +1,80 @@
+;; TODO ADD A SIMPLE-BASE-STRING tag code and a SIMPLE-STRING tag code
+;; about 10% of the time is spent in upgraded-array-element-type and
+;; array-dimensions and other stuff.
+
 (quicklisp:quickload "cl-store")
 (require 'sb-sprof)
 
 (defun long-simple-list ()
-  (let ((a (loop repeat 1000000 collect 123)))
+  (let ((a (loop repeat 1000000
+		 collect (make-pathname :name (format nil "~A" (random 123456))))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
-      ;;(sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE-FASTER: file length ~,2fMB~%" (/ (file-length str) 1d6)))
     (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
     (gc :full t)
-    ;; Here we average 4 bytes per
-    ;; 1 byte for each cons,
-    ;; 1 byte for a reference
-    ;; and two bytes for the reference?
     (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1d6)))
     (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
 
-;; cl-store-faster generates 3MB files, cl-store generates 4MB files.
-;; WHICH         |  WRITING  |  READING  | TEST
-;;---------------+-----------+-----------+
-;;cl-store       |     625 ms|     700 ms| 10x 1M long list of 'a
-;;cl-store-faster|     475 ms|     150 ms| 10x 1M long list of 'a with no precomputed dispatch
-;;cl-store       |     675 ms|     675 ms| 10x 1M long list of 123
-;;cl-store-faster|     325 ms|     115 ms| 10x 1M long list of 123 with no precomputed dispatch
+;; Testing 10x writing and reading a 1M long list of identical
+;; value of the types below.  This is just a test on the hash
+;; table usage (it shows that cl-store does not de-duplicate
+;; numbers larger than ub32s).  File sizes is 3MB for
+;; CL-STORE-FASTER vs 4MB for CL-STORE
+;;+------------+------------------+------------------+ 
+;;|  FIXED     | CL-STORE-FASTER  |     CL-STORE     |
+;;+------------+------------------+------------------+
+;;| TYPE       |WRITE(ms)|READ(ms)|WRITE(ms)|READ(ms)|
+;;+------------+---------+--------+---------+--------+
+;; symbol      |      505|     150|      650|     700|
+;; ub8         |      335|     140|      720|     680|
+;; sb8         |      330|     140|      720|     680|
+;; ub16        |      385|     140|      950|     815|
+;; sb16        |      370|     135|      920|     800|
+;; ub32        |      400|     150|      915|     795|
+;; fixnum      |      435|     160|     5000|    3400| 
+;; single-float|      435|     160|      675|     680|
+;; double-float|      535|     145|      690|     690|
+;; complex     |      530|     160|      650|     690|
+;; string      |      150|     130|      670|     690| ;; 3 MB cl-store-faster vs 4 MB cl-store
+;; pathname    |      650|     130|      680|     700| ;; 3 MB cl-store-faster vs 4 MB cl-store
+;;+------------+---------+--------+---------+--------+
+;; For the number cases we are storing say 20M objects (the conses
+;; and the numbers) in 350 ms which is 57M transactions/sec or
+;; 18 ns per transaction.  That's not so bad for this cache hot
+;; case.  (This is all on an old i5 laptop).  In terms of data rate,
+;; this is 30 MB/ 350 ms or 85 MB/sec which isn't amazing.
 
-;; We are nominally storing 80 M objects in 0.5 second, 160M
-;; objects/second or 65 ns per object (of course this is a branch
-;; predictor and cache hot test).  Or roughly 60 MB for second, which
-;; still is nowhere near disk speed limited, so we should work harder
+;; Now, doing 10 repeats of writing 1 million random objects
+;;+------------+------------------+------------------+---------------+--------+ 
+;;|   RANDOM   | CL-STORE-FASTER  |     CL-STORE     |CL-STORE-FASTER|CL-STORE|
+;;+------------+------------------+------------------+---------------+--------+
+;;| TYPE       |WRITE(ms)|READ(ms)|WRITE(ms)|READ(ms)|      SIZE     |  SIZE  |
+;;+------------+---------+--------+---------+--------+---------------+--------+
+;; ub8         |      375|     135|      715|     715|            3MB|     5MB|
+;; ub16        |      390|     140|      925|     815|            4MB|     8MB|
+;; ub32        |      390|     150|      910|     800|            6MB|     8MB|
+;; fixnum      |      435|     160|     5000|    3400|           10MB|    38MB|
+;; single-float|      410|     145|   700000|    6500|            6MB|    21MB|
+;; double-float|     3650|     330|    10400|   11100|           10MB|    48MB|
+;; gensym      |     1240|    1890|     3650|    3270|           13MB|    12MB|
+;; complex/sb8 |      540|     150|      690|     700|            3MB|     4MB|
+;; complex/df  |      530|     140|      690|     770|            3MB|     4MB|
+;; complex/sf  |      540|     140|      690|     710|            3MB|     4MB|
+;; string      |     2200|     500|     3600|    1800|           11MB|    11MB|
+;; pathname    |      650|     150|      680|     690|
+;;+------------+---------+--------+---------+--------+
+;; Note for symbols we do not store symbol/base-string separate from symbol/string
+;; which could save a little bit of space (one tag bit) (see 13MB vs 12MB for gensym)
+;; Similarly for simple-base-strings we don't use a tag code for it.
+
+
 
 ;; WARNING: sbcl hashing on single floats is terrible, so cl-store does not finish
 (defun long-float-array (&optional (random nil))
@@ -125,3 +170,24 @@
 	      max
 	      (* 1f0 (/ sum (hash-table-count ht)))))))
 
+
+(defun four-long-simple-lists ()
+  (let* ((length 1000000)
+	 (chunks 4)
+	 (as (loop repeat chunks
+		   collect
+		   (loop repeat (floor length chunks) collect 'a))))
+    (gc :full t)
+    (let ((cl-store-faster::*support-shared-list-structures* nil))
+      ;;(sb-sprof:with-profiling (:report :graph)
+      (time (dotimes (x 10) (apply #'cl-store-faster:store-to-file "blarg.bin" as))))
+    ;; (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
+    (gc :full t)
+    ;; Here we average 4 bytes per
+    ;; 1 byte for each cons,
+    ;; 1 byte for a reference
+    ;; and two bytes for the reference?
+    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    )
+  (gc :full t))

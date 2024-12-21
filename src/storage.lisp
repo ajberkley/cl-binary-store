@@ -57,66 +57,65 @@
 		 storage-write-ub16! storage-write-ub32!
 		 storage-write-ub64! storage-write-sb64!))
 
-(defun storage-write-byte! (storage byte &optional offset)
-  "If you pass in offset, then you are also responsible for incrementing it"
+(defun storage-write-byte! (storage byte &optional (offset nil offset-provided-p))
+  "If you pass in offset, then you are responsible for incrementing it"
   (typecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (setf (aref (storage-store& storage) offset) byte)
-       (when offset (setf (storage-offset storage) (+ 1 offset)))))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 1 offset)))))
     (sap-write-storage
-      (let ((offset (storage-offset storage)))
-	(setf (sb-sys:sap-ref-8 (storage-sap& storage) offset) byte)
-	(when offset (setf (storage-offset storage) (+ 1 offset)))))))
+     (let ((offset (storage-offset storage)))
+       (setf (sb-sys:sap-ref-8 (storage-sap& storage) offset) byte)
+       (unless offset-provided-p (setf (storage-offset storage) (+ 1 offset)))))))
 
-(defun storage-write-ub16! (storage ub16 &optional offset)
+(defun storage-write-ub16! (storage ub16 &optional (offset nil offset-provided-p))
   (typecase storage
     (buffering-write-storage
-     (let ((offset (or offset (storage-offset storage)))
-	   (array (storage-store& storage)))
-       (setf (aref array offset) (logand ub16 255))
-       (setf (aref array (incf offset)) (ash ub16 -8))
-       (when offset (setf (storage-offset storage) (+ 2 offset)))))
+     (let ((offset (or offset (storage-offset storage))))
+       (with-storage-sap (sap storage)
+	 (setf (sb-sys:sap-ref-16 sap offset) ub16))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 2 offset)))))
     (sap-write-storage
-      (let ((offset (or offset (storage-offset storage))))
-	(setf (sb-sys:sap-ref-16 (storage-sap& storage) offset) ub16)
-	(when offset (setf (storage-offset storage) (+ 2 offset)))))))
+     (let ((offset (or offset (storage-offset storage))))
+       (setf (sb-sys:sap-ref-16 (storage-sap& storage) offset) ub16)
+       (unless offset-provided-p (setf (storage-offset storage) (+ 2 offset)))))))
 
-(defun storage-write-ub32! (storage ub32 &optional offset)
+(defun storage-write-ub32! (storage ub32 &optional (offset nil offset-provided-p))
   (typecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (with-storage-sap (sap storage)
 	 (setf (sb-sys:sap-ref-32 sap offset) ub32))
-       (when offset (setf (storage-offset storage) (+ 4 offset)))))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 4 offset)))))
     (sap-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (setf (sb-sys:sap-ref-32 (storage-sap& storage) offset) ub32)
-       (when offset (setf (storage-offset storage) (+ 4 offset)))))))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 4 offset)))))))
 
-(defun storage-write-ub64! (storage ub64 &optional offset)
+(defun storage-write-ub64! (storage ub64 &optional (offset nil offset-provided-p))
   (typecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (with-storage-sap (sap storage)
 	 (setf (sb-sys:sap-ref-64 sap offset) ub64))
-       (when offset (setf (storage-offset storage) (+ 8 offset)))))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))
     (sap-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (setf (sb-sys:sap-ref-64 (storage-sap& storage) offset) ub64)
-       (when offset (setf (storage-offset storage) (+ 8 offset)))))))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))))
 
-(defun storage-write-sb64! (storage sb64 &optional offset)
+(defun storage-write-sb64! (storage sb64 &optional (offset nil offset-provided-p))
   (typecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (with-storage-sap (sap storage)
 	 (setf (sb-sys:signed-sap-ref-64 sap offset) sb64))
-       (when offset (setf (storage-offset storage) (+ 8 offset)))))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))
     (sap-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (setf (sb-sys:signed-sap-ref-64 (storage-sap& storage) offset) sb64)
-       (when offset (setf (storage-offset storage) (+ 8 offset)))))))
+       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))))
 
 (declaim (inline storage-read-sb64!))
 (defun storage-read-sb64! (storage offset)
@@ -275,7 +274,7 @@
  Ensure that we have at least BYTES of data in STORAGE.  May signal `end-of-data'
  unless return-nil-on-eof is t."
   (declare (optimize speed safety) (type fixnum bytes))
-  (or (<= (the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
+  (or (<= (sb-ext:truly-the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
       (refill-read-storage storage bytes return-nil-on-eof)))
 
 (declaim (inline flush-write-storage))
@@ -292,11 +291,11 @@
     (buffering-write-storage
      (locally (declare (type fixnum bytes))
        (let ((offset (storage-offset storage)))
-	 (if (< (the fixnum (+ offset bytes)) (storage-size storage))
+	 (if (< (sb-ext:truly-the fixnum (+ offset bytes)) (storage-size storage))
 	     offset
 	     (flush-then-maybe-increase-size-of-storage storage bytes)))))
     (sap-write-storage
      (let ((offset (storage-offset storage)))
-       (assert (<= (the fixnum (+ offset bytes)) (storage-sap-size& storage)))
+       (assert (<= (sb-ext:truly-the fixnum (+ offset bytes)) (storage-sap-size& storage)))
        offset))))
 

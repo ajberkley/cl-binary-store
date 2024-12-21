@@ -6,8 +6,8 @@
   (declare (optimize speed safety) (type pathname obj))
   (maybe-store-reference-instead (obj storage references)
     (store-ub8 +pathname-code+ storage nil)
-    (store-object #-sbcl (pathname-host obj)
-                  #+sbcl (host-namestring obj) storage references)
+    #-sbcl (store-object (pathname-host obj) storage references)
+    #+sbcl (store-object (host-namestring obj) storage references) ;; store-string
     (store-object (pathname-device obj) storage references)
     (store-object (pathname-directory obj) storage references)
     (store-object (pathname-name obj) storage references)
@@ -15,6 +15,7 @@
     (store-object (pathname-version obj) storage references)))
 
 (defun restore-pathname (storage references)
+  (assert references)
   (make-pathname
    :host (restore-object storage references)
    :device (restore-object storage references)

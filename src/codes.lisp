@@ -28,6 +28,9 @@
 		    (equalp (gethash type *code-info*) code-info))
 	  (cerror "OVERRIDE-STORE" (format nil "Store function for ~A already exists" type)))
 	(setf (gethash type *code-info*) code-info))
+      (unless (or (null (gethash code *code-info*))
+		  (equalp (gethash code *code-info*) code-info))
+	(cerror "OVERRIDE-STORE" (format nil "Restore function for ~A already exists" type)))
       (setf (gethash code *code-info*) code-info))
     code))
 
@@ -80,7 +83,7 @@
 (defconstant +symbol-code+ (register-code 17 :restore 'restore-symbol :store 'store-symbol
 					     :type 'symbol :store-references t
 					     :restore-references t))
-(defconstant +gensym-code+ (register-code 18 :restore 'restore-gensym :restore-references t))
+(defconstant +gensym-code+ (register-code 18 :restore 'restore-gensym))
 ;; REFERENCES
 (defconstant +referrer-ub8-code+ (register-code 19 :restore 'restore-referrer-ub8
 						:store-references t :restore-references t))
@@ -89,7 +92,7 @@
 (defconstant +referrer-ub32-code+ (register-code 21 :restore 'restore-referrer-ub32
 						 :store-references t :restore-references t))
 (defconstant +referrer-code+ (register-code 22 :restore 'restore-referrer
-					    :store-references t :restore-references t))
+					       :store-references t :restore-references t))
 (defconstant +record-reference-ub8-code+ (register-code 23 :restore 'restore-reference-id-ub8
 							:store-references t :restore-references t))
 (defconstant +record-reference-ub16-code+ (register-code 24 :restore 'restore-reference-id-ub16
@@ -142,3 +145,13 @@
 (defconstant +hash-table-code+
   (register-code 36 :restore 'restore-hash-table :store 'store-hash-table :type 'hash-table
 		    :store-references t :restore-references t))
+
+(defconstant +simple-base-string-code+
+  (register-code 37 :restore 'restore-simple-base-string :store 'store-simple-base-string
+		    :type 'simple-base-string
+		    :store-references t))
+
+(defconstant +simple-string-code+
+  (register-code 38 :restore 'restore-simple-string :store 'store-simple-string
+		    :type 'simple-string
+		    :store-references t))

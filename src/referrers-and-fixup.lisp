@@ -1,109 +1,63 @@
 (in-package :cl-store-faster)
 
-;; Referrers are used to handle circularity (in lists, non-specialized
-;; vectors, structure-classes and standard-classes).  Referrers are
-;; implicitly created during serialization and deserialization.
+;; References are used to handle circularity (in lists, non-specialized
+;; vectors, structure-classes and standard-classes).  References are
+;; created during serialization and deserialization.
 
-;; We use referrers when the underlying common lisp structure allows sharing
+;; We use references when the underlying common lisp structure allows sharing
 ;; and when it makes sense to save memory in the restored image (that is objects
 ;; that are tagged):
 ;;  (and number (not fixnum) (not `single-float')) will be de-duplicated
 ;;  `structure-class'es and slot-values thereof
 ;;  `standard-class'es and slot-values thereof
 ;;  `cons'es
+;;
+;; During serialization, we record every (referrable) object we see.
+;; This is done during an explicit reference pass through the data.
+;; Then, if we have seen an object multiple times we assign it a
+;; reference id.  Then we begin the serialization process with that
+;; information.  While the reference assignment pass is hard to
+;; parallelize the rest of the storage can then in principle be easily
+;; parallized (with just some contention over when we decide to
+;; serialize the reference objects).
 
-;; There are two methods that referrers are handled.
-;;  1) Implicitly
-;;      We assign a reference-id to every object we see during store
-;;      or restore.
-;;  2) Explicitly
-;;      We record every object we see during store.  If we see an
-;;      object multiple times then we assign it a reference id.  Then
-;;      we begin the serialization process with that information.
-;;      While the reference assignment pass is hard to parallelize the
-;;      rest of the storage can then be parallelized.  It also allows
-;;      the restoration to be parallelized (though we would need to
-;;      add some file features to allow that).  The simplest probably
-;;      is to add a set of bookmarks at the end of the buffer (probably
-;;      recorded as we flush buffers to disk / file).
-;;  3) No references allowed
-;;      While nominally this would be super fast, is it worth the small
-;;      complexity?
+;; The nice thing about this explicit reference scheme is that it also
+;; allows the restoration to be parallelized (though we would need to
+;; add some file features to allow that).  Say some bookmarks at the
+;; end of the file (with some rule about where object starts are with
+;; respect to the buffers that we flush during ;; serialization 
 
-;; I'd like to pre-compile these modes.  So probably the restore and store
-;; functions need to take information about this.  We'll probably have to move
-;; away from simple functions to some hidden parameters.  If we inline them
-;; into compiled trampolines we should get very fast performance.
-
-;; For (2), while we are doing the reference id pass, we are having to
-;; do the main dispatch work.  Why don't we compile at the same time a
-;; dispatch list?  The closure would cost at a minimum 8 bytes
-;; (widetag), reference id (8 bytes), function address (8 bytes) for
-;; each dispatch decision.  If there was no reference id (or we were
-;; working with no references allowed?) we would store the closure
-;; without it (as the inline function would be specialized to not have
-;; the information).  Is a closure needed or should we just store the
-;; dispatch indices in a specialized array?  If we did that we'd be
-;; down to 1 byte each.  But then we'd have to make a decision about
-;; reference or not at each object.  Nominally that's a fast path as
-;; references don't have very often.  OK, I like that.  It avoids
-;; slowing us down.  Also if we occasionally stored an offset into the data
-;; we could then parallelize the writing later.
-
-;; OK, so let's work on an explicit referencing pass?  First step is
-;; to re-use the store functions to do the object walking.  I think we
-;; can just replace STORE-OBJECT with a passed in function with no
-;; side-effects... but we need to be careful not to do extra work in
-;; the serializers --- we need to NO-OP out the basic storage
-;; functions (I suppose we can pass in a STORAGE which is NIL and make
-;; sure everything is INLINED which will allow the compiler to elide
-;; those paths).  Even if things aren't inlined, the test is trivial
-;; and predictable.  OK, so lets do that.
-
-;; STEP 1:
-;;  Let's do a first SERIAL pass to identify references (this can be
-;;  parallelized later with the cost of a fixup pass which can also
-;;  be parallelized).
-
-;; With the idea that we need to also potentially compute the dispatch
-;; list in the STORE-OBJECT call
-
-(defstruct referrer)
+;; A few things I've tried to speed this up, I tried precompiling the dispatch
+;; during the reference step to avoid the dispatch tree, but that just made things
+;; slower.  I tried parallelizing the reference pass but there is way too much
+;; contention for the reference hash table and we need eq hashing, so I cannot
+;; just plug in a lockless hashtable.
 
 (declaim (inline references-vector))
 (defstruct references
+  "During deserialization this array grows as we restore references.
+ In a parallel restore scenario this would have to work differently
+ (we'd want to store the number of references in the file and then
+ fill this vector up with fix-ups at the beginning)"
   (vector (make-array nil) :type simple-vector))
 
-(defparameter *references* nil
-  "An EQL hash-table that is locally bound during store, and a
- simple-vector during restore.
-
- Used to store objects we restore which may be referenced later
- (or in a circular manner).
- For example if we store a circular list:
-  #1=(cons #1 #1)
- To store this, we first see the cons, write out a +cons-code+,
- and store the cons in *references* pointing at referrer index 1.
- Then we see a reference to referrer index 1, which we can
- immediately resolve.  There is no complexity here requiring
- delayed fix-ups or anything.
-
- When we are reading though, we see the cons, and immediately
- allocate (cons nil nil).  The same goes for structures and classes,
- where we pre-allocate the objects as soon as we see their types.
-
- This hash-table maps values -> reference-indices when writing, and
- reference-indices -> values when reading, as such ONLY store non
- fixnum objects in here.")
+;; During the storing phase, we pass around a references hash table
+;; which is an EQL hash-table which maps objects to reference ids.
+;; Nominally we could have multiple reference hash tables if we wanted
+;; to parallelize the storage operation more by reducing contention.
 
 (declaim (inline check/store-reference))
 (defun check/store-reference (object storage references &optional (add-new-reference t))
-  "Returns T if we have written a short-hand reference out to the OBJECT, in which case the
- caller should NOT write OBJECT out to storage.  If NIL, then you must write the OBJECT out.
- If ADD-NEW-REFERENCE is T, in the case where this function returns NIL, we will generate a
- new reference id for this object so it can be used in the future.  The only case where
- ADD-NEW-REFERENCE should be NIL is if you are explicitly dis-allowing (for performance reasons)
- circularity."
+  "Used during the storage phase both during the reference counting
+ step and the serialization step.  This function returns T if this
+ object has already been written out, in which case the caller should
+ NOT write OBJECT out to storage.  If NIL, then you must write the
+ OBJECT out.  If ADD-NEW-REFERENCE is T, in the case where this
+ function returns NIL, we will generate a new reference id for this
+ object so it can be used in the future.  The only case where
+ ADD-NEW-REFERENCE should be NIL is if you are explicitly
+ dis-allowing (for performance reasons) circularity, as we optionally
+ do during cons serialization."
   (declare (optimize speed safety))
   (if storage ; we are in the storage phase, writing things out
       (let ((ref-idx (gethash object references)))
@@ -133,7 +87,7 @@
 	#+debug-csf
 	(let ((*print-circle* t))
 	  (format t "~S ~A~%"
-		  object
+		  (type-of object)
 		  (ecase number-of-times-referenced
 		    (0 "has never been seen before")
 		    (1 "has been seen before once")
@@ -150,7 +104,7 @@
 	   t)
 	  (t nil)))))
 
-;; RESTORATION WORK
+;; RESTORE PHASE
 
 (declaim (inline ensure-references-vector))
 (defun ensure-references-vector (references ref-id)
@@ -294,7 +248,7 @@
 	((unsigned-byte 16)
 	 (storage-write-byte! storage +referrer-ub16-code+ offset)
 	 (storage-write-ub16! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 3 offset)))
+	 (setf (storage-offset storage) (+ 2 offset)))
 	((unsigned-byte 32)
 	 (storage-write-byte! +referrer-ub32-code+ storage offset)
 	 (storage-write-ub32! ref-index (incf offset))
@@ -318,13 +272,13 @@
 	((unsigned-byte 16)
 	 (storage-write-byte! storage +record-reference-ub16-code+ offset)
 	 (storage-write-ub16! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 3 offset)))
+	 (setf (storage-offset storage) (+ 2 offset)))
 	((unsigned-byte 32)
 	 (storage-write-byte! +record-reference-ub32-code+ storage offset)
 	 (storage-write-ub32! ref-index (incf offset))
 	 (setf (storage-offset storage) (+ 4 offset)))
 	(t
-	 (storage-write-byte! +record-reference-code+ storage nil)
+	 (storage-write-byte! +record-reference-code+ storage)
 	 (store-tagged-unsigned-fixnum ref-index storage))))))
 
 (declaim (inline restore-reference-id-for-following-object))

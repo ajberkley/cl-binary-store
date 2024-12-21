@@ -69,13 +69,12 @@
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage &optional (tag t))
   (declare (optimize speed safety) (type fixnum fixnum))
-  (with-write-storage (storage)
-    (let ((offset (ensure-enough-room-to-write storage 9)))
-      (when tag
-	(storage-write-byte! storage +fixnum-code+ offset)
-	(incf offset))
-      (storage-write-sb64! storage fixnum offset)
-      (setf (storage-offset storage) (+ offset 8)))))
+  (with-write-storage (storage offset 9)
+    (when tag
+      (storage-write-byte! storage +fixnum-code+ offset)
+      (incf offset))
+    (storage-write-sb64! storage fixnum offset)
+    (setf (storage-offset storage) (+ offset 8))))
 
 ;; Bignum code is based on code from the CL-STORE package which is
 ;; Copyright (c) 2004 Sean Ross
@@ -130,9 +129,8 @@
 (declaim (inline store-single-float))
 (defun store-single-float (single-float storage &optional (tag t))
   (declare (optimize speed safety) (type single-float single-float))
-  (with-write-storage (storage)
-    (let ((offset (ensure-enough-room-to-write storage 5))
-	  (temp (make-array 1 :element-type 'single-float :initial-element single-float)))
+  (with-write-storage (storage offset 5)
+    (let ((temp (make-array 1 :element-type 'single-float :initial-element single-float)))
       (declare (dynamic-extent temp))
       (when tag
 	(storage-write-byte! storage +single-float-code+ offset)
