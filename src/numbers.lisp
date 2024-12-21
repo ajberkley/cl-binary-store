@@ -153,6 +153,18 @@
       (copy-n-bytes a 0 array offset 8)
       (aref a 0))))
 
+(defmacro restore-double-float-to (slot storage)
+  (assert (atom storage))
+  `(progn
+     (ensure-enough-data ,storage 8)
+     (let ((offset (storage-offset ,storage))
+           (array (storage-store ,storage)))
+       (setf (storage-offset ,storage) (+ 8 offset))
+       (let ((a (make-array 1 :element-type 'double-float)))
+         (declare (dynamic-extent a))
+         (copy-n-bytes a 0 array offset 8)
+         (setf ,slot (aref a 0))))))
+
 (declaim (inline store-double-float))
 (defun store-double-float (double-float storage references &optional (tag t))
   (declare (optimize speed safety) (type double-float double-float))

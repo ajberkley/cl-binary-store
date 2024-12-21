@@ -33,7 +33,7 @@
 ;; contention for the reference hash table and we need eq hashing, so I cannot
 ;; just plug in a lockless hashtable.
 
-(declaim (inline references-vector))
+(declaim (inline references-vector make-references))
 (defstruct references
   "During deserialization this array grows as we restore references.
  In a parallel restore scenario this would have to work differently

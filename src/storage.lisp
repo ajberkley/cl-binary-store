@@ -147,7 +147,7 @@
 (defstruct (read-storage (:constructor %make-read-storage)
 			 (:include storage-base)
 			 (:conc-name storage-))
-  (store (make-array 8192 :element-type '(unsigned-byte 8))
+  (store (make-array 32768 :element-type '(unsigned-byte 8))
    :type (simple-array (unsigned-byte 8) (*)))
   (max 0 :type fixnum)
   ;; read-func must return the number of bytes available
@@ -170,15 +170,30 @@
      (length (storage-store storage)))))
 
 (defun make-read-into-storage/stream (stream)
-  (lambda (storage)
-    (let ((seq (storage-store storage)))
-      #+debug-csf(format t "We currently have ~A..~A valid data (~A bytes)~%"
-	      (storage-offset storage) (storage-max storage)
-	      (- (storage-max storage) (storage-offset storage)))
-      (let ((new-bytes-end-at (read-sequence seq stream :start (storage-max storage))))
-	#+debug-csf(format t "We read from ~A..~A bytes~%" (storage-max storage) new-bytes-end-at)
-	(setf (storage-max storage) new-bytes-end-at)
-	(- new-bytes-end-at (storage-offset storage))))))
+  (let* ((total-read 0)
+         (start-read-time (get-universal-time))
+         (last-read-time start-read-time))
+    (declare (type fixnum total-read))
+    (lambda (storage)
+      (let ((seq (storage-store storage)))
+        #+debug-csf(format t "We currently have ~A..~A valid data (~A bytes)~%"
+	                   (storage-offset storage) (storage-max storage)
+	                   (- (storage-max storage) (storage-offset storage)))
+        (labels ((print-update (now &optional (leader "Read " leader-provided-p))
+                   (when (or leader-provided-p (> now (+ 10 last-read-time)))
+                     (setf last-read-time now)
+                     (format t "~A~,2f MB in ~A seconds (~,2f MB/sec)~%"
+                             leader
+                             (/ total-read 1d6) (- last-read-time start-read-time)
+                             (/ total-read 1d6 (- last-read-time start-read-time))))))
+          (let ((new-bytes-end-at (read-sequence seq stream :start (storage-max storage)))
+                (now (get-universal-time)))
+            (incf total-read (- new-bytes-end-at (storage-max storage)))
+	    (setf (storage-max storage) new-bytes-end-at)
+            (if (= new-bytes-end-at (storage-offset storage))
+                (print-update now "Finished reading ")
+                (print-update now))
+	    (- new-bytes-end-at (storage-offset storage))))))))
 
 (defun make-write-into-storage/stream (stream)
   (declare (optimize speed safety))

@@ -26,6 +26,7 @@
 
    #:store-double-float
    #:restore-double-float
+   #:restore-double-float-to
    #:store-single-float
    #:restore-single-float
    
