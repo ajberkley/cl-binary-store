@@ -168,6 +168,17 @@
       (#.+simple-base-string-code+ (restore-simple-base-string storage))
       (#.+simple-string-code+ (restore-simple-string storage)))))
 
+(declaim (notinline restore-string/maybe-reference))
+(defun restore-string/maybe-reference (storage references)
+  "Can only be used if you are sure that the strings are not references,
+ so that means they must have been stored with store-string/no-refs"
+  (declare (optimize speed safety))
+  (let ((code (restore-ub8 storage)))
+    (case code
+      (#.+simple-base-string-code+ (restore-simple-base-string storage))
+      (#.+simple-string-code+ (restore-simple-string storage))
+      (otherwise (read-dispatch code storage references)))))
+
 (declaim (inline store-simple-specialized-vector))
 (defun store-simple-specialized-vector (sv storage &optional references)
   (declare (optimize speed safety) (type (simple-array * (*)) sv))

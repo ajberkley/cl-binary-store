@@ -6,8 +6,9 @@
 (require 'sb-sprof)
 
 (defun long-simple-list ()
-  (let ((a (loop repeat 1000000
-		 collect (make-pathname :name (format nil "~A" (random 123456))))))
+  (let ((a (loop for i fixnum from 0 below 1000000
+		 collect (make-pathname :name (format nil "~A" (random 2398423))
+					:directory "my-directory"))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
@@ -68,13 +69,20 @@
 ;; complex/df  |      530|     140|      690|     770|            3MB|     4MB|
 ;; complex/sf  |      540|     140|      690|     710|            3MB|     4MB|
 ;; string      |     2200|     500|     3600|    1800|           11MB|    11MB|
-;; pathname    |      650|     150|      680|     690|
-;;+------------+---------+--------+---------+--------+
-;; Note for symbols we do not store symbol/base-string separate from symbol/string
-;; which could save a little bit of space (one tag bit) (see 13MB vs 12MB for gensym)
-;; Similarly for simple-base-strings we don't use a tag code for it.
+;; pathname    |     3000|     740|     2400|    3100|            7MB|     8MB|
+;;+------------+---------+--------+---------+--------+---------------+--------+
 
+;; TODO WHY IS PATHNAME SLOW-ish?  Weird.  
+;; Hm.  eq hashtable didn't speed it up, so I don't know...
 
+;; TODO do write flushing asynchronously --- we are hitting 90% CPU only with
+;; 10% system time already for many things.
+
+;; TODO: add a fast approximate radix bucket sort to assign reference ids after
+;; the reference counting step?  It's not trivial to do fast, but I think it
+;; might be fun.  Only trigger it if > 65536 references because ub32 vs ub16 is
+;; significant.  I guess we can also do if 256 < num-refs < 65536 but use a
+;; really coarse metric?
 
 ;; WARNING: sbcl hashing on single floats is terrible, so cl-store does not finish
 (defun long-float-array (&optional (random nil))
@@ -85,10 +93,13 @@
       ;;(sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a)))
       (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin"))))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE-FASTER: file length ~,2fMB~%" (/ (file-length str) 1d6)))
     (gc :full t)
     (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
     (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
-    )
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1d6))))
   (gc :full t))
 ;; Double float non-random (you can see the hot branch predicted path going zoom)
 ;; CL-STORE-FASTER: 145 ms write /  35 ms read; half is system time on write
@@ -104,13 +115,13 @@
 ;; CL-STORE:          DNF ms write /   DNF ms read (terrible single float hashing stuff? on SBCL)
 
 (defun long-complex-list ()
-  (let ((a (loop repeat 1000000 collect (if (> (random 1000) 800)
-					    1234
+  (let ((a (loop repeat 1000000 collect (if (> (random 1000) 500)
+					    (random 1d0)
 					    ;; (complex 1d0) ;; cl-store chokes
 					    ;; (random 1d0) ;; cl-store chokes
 					    (if (> (random 100) 50)
 						;;(random 1f0) ;; <- makes cl-store take forever!
-						"hi" ;;'blarg
+						(format nil "~A" (random 123)) ;;"hi" ;;'blarg
 						(if (> (random 100) 50)
 						    (cons (random 30) 2)
 						    (if (= (random 2) 1)
@@ -119,14 +130,16 @@
 							#())))))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
-      (sb-sprof:with-profiling (:report :graph)
-       (time (dotimes (x 30) (cl-store-faster:store-to-file "blarg.bin" a)))))
-      ;;(time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
-    ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
-    ;; (gc :full t)
-    ;;(sb-sprof:with-profiling (:report :graph)
-    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+      (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
+    (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE-FASTER: file length ~,2fMB~%" (/ (file-length str) 1d6)))
+    (gc :full t)
+    (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1d6)))
     )
   (gc :full t))
 

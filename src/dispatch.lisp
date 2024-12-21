@@ -107,7 +107,7 @@
   (defun store-objects/generic (storage &rest stuff)
     (declare (optimize speed safety))
     (let* ((references (make-hash-table :test 'eql :size 256 :synchronized nil))
-	   (struct-info (make-hash-table :test 'eql :synchronized nil))
+	   (struct-info (make-hash-table :test 'eql :synchronized nil)) ;; if use the metaclass object maybe can use eq?  can I do that for structs?
 	   (*struct-info* struct-info))
       (declare (dynamic-extent struct-info references))
       #+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))

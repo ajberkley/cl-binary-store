@@ -292,12 +292,12 @@
 
 (defun restore-reference-id-ub16 (storage references)
   (let ((ref-id (restore-ub16 storage)))
-    (format t "Restoring reference id ~A~%" ref-id)
+    #+debug-csf(format t "Restoring reference id ~A~%" ref-id)
     (restore-reference-id-for-following-object ref-id storage references)))
 
 (defun restore-reference-id-ub32 (storage references)
   (let ((ref-id (restore-ub32 storage)))
-    (format t "Restoring reference id ~A~%" ref-id)
+    #+debug-csf(format t "Restoring reference id ~A~%" ref-id)
     (restore-reference-id-for-following-object ref-id storage references)))
 
 (defun restore-reference-id (storage references)

@@ -2,12 +2,13 @@
 
 ;; Pathname code is pretty much identical to cl-store
 
+(declaim (inline store-pathname))
 (defun store-pathname (obj storage references)
   (declare (optimize speed safety) (type pathname obj))
   (maybe-store-reference-instead (obj storage references)
     (store-ub8 +pathname-code+ storage nil)
     #-sbcl (store-object (pathname-host obj) storage references)
-    #+sbcl (store-object (host-namestring obj) storage references) ;; store-string
+    #+sbcl (store-object (host-namestring obj) storage references)
     (store-object (pathname-device obj) storage references)
     (store-object (pathname-directory obj) storage references)
     (store-object (pathname-name obj) storage references)
@@ -17,7 +18,8 @@
 (defun restore-pathname (storage references)
   (assert references)
   (make-pathname
-   :host (restore-object storage references)
+   :host #+sbcl (restore-object storage references)
+	 #-sbcl (restore-object storage references)
    :device (restore-object storage references)
    :directory (restore-object storage references)
    :name (restore-object storage references)
