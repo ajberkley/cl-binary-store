@@ -38,7 +38,7 @@
 (declaim (inline storage-sap))
 (defmacro with-storage-sap ((sap storage) &body body)
   (assert (atom storage))
-  `(typecase ,storage
+  `(etypecase ,storage
      (sap-write-storage
       (let ((sap (storage-sap& ,storage)))
 	,@body))
@@ -59,7 +59,7 @@
 
 (defun storage-write-byte! (storage byte &optional (offset nil offset-provided-p))
   "If you pass in offset, then you are responsible for incrementing it"
-  (typecase storage
+  (etypecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (setf (aref (storage-store& storage) offset) byte)
@@ -70,7 +70,7 @@
        (unless offset-provided-p (setf (storage-offset storage) (+ 1 offset)))))))
 
 (defun storage-write-ub16! (storage ub16 &optional (offset nil offset-provided-p))
-  (typecase storage
+  (etypecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (with-storage-sap (sap storage)
@@ -82,7 +82,7 @@
        (unless offset-provided-p (setf (storage-offset storage) (+ 2 offset)))))))
 
 (defun storage-write-ub32! (storage ub32 &optional (offset nil offset-provided-p))
-  (typecase storage
+  (etypecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (with-storage-sap (sap storage)
@@ -94,7 +94,7 @@
        (unless offset-provided-p (setf (storage-offset storage) (+ 4 offset)))))))
 
 (defun storage-write-ub64! (storage ub64 &optional (offset nil offset-provided-p))
-  (typecase storage
+  (etypecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (with-storage-sap (sap storage)
@@ -106,7 +106,7 @@
        (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))))
 
 (defun storage-write-sb64! (storage sb64 &optional (offset nil offset-provided-p))
-  (typecase storage
+  (etypecase storage
     (buffering-write-storage
      (let ((offset (or offset (storage-offset storage))))
        (with-storage-sap (sap storage)
@@ -161,7 +161,7 @@
 
 (declaim (inline storage-size))			       
 (defun storage-size (storage)
-  (typecase storage
+  (etypecase storage
     (buffering-write-storage
      (length (storage-store& storage)))
     (sap-write-storage

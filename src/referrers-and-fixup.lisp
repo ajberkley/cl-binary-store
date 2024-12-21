@@ -250,11 +250,11 @@
 	 (storage-write-ub16! storage ref-index (incf offset))
 	 (setf (storage-offset storage) (+ 2 offset)))
 	((unsigned-byte 32)
-	 (storage-write-byte! +referrer-ub32-code+ storage offset)
-	 (storage-write-ub32! ref-index (incf offset))
+	 (storage-write-byte! storage +referrer-ub32-code+ offset)
+	 (storage-write-ub32! storage ref-index (incf offset))
 	 (setf (storage-offset storage) (+ 4 offset)))
 	(t
-	 (storage-write-byte! +referrer-code+ storage nil)
+	 (storage-write-byte! storage +referrer-code+ nil)
 	 (store-tagged-unsigned-fixnum ref-index storage))))))
 
 (declaim (inline store-reference-id-for-following-object))
@@ -264,7 +264,7 @@
   (with-write-storage (storage)
     #+debug-csf (format t "Writing reference ~A~%" ref-index)
     (let ((offset (ensure-enough-room-to-write storage 5)))
-      (typecase ref-index
+      (etypecase ref-index
 	((unsigned-byte 8)
 	 (storage-write-byte! storage +record-reference-ub8-code+ offset)
 	 (storage-write-byte! storage ref-index (incf offset))
@@ -274,11 +274,11 @@
 	 (storage-write-ub16! storage ref-index (incf offset))
 	 (setf (storage-offset storage) (+ 2 offset)))
 	((unsigned-byte 32)
-	 (storage-write-byte! +record-reference-ub32-code+ storage offset)
-	 (storage-write-ub32! ref-index (incf offset))
+	 (storage-write-byte! storage +record-reference-ub32-code+ offset)
+	 (storage-write-ub32! storage ref-index (incf offset))
 	 (setf (storage-offset storage) (+ 4 offset)))
 	(t
-	 (storage-write-byte! +record-reference-code+ storage)
+	 (storage-write-byte! storage +record-reference-code+)
 	 (store-tagged-unsigned-fixnum ref-index storage))))))
 
 (declaim (inline restore-reference-id-for-following-object))
@@ -291,10 +291,14 @@
   (restore-reference-id-for-following-object (restore-ub8 storage) storage references))
 
 (defun restore-reference-id-ub16 (storage references)
-  (restore-reference-id-for-following-object (restore-ub16 storage) storage references))
+  (let ((ref-id (restore-ub16 storage)))
+    (format t "Restoring reference id ~A~%" ref-id)
+    (restore-reference-id-for-following-object ref-id storage references)))
 
 (defun restore-reference-id-ub32 (storage references)
-  (restore-reference-id-for-following-object (restore-ub32 storage) storage references))
+  (let ((ref-id (restore-ub32 storage)))
+    (format t "Restoring reference id ~A~%" ref-id)
+    (restore-reference-id-for-following-object ref-id storage references)))
 
 (defun restore-reference-id (storage references)
   (restore-reference-id-for-following-object (restore-object storage references)
