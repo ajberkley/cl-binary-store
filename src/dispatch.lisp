@@ -154,10 +154,11 @@
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all elements restored."
     ;; NOMINALLY WE SHOULD BE WRITING OUT THE NUMBER OF REFERENCES TO AVOID RESIZING
-    (let* ((references-vector (make-array 1024 :initial-element nil)) ;; not needed but helps with debuggingfe
+    (let* ((references-vector (make-array 1024))
 	   (references (make-references :vector references-vector))
 	   (first-code (maybe-restore-ub8 storage))
-	   (first-result (when first-code (read-dispatch first-code storage references))))
+	   (first-result (when first-code (read-dispatch first-code storage references)))
+	   (*version-being-read* nil))
       (declare (dynamic-extent references references-vector))
       (when first-code
 	(let ((rest (loop for code = (maybe-restore-ub8 storage)
