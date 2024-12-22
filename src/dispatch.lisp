@@ -125,6 +125,8 @@
 		 references)
 	(clrhash references)		; help the gc?
 	(setf references new-ht)
+	(when (>= ref-id 8192)
+	  (write-reference-count (1+ ref-id) storage))
 	#+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht)))
       (dolist (elt stuff)
 	(store-object/storage elt storage references))
@@ -154,7 +156,7 @@
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all elements restored."
     ;; NOMINALLY WE SHOULD BE WRITING OUT THE NUMBER OF REFERENCES TO AVOID RESIZING
-    (let* ((references-vector (make-array 1024))
+    (let* ((references-vector (make-array 8192))
 	   (references (make-references :vector references-vector))
 	   (first-code (maybe-restore-ub8 storage))
 	   (first-result (when first-code (read-dispatch first-code storage references)))

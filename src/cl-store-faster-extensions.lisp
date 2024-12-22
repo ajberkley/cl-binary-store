@@ -65,6 +65,9 @@
    #:storage-offset
    #:storage-max
    #:storage-size
+
+   #:action
+   #:action-code
    ))
 
 (in-package :cl-store-faster-extensions)

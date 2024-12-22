@@ -160,6 +160,8 @@
 					     :type 'keyword :store-references t
 					      :restore-references nil))
 
-(defconstant +magic-number-code+ (register-code 40 :restore 'restore-magic-number
-						   :store 'store-magic-number
-						   :type 'magic-number))
+(defconstant +action-code+ (register-code 40 :restore 'restore-action& 
+					     :store 'store-action&
+					     :type 'action
+					     :restore-references t
+					     :store-references t))

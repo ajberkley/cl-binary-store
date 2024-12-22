@@ -12,6 +12,7 @@
    ;; User interface
    #:store
    #:restore
+   ;; Some specific bits
    #:restore-from-stream
    #:store-to-stream
    #:restore-from-vector
@@ -28,6 +29,12 @@
    #:storage-store
    #:storage-offset
    #:flush-storage
+   #:*write-magic-number*
+   #:*write-version*
+   #:magic-number
+   #:magic-number-number
+   #:*version-being-read*
+   #:*supported-versions*
 ))
 
 (in-package :cl-store-faster)

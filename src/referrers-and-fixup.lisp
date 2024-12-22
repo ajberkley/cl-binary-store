@@ -106,17 +106,21 @@
 
 ;; RESTORE PHASE
 
+(defun grow-references-vector (references ref-id)
+  (let* ((vec (references-vector references))
+	 (len (length vec)))
+    (setf (references-vector references)
+	  (adjust-array vec
+			(max (the fixnum (* 2 len))
+			     (the fixnum (1+ ref-id)))))))
+
 (declaim (inline ensure-references-vector))
 (defun ensure-references-vector (references ref-id)
   "Return / resize references-vector which can hold ref-id"
   (let* ((vec (references-vector references))
 	 (len (length vec)))
     (if (<= len ref-id)
-	(setf vec
-	      (setf (references-vector references)
-		    (adjust-array vec
-				  (max (the fixnum (* 2 len))
-				       (the fixnum (1+ ref-id))))))
+	(setf (references-vector references) (grow-references-vector references ref-id))
 	vec)))
 
 (declaim (inline update-reference))

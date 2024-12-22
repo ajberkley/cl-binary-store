@@ -18,20 +18,18 @@
  this in the file.")
 
 (declaim (inline make-magic-number))
+(defstruct (magic-number (:include action (code +magic-number-action-code+)))
+  (number 2718281828 :type integer :read-only t))
 
-(defstruct magic-number
-  (number 2718281828 :type integer))
-
-(defun restore-magic-number (storage)
+(defmethod action ((code (eql +magic-number-action-code+)) storage references)
   (let ((magic-number (restore-object storage nil)))
     (unless (member magic-number *supported-versions*)
-      (error "Unsupported version ~X, we support ~{~X~^ ~}"
+      (error "Unsupported version #x~X, we support ~{#x~X~^ ~}"
 	     magic-number *supported-versions*))
     (setf *version-being-read* magic-number)
     (make-magic-number :number magic-number)))
 
-(defun store-magic-number (magic-number storage)
+(defmethod store-action ((action magic-number) storage references)
   (with-write-storage (storage)
-    (store-ub8 +magic-number-code+ storage nil)
-    (store-fixnum (magic-number-number magic-number) storage t)))
+    (store-fixnum (magic-number-number action) storage t)))
   
