@@ -79,12 +79,11 @@
 			     ;; symbol call when debugging for no inline
 			     #+debug-csf
 			     `(locally (declare (notinline ,func-name))
-			       (funcall ',func-name ,value ,storage
-					,@(when takes-references `(,references))))
+			        (funcall ',func-name ,value ,storage
+					 ,@(when takes-references `(,references))))
 			     #-debug-csf
-			     `;;(locally (declare (inline ,func-name))
-				(,func-name ,value ,storage
-					    ,@(when takes-references `(,references))));;)
+			     `(,func-name ,value ,storage
+					 ,@(when takes-references `(,references))))
 			    type-dispatch-table))))
 		     *code-info*)
 	    type-dispatch-table)
@@ -117,6 +116,7 @@
       (let ((new-ht (make-hash-table :test 'eql))
 	    (ref-id 0))
 	(declare (type fixnum ref-id))
+        (analyze-references-hash-table references) ;; debugging code
 	;; Now clean up the references table: delete anyone who has no references
 	#+debug-csf (format t "Generating real reference hash-table~%")
 	(maphash (lambda (k v)
@@ -167,3 +167,45 @@
 			  while code
 			  collect (read-dispatch code storage references))))
 	  (apply #'values first-result rest))))))
+
+(defun analyze-references-hash-table (&optional references)
+  (declare (ignorable references))
+  ;;(defparameter *saved-refs* references)
+  #+debug-csf(let ((types (make-hash-table :test 'equal))
+                   (individual-reference-counts (make-hash-table :test 'equal))
+                   (max-refed (make-hash-table :test 'equal))
+                   (total-references-used 0)
+                   (total-unique-multiply-referenced-objects 0))
+               (declare (type fixnum total-references-used total-unique-multiply-referenced-objects))
+               (maphash (lambda (k v)
+                          (let ((type (type-of k)))
+                            (incf (gethash type types 0) v)
+                            (when (> v 1)
+                              (incf total-references-used v)
+                              (incf total-unique-multiply-referenced-objects))
+                            (push v (gethash type individual-reference-counts))
+                            (when (< (car (gethash type max-refed (cons 0 nil))) v)
+                              (setf (gethash type max-refed) (cons v k)))))
+	                references)
+               (format t "Total references emitted to file ~A with total reference ids allocated ~A~%~
+               There were ~A possible objects being referenced~%"
+                       total-references-used total-unique-multiply-referenced-objects (hash-table-count references))
+               (let (data)
+                 (format t "Reference types are:~%")
+                 (maphash (lambda (type total-count)
+                            (push (cons type total-count) data))
+                          types)
+                 (setf data (sort data #'> :key #'cdr))
+                 (map nil (lambda (d)
+                            (let ((individual-counts (gethash (car d) individual-reference-counts)))
+                              (format t "~A of type ~A (~A unique)~%     ~
+                                    avg ref count ~,3f / min ~,3f / max ~,3f / frac>1 ~,3f~%     ~
+                                    most-refed: ~A)~%"
+                                      (cdr d) (car d) (length individual-counts)
+                                      (/ (cdr d) (length individual-counts) 1d0)
+                                      (loop for i fixnum in individual-counts minimizing i)
+                                      (loop for i fixnum in individual-counts maximizing i)
+                                      (/ (count-if (lambda (x) (> x 1)) individual-counts)
+                                         (length individual-counts) 1d0)
+                                      (gethash (car d) max-refed))))
+                      data))))

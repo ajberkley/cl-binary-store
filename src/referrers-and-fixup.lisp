@@ -81,27 +81,20 @@
 	       (setf (gethash object references) ref-idx)
 	       nil))))
       (let ((number-of-times-referenced (gethash object references 0)))
-	(declare (type (unsigned-byte 8) number-of-times-referenced))
+	(declare (type fixnum number-of-times-referenced))
 	;; This is the reference collection pass.  We store the number of times
 	;; an object is referenced as 1 or 2, where 2 means anything more than 1.
-	#+debug-csf
-	(let ((*print-circle* t))
-	  (format t "~S ~A~%"
-		  (type-of object)
-		  (ecase number-of-times-referenced
-		    (0 "has never been seen before")
-		    (1 "has been seen before once")
-		    (2 "has been seen before more than once"))))
 	;; The logic below is unnecessarily complex, speed this up.
 	(cond
 	  ((and (zerop number-of-times-referenced) add-new-reference)
 	   (setf (gethash object references) 1)
 	   nil)
-	  ((= number-of-times-referenced 1)
-	   (setf (gethash object references) 2)
+	  (#+debug-csf (>= number-of-times-referenced 1)
+           #-debug-csf (= number-of-times-referenced 1)
+           #+debug-csf (the fixnum (incf (the fixnum (gethash object references))))
+	   #-debug-csf(setf (gethash object references) 2)
 	   t)
-	  ((= number-of-times-referenced 2)
-	   t)
+	  #-debug-csf((= number-of-times-referenced 2) t)
 	  (t nil)))))
 
 ;; RESTORE PHASE
