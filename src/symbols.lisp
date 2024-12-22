@@ -29,22 +29,30 @@
     (cond
       (symbol-package
        (maybe-store-reference-instead (symbol storage references)
-	 (store-ub8 +symbol-code+ storage nil)
 	 #+debug-csf
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
-	 (store-object (symbol-name symbol) storage nil)
-	 (store-object (package-name symbol-package) storage references)
-	 ;; (store-string/no-refs (symbol-name symbol) storage)
-	 ;; (store-string (package-name symbol-package) storage references)
-	 ))
+	 (with-write-storage (storage)
+	   (store-ub8 +symbol-code+ storage nil)
+	   (store-string/no-refs (symbol-name symbol) storage))
+	 (store-object (package-name symbol-package) storage references)))
       (t ;; symbols without a package, (symbol-package (gensym)) -> nil
        #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
-       ;;these can never be the same
-       (store-ub8 +gensym-code+ storage nil)
-       (store-object (symbol-name symbol) storage nil)
-       ;; (store-string/no-refs (symbol-name symbol) storage)
-       ))))
+       ;;these can never be the same string
+       (with-write-storage (storage)
+	 (store-ub8 +gensym-code+ storage nil)
+	 (store-string/no-refs (symbol-name symbol) storage))))))
+
+(declaim (inline store-keyword))
+(defun store-keyword (keyword storage references)
+  (maybe-store-reference-instead (keyword storage references)
+    (with-write-storage (storage)
+      (store-ub8 +keyword-code+ storage nil))
+    (store-string/no-refs (symbol-name keyword) storage)))
+
+(declaim (inline restore-keyword))
+(defun restore-keyword (storage)
+  (intern (restore-string storage) :keyword))
 
 (define-condition missing-package (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
@@ -62,8 +70,7 @@
 
 (declaim (inline restore-symbol))
 (defun restore-symbol (storage references)
-  (let* ((symbol-string (restore-object storage nil);; (restore-string storage)
-			)
+  (let* ((symbol-string (restore-string storage))
 	 (package-string (restore-object storage references)))
       (if (find-package package-string)
 	  (intern symbol-string package-string)

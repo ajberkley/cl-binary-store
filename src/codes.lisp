@@ -155,3 +155,7 @@
   (register-code 38 :restore 'restore-simple-string :store 'store-simple-string
 		    :type 'simple-string
 		    :store-references t))
+
+(defconstant +keyword-code+ (register-code 39 :restore 'restore-keyword :store 'store-keyword
+					     :type 'keyword :store-references t
+					     :restore-references nil))

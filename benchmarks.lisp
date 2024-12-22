@@ -7,8 +7,9 @@
 
 (defun long-simple-list ()
   (let ((a (loop for i fixnum from 0 below 1000000
-		 collect (make-pathname :name (format nil "~A" (random 2398423))
-					:directory "my-directory"))))
+		 collect 'a;; (make-pathname :name (format nil "~A" (random 2398423))
+			 ;; 		:directory "my-directory")
+		 )))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
@@ -117,12 +118,12 @@
 
 (defun long-complex-list ()
   (let ((a (loop repeat 1000000 collect (if (> (random 1000) 500)
-					    (random 1d0)
+					    3.1415d0
 					    ;; (complex 1d0) ;; cl-store chokes
 					    ;; (random 1d0) ;; cl-store chokes
 					    (if (> (random 100) 50)
 						;;(random 1f0) ;; <- makes cl-store take forever!
-						(format nil "~A" (random 123)) ;;"hi" ;;'blarg
+						"hi" ;;(format nil "~A" (random 123))
 						(if (> (random 100) 50)
 						    (cons (random 30) 2)
 						    (if (= (random 2) 1)
@@ -131,7 +132,8 @@
 							#())))))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
-      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+      ;;(sb-sprof:with-profiling (:report :graph)
+      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))));;)
       (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
     (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
     (with-open-file (str "blarg.bin")
@@ -149,17 +151,17 @@
 ;; CL-STORE:       1400 ms write / 1400 ms read
 
 (defun long-random-double-float-list ()
-  (let ((a (loop repeat 1000000 collect (random 1d0))))
+  (let ((a (coerce (loop repeat 1000000 collect (random 1d0)) 'simple-vector)))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
       ;;      (sb-sprof:with-profiling (:report :graph)
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
-    (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
     ;; (assert (equalp (cl-store-faster:restore-from-file "blarg.bin") a))
-    (gc :full t)
-    ;;(sb-sprof:with-profiling (:report :graph)
-      (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
+    ;; (gc :full t)
+    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    )
   (gc :full t))
 ;; long-random-double-float-list
 ;; CL-STORE-FASTER: 3500 ms write /   315 ms read
@@ -184,7 +186,6 @@
 	      max
 	      (* 1f0 (/ sum (hash-table-count ht)))))))
 
-
 (defun four-long-simple-lists ()
   (let* ((length 1000000)
 	 (chunks 4)
@@ -203,5 +204,23 @@
     ;; and two bytes for the reference?
     ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
     ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    )
+  (gc :full t))
+
+
+(defun lots-of-keywords ()
+  (let ((a (loop for i fixnum from 0 below 1000000
+		 collect (intern (format nil "~A" (random 250000)) 'keyword))))
+    (gc :full t)
+    (let ((cl-store-faster::*support-shared-list-structures* nil))
+      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE-FASTER: file length ~,2fMB~%" (/ (file-length str) 1d6)))
+    (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
+    (gc :full t)
+    (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1d6)))
+    (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
