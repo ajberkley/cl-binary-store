@@ -7,9 +7,7 @@
 
 (defun long-simple-list ()
   (let ((a (loop for i fixnum from 0 below 1000000
-		 collect 'a;; (make-pathname :name (format nil "~A" (random 2398423))
-			 ;; 		:directory "my-directory")
-		 )))
+		 collect (format nil "~A~A" #\U+03b1 (random 1000000)))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
       (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
@@ -34,17 +32,18 @@
 ;;+------------+------------------+------------------+
 ;;| TYPE       |WRITE(ms)|READ(ms)|WRITE(ms)|READ(ms)|
 ;;+------------+---------+--------+---------+--------+
-;; symbol      |      505|     150|      650|     700|
+;; symbol      |      480|     120|      650|     700|
 ;; ub8         |      335|     140|      720|     680|
 ;; sb8         |      330|     140|      720|     680|
 ;; ub16        |      385|     140|      950|     815|
 ;; sb16        |      370|     135|      920|     800|
-;; ub32        |      400|     150|      915|     795|
-;; fixnum      |      435|     160|     5000|    3400| 
+;; ub32        |      400|     140|      915|     795|
+;; fixnum      |      435|     130|     3000|    2700| 
 ;; single-float|      435|     160|      675|     680|
 ;; double-float|      535|     145|      690|     690|
 ;; complex     |      530|     160|      650|     690|
-;; string      |      150|     130|      670|     690| ;; 3 MB cl-store-faster vs 4 MB cl-store
+;; string      |      520|     130|      670|     690| ;; 3 MB cl-store-faster vs 4 MB cl-store
+;; unicode-str |     2800|    3300|     5600|    2500| ;; 13MB cl-store-faster vs 21 MB cl-store
 ;; pathname    |      650|     130|      680|     700| ;; 3 MB cl-store-faster vs 4 MB cl-store
 ;;+------------+---------+--------+---------+--------+
 ;; For the number cases we are storing say 20M objects (the conses
@@ -69,7 +68,7 @@
 ;; complex/sb8 |      540|     150|      690|     700|            3MB|     4MB|
 ;; complex/df  |      530|     140|      690|     770|            3MB|     4MB|
 ;; complex/sf  |      540|     140|      690|     710|            3MB|     4MB|
-;; string      |     2200|     500|     3600|    1800|           11MB|    11MB|
+;; string      |     2300|     500|     2600|    2000|          9.9MB|   9.9MB|
 ;; pathname    |     3000|     740|     2400|    3100|            7MB|     8MB|
 ;;+------------+---------+--------+---------+--------+---------------+--------+
 

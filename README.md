@@ -137,7 +137,7 @@ it is on my TODO list and I would like this to be as fast.
 - [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
 - [ ] Provide non-sbcl specific serializers
 - [ ] Address slow compilation (a bit too much inlining --- remove most of it based on testing without reference table.
-- [ ] Store number of references in the output so deserialization doesn't have to grow the references vector (minor tweak)
+- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
 
 Some more testing and another run at speed
 
