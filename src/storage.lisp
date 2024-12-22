@@ -185,7 +185,8 @@
                      (format t "~A~,2f MB in ~A seconds (~,2f MB/sec)~%"
                              leader
                              (/ total-read 1d6) (- last-read-time start-read-time)
-                             (/ total-read 1d6 (- last-read-time start-read-time))))))
+                             (unless (= last-read-time start-read-time)
+			       (/ total-read 1d6 (- last-read-time start-read-time)))))))
           (let ((new-bytes-end-at (read-sequence seq stream :start (storage-max storage)))
                 (now (get-universal-time)))
             (incf total-read (- new-bytes-end-at (storage-max storage)))

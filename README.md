@@ -128,7 +128,6 @@ it is on my TODO list and I would like this to be as fast.
 
 ## TODO
 
-- [ ] maybe handle serialize/deserialize conditions
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
 - [ ] detect class and structure change on restore (just on the struct-info restore)
 - [ ] support store/restore from raw memory (mmap, sap, etc)
