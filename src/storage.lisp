@@ -258,11 +258,10 @@
   "Returns storage offset after action"
   (declare (optimize speed safety))
   (funcall (storage-flusher storage) storage)
-  (if (> bytes (storage-size storage))
-      (progn
-	(setf (storage-store& storage) (make-array bytes :element-type '(unsigned-byte 8)))
-	(setf (storage-offset storage) 0))
-      (storage-offset storage)))
+  (let ((offset (storage-offset storage)))
+    (when (> bytes (- (storage-size storage) offset))
+      (error "Not enough room to write..."))
+    offset))
 
 (define-condition end-of-data (simple-error)
   ())

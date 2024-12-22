@@ -51,21 +51,29 @@
 
 (defun store-to-extant-vector (vector &rest data)
   (let* ((offset 0)
-	 (temp-vector (make-array 8192 :element-type '(unsigned-byte 8)))
+	 (is-simple-octet-array (typep vector '(simple-array (unsigned-byte 8) (*))))
+	 (temp-vector
+	   (if is-simple-octet-array
+	       vector
+	       (make-array (min 8192 (length vector)) :element-type '(unsigned-byte 8))))
 	 (flusher
-	   (lambda (storage)
-	     (declare (type buffering-write-storage storage))
-	     (assert (> (- (length vector) offset)
-			(storage-offset storage))
-		     nil
-			  'out-of-space-in-fixed-vector
-			  :format-control "Out of space in provided output vector")
-		  (replace vector (storage-store& storage)
-			   :start1 offset :start2 0
-			   :end2 (storage-offset storage))
-		  (incf offset (storage-offset storage))
-		  (setf (storage-offset storage) 0)))
-	      (storage (%make-buffering-write-storage :store& temp-vector :flusher flusher)))
+	   (if is-simple-octet-array
+	       (lambda (storage)
+		 (declare (type buffering-write-storage storage))
+		 (storage-offset storage))
+	       (lambda (storage)
+		 (declare (type buffering-write-storage storage))
+		 (assert (> (- (length vector) offset)
+			    (storage-offset storage))
+			 nil
+			 'out-of-space-in-fixed-vector
+			 :format-control "Out of space in provided output vector")
+		 (replace vector (storage-store& storage)
+			  :start1 offset :start2 0
+			  :end2 (storage-offset storage))
+		 (incf offset (storage-offset storage))
+		 (setf (storage-offset storage) 0))))
+	 (storage (%make-buffering-write-storage :store& temp-vector :flusher flusher)))
     (declare (dynamic-extent temp-vector storage flusher) (type fixnum offset))
     (store-objects/buffering-write-storage storage data)
     offset))
