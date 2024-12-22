@@ -40,7 +40,7 @@
   (assert (atom storage))
   `(etypecase ,storage
      (sap-write-storage
-      (let ((sap (storage-sap& ,storage)))
+      (let ((,sap (storage-sap& ,storage)))
 	,@body))
      (buffering-write-storage
       (let ((store (storage-store& ,storage)))

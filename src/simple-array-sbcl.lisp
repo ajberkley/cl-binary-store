@@ -82,6 +82,25 @@
 				 (the (integer 0 64) (or actual-bits (second type)))))
 			 8)))))
 
+(defun write-sap-data-to-storage (sap num-bytes storage)
+  (let ((storage-size (storage-size storage)))
+    (declare (type (and (integer 1) fixnum) storage-size))
+    (loop
+      with num-bytes-remaining fixnum = num-bytes
+      with sap-offset fixnum = 0
+      for storage-offset = (storage-offset storage)
+      while (> num-bytes-remaining 0)
+      do
+	 (let ((write-length (min storage-size num-bytes-remaining)))
+	   (ensure-enough-room-to-write storage write-length)
+	   (let ((offset (storage-offset storage)))
+	     (with-storage-sap (storage-sap storage)
+	       (copy-sap storage-sap offset sap sap-offset write-length))
+	     (incf sap-offset write-length)
+	     (decf num-bytes-remaining write-length)
+	     (assert (>= num-bytes-remaining 0))
+	     (setf (storage-offset storage) (+ offset write-length)))))))
+
 (declaim (inline store-simple-base-string))
 (defun store-simple-base-string (string storage &optional references)
   (declare (optimize speed safety) (type simple-base-string string))
@@ -90,11 +109,9 @@
 	       (storage-write-byte storage +simple-base-string-code+)
 	       (let ((string-length (length string)))
 		 (store-tagged-unsigned-fixnum string-length storage)
-		 (let ((offset (ensure-enough-room-to-write storage string-length)))
-		   (with-storage-sap (sap storage)
-		     (sb-sys:with-pinned-objects (string)
-		       (copy-sap sap offset (sb-sys:vector-sap string) 0 string-length)))
-		   (setf (storage-offset storage) (+ offset string-length)))))))
+		 (sb-sys:with-pinned-objects (string)
+		   (write-sap-data-to-storage (sb-sys:vector-sap string)
+					      string-length storage))))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references)
@@ -191,11 +208,10 @@
 		   #+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
 				       (type-of sv) bytes-to-write encoded-element-type)
 		   (storage-write-byte storage encoded-element-type)
-		   (let ((offset (ensure-enough-room-to-write storage bytes-to-write)))
-		     (with-storage-sap (sap storage)
-		       (sb-sys:with-pinned-objects (sv)
-			 (copy-sap sap offset (sb-sys:vector-sap sv) 0 bytes-to-write)))
-		     (setf (storage-offset storage) (+ offset bytes-to-write))))))))
+		   (sb-sys:with-pinned-objects (sv)
+		     (write-sap-data-to-storage
+		      (sb-sys:vector-sap sv) bytes-to-write storage)))))))
+
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (sv storage references)
@@ -233,15 +249,13 @@
 	    (sbcl-specialized-array-element-size/bits sa num-elts)
 	  (storage-write-byte storage encoded-element-type)
 	  #+debug-csf (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
-	 	  (type-of sa) bytes-to-write encoded-element-type)
-	  (let ((offset (ensure-enough-room-to-write storage bytes-to-write)))
-	    (sb-kernel:with-array-data ((backing-array sa) (start) (end))
-	      (assert (zerop start))
-	      (with-storage-sap (sap storage)
-		(sb-sys:with-pinned-objects (backing-array)
-		  (copy-sap sap offset (sb-sys:vector-sap backing-array) 0 bytes-to-write))))
-	    (setf (storage-offset storage) (+ offset bytes-to-write))
-	    (values)))))))
+	 		      (type-of sa) bytes-to-write encoded-element-type)
+	  (sb-kernel:with-array-data ((backing-array sa) (start) (end))
+	    (assert (zerop start))
+	    (sb-sys:with-pinned-objects (backing-array)
+	      (write-sap-data-to-storage (sb-sys:vector-sap backing-array) bytes-to-write
+					 storage)))
+	  (values))))))
 
 (defun restore-simple-specialized-array (storage)
   (declare (optimize speed safety))
