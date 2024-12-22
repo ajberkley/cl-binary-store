@@ -1,9 +1,9 @@
 # cl-store-faster
 
 A fast and lightly customizable serializer/deserializer of Common Lisp
-objects to compact binary format.  This is a work in progress so do not
-use it until I get output versioning working, at which point you can
-be sure there will be no breaking format changes.
+objects to compact binary format.  There is some simple versioning so
+far, but I would not use this in production yet as I am still
+developing this (22 Dec 2025).
 
 Currently have a bunch of sbcl specific code and no alternative for other
 Common Lisp implementations (see TODO).
@@ -128,6 +128,7 @@ it is on my TODO list and I would like this to be as fast.
 
 ## TODO
 
+- [ ] add large object without extending storage buffer
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
 - [ ] detect class and structure change on restore (just on the struct-info restore)
 - [ ] support store/restore from raw memory (mmap, sap, etc)
@@ -136,7 +137,6 @@ it is on my TODO list and I would like this to be as fast.
 - [ ] Reduced copying if using a sap backend?
 - [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
 - [ ] Provide non-sbcl specific serializers
-- [ ] Add magic number / versioning and compiled backends for different back-ends
 - [ ] Address slow compilation (a bit too much inlining --- remove most of it based on testing without reference table.
 - [ ] Store number of references in the output so deserialization doesn't have to grow the references vector (minor tweak)
 

@@ -158,4 +158,8 @@
 
 (defconstant +keyword-code+ (register-code 39 :restore 'restore-keyword :store 'store-keyword
 					     :type 'keyword :store-references t
-					     :restore-references nil))
+					      :restore-references nil))
+
+(defconstant +magic-number-code+ (register-code 40 :restore 'restore-magic-number
+						   :store 'store-magic-number
+						   :type 'magic-number))

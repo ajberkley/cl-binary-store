@@ -294,3 +294,23 @@
 	 (mnum (- num)))
     (is '= num (restore-from-vector (store-to-vector num)))
     (is '= mnum (restore-from-vector (store-to-vector mnum)))))
+
+(define-test test-versioning
+  (fail
+      (restore
+       (let ((*write-magic-number* t)
+	     (*write-version* 123))
+	 (store nil "check"))))
+  (is 'equalp
+      "check"
+      (restore
+       (let ((*write-magic-number* nil)
+	     (*write-version* 123))
+	 (store nil "check"))))
+  (is 'equalp
+      "check"
+      (nth-value 1
+		 (restore
+		  (let ((*write-magic-number* t))
+		    (store nil "check"))))))
+  

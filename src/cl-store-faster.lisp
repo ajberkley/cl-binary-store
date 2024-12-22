@@ -10,10 +10,13 @@
   (:documentation "Package containing all internal and extension symbols of cl-store-faster")
   (:export
    ;; User interface
+   #:store
+   #:restore
    #:restore-from-stream
    #:store-to-stream
    #:restore-from-vector
    #:store-to-vector
+   #:store-to-extant-vector
    #:end-of-data
    #:store-to-file
    #:restore-from-file
@@ -24,6 +27,7 @@
    #:ensure-enough-room-to-write
    #:storage-store
    #:storage-offset
-   #:flush-storage))
+   #:flush-storage
+))
 
 (in-package :cl-store-faster)

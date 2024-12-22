@@ -82,9 +82,9 @@
 			       (funcall ',func-name ,value ,storage
 					,@(when takes-references `(,references))))
 			     #-debug-csf
-			     `(locally (declare (inline ,func-name))
+			     `;;(locally (declare (inline ,func-name))
 				(,func-name ,value ,storage
-					    ,@(when takes-references `(,references)))))
+					    ,@(when takes-references `(,references))));;)
 			    type-dispatch-table))))
 		     *code-info*)
 	    type-dispatch-table)
@@ -157,13 +157,10 @@
     (let* ((references-vector (make-array 1024 :initial-element nil)) ;; not needed but helps with debuggingfe
 	   (references (make-references :vector references-vector))
 	   (first-code (maybe-restore-ub8 storage))
-
 	   (first-result (when first-code (read-dispatch first-code storage references))))
       (declare (dynamic-extent references references-vector))
       (when first-code
 	(let ((rest (loop for code = (maybe-restore-ub8 storage)
 			  while code
 			  collect (read-dispatch code storage references))))
-	  (if rest
-	      (cons first-result rest)
-	      first-result))))))
+	  (apply #'values first-result rest))))))

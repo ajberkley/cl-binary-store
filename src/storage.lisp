@@ -25,7 +25,7 @@
   (store& (make-array 8192 :element-type '(unsigned-byte 8))
    :type (simple-array (unsigned-byte 8) (*)))
   ;; When called with storage, flusher writes-out or reads-in the data in seq and
-  ;; updates offset and max and returns the number of valid bytes in storage if reading
+  ;; updates offset
   (flusher (constantly nil) :type function))
 
 (declaim (inline storage-sap& storage-sap-size&))
