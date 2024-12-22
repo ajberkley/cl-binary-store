@@ -85,9 +85,10 @@
 ;; really coarse metric?
 
 ;; WARNING: sbcl hashing on single floats is terrible, so cl-store does not finish
-(defun long-float-array (&optional (random nil))
-  (let ((a (coerce (loop repeat 1000000 collect (if random (random 1f0) 1f0))
-		   '(simple-array single-float (*)))))
+(defun long-float-array (&key (random nil) (type 'double-float))
+  (let* ((num (if (eq type 'double-float) 1d0 1f0))
+	 (a (coerce (loop repeat 1000000 collect (if random (random num) num))
+		   `(simple-array ,type (*)))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
       ;;(sb-sprof:with-profiling (:report :graph)
