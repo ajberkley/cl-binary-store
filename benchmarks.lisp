@@ -65,6 +65,12 @@
 
 ;; Now down to 403 ms with the inlined dispatch.  Removing inlined dispatch and
 ;; we are back to 620 ms.  OK, so we should work on dispatch a little bit.
+;; Let's try the chunked dispatch
+
+(defgeneric blarg (x))
+
+(defmethod blarg ((a simple-array)))
+(defmethod blarg ((a (simple-array double-float (*)))))
 
 
 (defun long-simple-list ()

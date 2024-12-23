@@ -84,8 +84,7 @@
     (type-specifiers &optional (top-level-type-bins '(t)))
   "A nice discrimator tree:
  (simulate-discriminators *many-types*
-   '(cons fixnum null (eql t) single-float (simple-array double-float (*))
-     array number structure-object standard-object t))"
+   '(cons fixnum null (eql t) single-float array number structure-object standard-object t))"
   ;; We want to prefer directly tagged elements at the high level, so we don't
   ;; actually try to build the type-tree, we just manually put them first
   (let* ((fixed-bins top-level-type-bins)
