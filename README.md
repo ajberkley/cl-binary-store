@@ -39,6 +39,58 @@ Multiply referenced objects are stored as references so equality is
 preserved across serialization / deserialization and circularity is
 supported.
 
+## User interface
+### (store place &rest data)
+
+*place* can be string or pathname referring to a file, or a stream, or a
+ vector, or NIL (in which case you will be returned a vector of data)
+
+### (restore place)
+
+*place* can be a string or pathname referring to a file, or a stream, or
+a vector.
+
+## Examples
+
+    CL-USER> (cl-store nil (list "abcd" 1234))
+    #(14 38 0 4 97 98 99 100 14 1 210 4 15)
+    ;; 14 = cons, 38 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 14 = cons
+    ;; 1 210 4 = 16 bit integer 1234, 15 = nil
+    
+    CL-USER> (restore (cl-store nil (list "abcd" 1234)))
+    ("abcd" 1234)
+
+    CL-USER> (cl-store-faster:store nil (make-string 1 :initial-element #\U+03b1))
+    #(38 0 2 206 177) ;; 4 bytes, 38 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
+
+    CL-USER> (let* ((*print-circle* t)
+    		    (v (make-array 1)))
+		(setf (svref v 0) v)
+               (store "blarg.bin" 'a 'b 'c v)
+               (format nil "~A" (restore "blarg.bin")))
+    "(A B C #1=#(#1#))"
+
+### Configurable options
+
+\*track-references\* default is T.  Let this to NIL if you have simple
+data with no references between them at all (so lists of data, no
+circularity, no repeated objects).  This is very fast (100s of MB/sec
+for small data; > 500 MB/sec for big data chunks; on my laptop).
+
+\*support-shared-list-structures\* default is T.  Let this to NIL if
+you have no list circularity (when it is NIL basic circular lists are
+supported as the first CONS we see in a list is recorded as a
+reference, so almost all data will work fine with this NIL; NIL makes
+this package behave like cl-store which will die / explode if given
+any complex circularity in a list).  Setting this to NIL is a
+significant performance improvement if you have list heavy data.
+
+\*store-class-slots\* default is NIL. Standard object class allocated
+slots will be stored if this is T
+
+\*write-magic-number\* default is NIL.  If T we will write out a magic
+number and the \*write-version\* to the output, which will then be
+validated against \*supported-versions\* when read back in.
 ## Why?
 
 I've been using [cl-store](https://cl-store.common-lisp.dev/) forever
@@ -105,71 +157,7 @@ second.  It's about 3-4x faster than cl-store.  This isn't the main
 focus of this package, you might do better with hyperluminal mem but
 the data is quite a lot smaller with this package.
 
-## User interface
-### (store place &rest data)
 
-*place* can be string or pathname referring to a file, or a stream, or a
- vector, or NIL (in which case you will be returned a vector of data)
-
-### (restore place)
-
-*place* can be a string or pathname referring to a file, or a stream, or
-a vector.
-
-## Examples
-
-    CL-USER> (cl-store nil (list "abcd" 1234))
-    #(14 38 0 4 97 98 99 100 14 1 210 4 15)
-    ;; 14 = cons, 38 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 14 = cons
-    ;; 1 210 4 = 16 bit integer 1234, 15 = nil
-    
-    CL-USER> (restore (cl-store nil (list "abcd" 1234)))
-    ("abcd" 1234)
-
-    CL-USER> (cl-store-faster:store nil (make-string 1 :initial-element #\U+03b1))
-    #(38 0 2 206 177) ;; 4 bytes, 38 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
-
-    CL-USER> (let* ((*print-circle* t)
-    		    (v (make-array 1)))
-		(setf (svref v 0) v)
-               (store "blarg.bin" 'a 'b 'c v)
-               (format nil "~A" (restore "blarg.bin")))
-    "(A B C #1=#(#1#))"
-
-### Configurable options
-
-\*track-references\* default is T.  Let this to NIL if you have simple
-data with no references between them at all (so lists of data, no
-circularity, no repeated objects).  This is very fast (100s of MB/sec
-for small data; > 500 MB/sec for big data chunks; on my laptop).
-
-\*support-shared-list-structures\* default is T.  Let this to NIL if
-you have no list circularity (when it is NIL basic circular lists are
-supported as the first CONS we see in a list is recorded as a
-reference, so almost all data will work fine with this NIL; NIL makes
-this package behave like cl-store which will die / explode if given
-any complex circularity in a list).  Setting this to NIL is a
-significant performance improvement if you have list heavy data.
-
-\*store-class-slots\* default is NIL. Standard object class allocated
-slots will be stored if this is T
-
-\*write-magic-number\* default is NIL.  If T we will write out a magic
-number and the \*write-version\* to the output, which will then be
-validated against \*supported-versions\* when read back in.
-
-## TODO
-
-- [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
-- [ ] detect class and structure change on restore (just on the struct-info restore)
-- [ ] support store/restore from raw memory (mmap, sap, etc)
-- [ ] very large object storage without copying
-- [ ] Parallel store and restore
-- [ ] Reduced copying if using a sap backend?
-- [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
-- [ ] Provide non-sbcl specific serializers
-- [ ] Address slow compilation (a bit too much inlining --- remove most of it based on testing without reference table.
-- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
 
 ## Parallelization
 
@@ -196,3 +184,18 @@ because they are immediates so any deduplication is not useful.  It
 would shrink the file size by maximally 3 bytes per single float
 (assuming we have less than 256 reference ids in the file) but not
 worth it.
+
+
+## TODO
+
+- [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
+- [ ] detect class and structure change on restore (just on the struct-info restore)
+- [ ] support store/restore from raw memory (mmap, sap, etc)
+- [ ] very large object storage without copying
+- [ ] Parallel store and restore
+- [ ] Reduced copying if using a sap backend?
+- [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
+- [ ] Provide non-sbcl specific serializers
+- [ ] Address slow compilation (a bit too much inlining --- remove most of it based on testing without reference table.
+- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
+
