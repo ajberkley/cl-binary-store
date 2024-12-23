@@ -166,7 +166,6 @@ versus
     (UNSIGNED-BYTE 8) 1 compares, 10 instructions, and 0 function-calls
     (UNSIGNED-BYTE 16) 2 compares, 20 instructions, and 0 function-calls
     (UNSIGNED-BYTE 32) 3 compares, 30 instructions, and 0 function-calls
-    I don't understand this big jump here
     (UNSIGNED-BYTE 64) 11 compares, 54 instructions, and 0 function-calls
     FIXNUM 12 compares, 63 instructions, and 0 function-calls
     BLARG 14 compares, 77 instructions, and 0 function-calls
@@ -178,7 +177,9 @@ versus
     RATIO 24 compares, 148 instructions, and 0 function-calls
     COMPLEX 26 compares, 163 instructions, and 0 function-calls
 
-versus
+versus the sbcl code below.  Note that there is a lot of complexity in the ub32->ub64 thing
+reflected in the assembly below.  You can see that testing for fixnum first would have been
+way smarter.
 
     ; disassembly for TRUST-SBCL
     ; Size: 307 bytes. Origin: #x55414696                         ; TRUST-SBCL
