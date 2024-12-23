@@ -32,9 +32,9 @@ top-level ordering (the first few are immediate/unboxed objects in a
 sense, and so should be easy to discriminate) (you can also run this
 with just '(t) as a singular tree root, but it's far from optimal!).
 
-  (simulate-discriminators *many-types*
-     '(cons fixnum null (eql t) single-float
-       array number structure-object standard-object t))
+    (simulate-discriminators *many-types*
+       '(cons fixnum null (eql t) single-float
+         array number structure-object standard-object t))
 
 Here's my ascii art representation of the resulting tree and some annotations run
 on sbcl 2.4.4.
