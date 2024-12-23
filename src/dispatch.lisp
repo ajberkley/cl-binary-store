@@ -41,6 +41,7 @@
   
   (make-read-dispatch)
 
+
   (defun strict-subtype-ordering (type-specs &key (key #'identity))
     ;; This sort of works, but some weird issues I haven't debugged yet
     ;; with the type hierarchy.
@@ -59,7 +60,41 @@
       (loop for g across groups
 	    appending (stable-sort (reverse g) #'subtypep :key key))))
 
-  (defmacro generate-store-object (value storage references)
+  (defun generate-store-object (value storage references)
+    (labels ((subtype-ordered (type-class items key)
+	     "Takes a sequence of items on which one can call (key item) and get a type
+              specifier.  Returns (values (sorted-by-subtype items type-class) other-items)"
+	     (loop for item in type-specs
+		   if (subtypep (funcall key item) type-class)
+		     collect item into matches
+		   else
+		     collect item into rejects
+		   finally
+		      (return (values (sort matches #'subtypep :key key)
+				      rejects)))))
+      (let ((high-level-types '(fixnum cons symbol vector array structure-object
+				standard-object number t)))
+	;; These are not disjoint sets (though we could do this procedure that way too)
+	;; In principle the compiler could be doing this sort of work in etypecase, but
+	;; because it is ordered, it would be generally wasted time for it to do so.
+	(etypecase value
+	  (loop for type in high-level-types
+		collect `(,type
+			  (etypecase
+      (loop for g across groups
+	    appending (stable-sort (reverse g) #'subtypep :key key)))	       
+    `(etypecase value
+       (fixnum ...)
+       (cons ...)
+       (symbol ...)
+       (vector ...)
+       (array ...)
+       (structure-object ...)
+       (standard-object ...)
+       (number ...)
+       (t))
+
+  (defmacro generate-store-object-old (value storage references)
     "Here we specialize the calls to have storage nil or not nil so the inlined
  storage code can delete the actual storage code when not used"
     ;; TODO CHANGE TO DUAL LAYER DISPATCH TO HELP WITH CODE GEN
@@ -207,3 +242,5 @@
                                            (length individual-counts) 1d0)
 					(gethash (car d) max-refed))))
 			data)))))
+
+(

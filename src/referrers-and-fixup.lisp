@@ -53,7 +53,7 @@
 ;; Nominally we could have multiple reference hash tables if we wanted
 ;; to parallelize the storage operation more by reducing contention.
 
-(declaim (inline check/store-reference))
+(declaim (notinline check/store-reference))
 (defun check/store-reference (object storage references &optional (add-new-reference t))
   "Used during the storage phase both during the reference counting
  step and the serialization step.  This function returns T if this

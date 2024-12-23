@@ -14,10 +14,36 @@
  out data with general list circularites.  Worst case we fill your disk,
  best case you end up with multiple copies of parts of the list.")
 
-;; TODO CHANGE THE INTERFACE HERE TO TAKE INFO AND TO DEFINE THE
-;; LAMBDA-LIST DIFFERENTLY FOR REF PHASE AND NOT REF PHASE
+(declaim (inline store-cons))
+(defun store-cons (cons storage references)
+  (if storage
+      (store-cons! cons storage references t *support-shared-list-structures*)
+      (search-cons cons references *track-references* *support-shared-list-structures*)))
+
 (declaim (notinline store-cons))
-(defun store-cons (cons storage references
+(defun store-cons! (cons storage references
+		   &optional (write-new-references t)
+		     (support-shared-list-structures *support-shared-list-structures*))
+  "If TAGGED is NIL, then we elide writing out the first cons tag, but
+ the rest of the list will be tagged as usual.
+
+ STORAGE can be NIL, in which case we should do no writing to it but we want to
+ traverse the lists anyway to count references."
+  (declare (optimize (speed 3) (safety 0)) (type storage storage))
+  ;; We always record the first cons at the head of a list
+  (when (check/store-reference cons storage references write-new-references)
+    (return-from store-cons! (values)))
+  (storage-write-byte storage +cons-code+)
+  ;; (if (typep (car cons) 'fixnum)
+  ;;     (store-fixnum (car cons) storage)
+  (store-object (car cons) storage references)
+  (let ((cdr (cdr cons)))
+    (if (consp cdr)
+	(store-cons! cdr storage references support-shared-list-structures
+		    support-shared-list-structures)
+	(store-object cdr storage references))))
+
+(defun search-cons (cons references
 		   &optional (write-new-references t)
 		     (support-shared-list-structures *support-shared-list-structures*))
   "If TAGGED is NIL, then we elide writing out the first cons tag, but
@@ -27,16 +53,14 @@
  traverse the lists anyway to count references."
   (declare (optimize (speed 3) (safety 0)))
   ;; We always record the first cons at the head of a list
-  (when (check/store-reference cons storage references write-new-references)
-    (return-from store-cons (values)))
-  (when storage
-    (storage-write-byte storage +cons-code+))
-  (store-object (car cons) storage references)
+  (when (check/store-reference cons nil references write-new-references)
+    (return-from search-cons (values)))
+  (store-object (car cons) nil references)
   (let ((cdr (cdr cons)))
     (if (consp cdr)
-	(store-cons cdr storage references support-shared-list-structures
+	(search-cons cdr references support-shared-list-structures
 		    support-shared-list-structures)
-	(store-object cdr storage references))))
+	(store-object cdr nil references))))
 
 (declaim (notinline restore-cons))
 ;; Has to be careful to not blow the stack

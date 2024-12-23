@@ -323,10 +323,11 @@
 (defun flush-write-storage (storage)
   (funcall (storage-flusher storage) storage))
 
+(declaim (ftype (function (storage fixnum) (values fixnum &optional)) ensure-enough-room-to-write))
 (declaim (inline ensure-enough-room-to-write))
 (defun ensure-enough-room-to-write (storage bytes)
   "Ensure that we have room to write BYTES to STORAGE.  Returns storage offset."
-  (declare (optimize speed safety) (type fixnum bytes))
+  (declare (optimize (speed 3) (safety 0)) (type fixnum bytes))
   (let ((offset (storage-offset storage)))
     (if (< (sb-ext:truly-the fixnum (+ offset bytes)) (storage-max storage))
 	offset
