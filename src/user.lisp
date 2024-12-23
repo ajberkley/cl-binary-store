@@ -113,7 +113,9 @@
 
 ;; TODO: SAP VECTORS / MMAPPED MEMORY
 
-(defvar *write-magic-number* nil)
+(defvar *write-magic-number* nil
+  "If T we will write out a magic number and *write-version* to the stream, which will be
+ validated against *supported-versions* when we read it back")
 
 (defun restore (place)
   "(restore #(14 39 37 0 2 72 73 15)) -> (values :hi))

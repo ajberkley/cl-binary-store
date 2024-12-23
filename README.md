@@ -97,33 +97,60 @@ implementation.  This also makes it near impossible to parallelize
 serialization because the default sbcl hash table is too slow when
 synchronized.
 
-I currently do not have a method to disable reference tracking, see
-TODO.  If that's your need, I'd suggest you use hyperluminal-mem, but
-it is on my TODO list and I would like this to be as fast.
+If your data does not contain multiple references, then you can let
+\*track-references\* to NIL and you can hit hundreds of MB/sec
+depending on your data (unicode strings are currently a bit slow as we
+are not using a fast utf-8 encoder) and 100M cons+integer objects per
+second.  It's about 3-4x faster than cl-store.  This isn't the main
+focus of this package, you might do better with hyperluminal mem but
+the data is quite a lot smaller with this package.
 
-## User facing entry points
-### (store-to-file filename &rest elements) / (restore-from-file filename)
-### (store-to-vector &rest elements) / (restore-from-vector vector)
-### (store-to-stream stream &rest elements) / (restore-from-stream stream)
+## User interface
+### Options
+
+\*track-references\* default is T.  Let this to NIL if you have simple
+data with no references between them at all (so lists of data, no
+circularity, no repeated objects).  This is very fast.
+
+\*support-shared-list-structures\* default is T.  let this to NIL if you have
+references to the middle of lists, or circularity that isn't just
+back to the head of a list.
+
+\*store-class-slots\* default is NIL. Standard object class allocated
+slots will be stored if this is T
+
+\*write-magic-number\* default is NIL.  If T we will write out a magic
+number and the \*write-version\* to the output, which will then be
+validated against \*supported-versions\* when read back in.
+
+### (store place &rest data)
+
+*place* can be string or pathname referring to a file, or a stream, or a
+ vector, or NIL (in which case you will be returned a vector of data)
+
+### (restore place)
+
+*place* can be a string or pathname referring to a file, or a stream, or
+a vector.
 
 ## Examples
 
-    CL-USER> (cl-store-faster:store-to-vector (list "abcd" 1234))
+    CL-USER> (cl-store nil (list "abcd" 1234))
     #(14 38 0 4 97 98 99 100 14 1 210 4 15)
     ;; 14 = cons, 38 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 14 = cons
     ;; 1 210 4 = 16 bit integer 1234, 15 = nil
     
-    CL-USER> (cl-store-faster:restore-from-vector *)
+    CL-USER> (restore (cl-store nil (list "abcd" 1234)))
     ("abcd" 1234)
 
-    CL-USER> (cl-store-faster:store-to-vector (make-string 1 :initial-element #\U+03b1))
+    CL-USER> (cl-store-faster:store nil (make-string 1 :initial-element #\U+03b1))
     #(38 0 2 206 177) ;; 4 bytes, 38 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
 
     CL-USER> (let* ((*print-circle* t)
     		    (v (make-array 1)))
 		(setf (svref v 0) v)
-               (cl-store-faster:store-to-file "blarg.bin" 'a 'b 'c v)
-               (format nil "~A" (cl-store-faster:restore-from-file "blarg.bin")))
+               (store "blarg.bin" 'a 'b 'c v)
+               (format nil "~A" (restore "blarg.bin")))
     "(A B C #1=#(#1#))"
 
 ## TODO
@@ -139,18 +166,16 @@ it is on my TODO list and I would like this to be as fast.
 - [ ] Address slow compilation (a bit too much inlining --- remove most of it based on testing without reference table.
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
 
-Some more testing and another run at speed
-
 ## Parallelization
 
-It's unlikely we would be able to hit disk bandwidths without
-parallelizing (both during store and restore).  Part of the win of
-parallelizing is that you can do thread local bump allocation for
-small objects so things zoom quickly.  For a single thread and small
-intrinsic objects we can hit >1M-objects per second, which isn't
-terrible, but not nearly what I'd like.
+Unless we are using \*track-references\* nil we cannot come close
+to hitting disk bandwidths on the storage phase.  So, one possible
+direction is trying to parallelize the storage phase.  Unfortunately,
+that is quite hard to do, as we are eq hash-table performance limited
+and the sbcl synchronized hash tables are way too slow.
 
-The storage phase is the slowest phase 
+Parallelization during restore is much easier, but performance is
+quite good already, so this isn't top of my list.
 
 ## Random comments
 
@@ -166,7 +191,3 @@ because they are immediates so any deduplication is not useful.  It
 would shrink the file size by maximally 3 bytes per single float
 (assuming we have less than 256 reference ids in the file) but not
 worth it.
-
-You'd think we could avoid storing symbol-name strings in the
-reference tracker, but it's possible to have the same symbol name in
-multiple packages so its worth it in the end.
