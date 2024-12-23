@@ -6,22 +6,32 @@
 (quicklisp:quickload "hyperluminal-mem")
 (require 'sb-sprof)
 
-(defun test-untracked-against-hlmem ()
-  (let* ((a (make-list 5 :initial-element 0))
-	 (b (make-list 5 :initial-element 1))
-	 (c (make-list 100000 :initial-element (list a b)))
-	 (d (make-array 100000000 :element-type '(unsigned-byte 8))))
-    (hyperluminal-mem:with-mem-words (var 1000000)
-      (let ((size (print (hyperluminal-mem::mwrite-box/list var 0 10000000 c))))
-	(time (dotimes (x 10) (hyperluminal-mem::mwrite-box/list var 0 10000000 c)))
-	(time (dotimes (x 10) (hyperluminal-mem::mread-box/list var 0 size)))))
+(defun test-untracked-single-list-against-hlmem ()
+  (let* ((len 1000000)
+	 (a (make-list len :initial-element 1)) ;; if you do this (cons 1 2) they are equal
+	 (store-size (* 32 (+ 1 len)))
+	 (a-store (make-array store-size :element-type '(unsigned-byte 8))))
+    (sb-sys:with-pinned-objects (a-store)
+      (let* ((sap (sb-sys:vector-sap a-store))
+	     (size (print (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a))))
+	(time (dotimes (x 100) (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a)))
+	;; returns words
+	(print (* 8 (length (hyperluminal-mem::mread-box/list sap 0 size))))
+	(time (dotimes (x 100) (hyperluminal-mem::mread-box/list sap 0 size)))))
     (let* ((cl-store-faster::*support-shared-list-structures* nil)
 	   (cl-store-faster::*track-references* nil)
-	   (size (cl-store-faster:store d c))
-	   (data (subseq d 0 size)))
-      (time (dotimes (x 10) (cl-store-faster:store data c)))
-      (time (dotimes (x 10) (cl-store-faster:restore data)))
+	   (size (cl-store-faster:store a-store a))
+	   (data (subseq a-store 0 size)))
+      (print size)
+      (time (dotimes (x 100) (cl-store-faster:store data a)))
+      (time (dotimes (x 100) (cl-store-faster:restore data)))
       (values))))
+
+;; 1M long list with constant small integer:
+;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (90Mobj/sec; 360 MB/sec)
+;; cl-store-faster writes in 1150 ms and reads in 1070 ms (17Mobj/sec;  26 MB/sec)
+;; THe cl-store output size is 38% the size of the hlmem output.
+;; If you make a list of (cons 1 2) then they perform equally (except the hlmem output is large)
 
 (defun long-simple-list ()
   (let ((a (loop repeat 1000
