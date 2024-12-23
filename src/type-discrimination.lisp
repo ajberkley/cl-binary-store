@@ -57,7 +57,7 @@
 (defclass class-c (class-a) ())x
 
 (defparameter *many-types*
-  `(rational real complex ratio integer fixnum
+  `(real complex ratio integer fixnum
     (complex double-float) (complex single-float)
     (unsigned-byte 8) (unsigned-byte 16) (unsigned-byte 32)
     (unsigned-byte 64)
@@ -73,6 +73,7 @@
     array
     simple-array
     null
+    double-float
     (eql t)
     (simple-array (unsigned-byte 8) (*))
     (simple-array single-float (*))
