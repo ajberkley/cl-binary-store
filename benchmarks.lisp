@@ -7,10 +7,13 @@
 
 (defun long-simple-list ()
   (let ((a (loop for i fixnum from 0 below 1000000
-		 collect (format nil "~A~A" #\U+03b1 (random 1000000)))))
+		 collect (format nil "~A" ;; #\U+03b1
+			  (random 1000000))
+		 )))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
-      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+      ;;(sb-sprof:with-profiling (:report :graph)
+	(time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
     (with-open-file (str "blarg.bin")
       (format t "CL-STORE-FASTER: file length ~,2fMB~%" (/ (file-length str) 1d6)))
     (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
@@ -34,15 +37,19 @@
 ;;+------------+---------+--------+---------+--------+
 ;; symbol      |      480|     120|      650|     700|
 ;; ub8         |      335|     140|      720|     680|
+;; ub8/no-ref  |      200|     123|      720|     680| ;; 150 MB/s
 ;; sb8         |      330|     140|      720|     680|
 ;; ub16        |      385|     140|      950|     815|
+;; ub16/no-ref |      200|     125|     1000|     855| ;; 200 MB/s
 ;; sb16        |      370|     135|      920|     800|
 ;; ub32        |      400|     140|      915|     795|
+;; ub32/no-ref |      240|     140|      915|     795| ;; 300 MB/s
 ;; fixnum      |      435|     130|     3000|    2700| 
+;; fixnum/noref|      310|     130|     5200|    3000| ;; 333 MB/s
 ;; single-float|      435|     160|      675|     680|
 ;; double-float|      535|     145|      690|     690|
 ;; complex     |      530|     160|      650|     690|
-;; string      |      520|     130|      670|     690| ;; 3 MB cl-store-faster vs 4 MB cl-store
+;; string      |      520|     130|      670|     690| ;; 170 MB/sec when no-ref
 ;; unicode-str |     2800|    3300|     5600|    2500| ;; 13MB cl-store-faster vs 21 MB cl-store
 ;; pathname    |      650|     130|      680|     700| ;; 3 MB cl-store-faster vs 4 MB cl-store
 ;;+------------+---------+--------+---------+--------+

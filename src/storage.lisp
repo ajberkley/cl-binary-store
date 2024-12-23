@@ -22,7 +22,7 @@
 (defstruct (buffering-write-storage (:constructor %make-buffering-write-storage)
 				    (:conc-name storage-)
 				    (:include storage-base))
-  (store& (make-array 8192 :element-type '(unsigned-byte 8))
+  (store& (make-array 16384 :element-type '(unsigned-byte 8))
    :type (simple-array (unsigned-byte 8) (*)))
   ;; When called with storage, flusher writes-out or reads-in the data in seq and
   ;; updates offset

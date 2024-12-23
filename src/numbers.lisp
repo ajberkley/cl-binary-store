@@ -66,7 +66,7 @@
     (setf (storage-offset storage) (+ 8 offset))
     (the fixnum (storage-read-sb64! storage offset))))
 
-(declaim (inline store-fixnum))
+(declaim (notinline store-fixnum))
 (defun store-fixnum (fixnum storage &optional (tag t))
   (declare (optimize speed safety) (type fixnum fixnum))
   (with-write-storage (storage offset 9)

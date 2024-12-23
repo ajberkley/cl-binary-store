@@ -89,7 +89,7 @@
 	    type-dispatch-table)
 	  :key #'first)))
 
-  (declaim (inline store-object/storage)) ;; to propagate storage / references
+  (declaim (notinline store-object/storage)) ;; to propagate storage / references
   (defun store-object/storage (value storage references)
     (generate-store-object value storage references))
   
@@ -102,56 +102,59 @@
   ;; Normal: 483 ms, just synchronized hash-table single threaded 1.2 seconds.
   ;; brutal.  I suppose we could go lock-less eql hashing instead of eq hashing
   ;; for our objects
-  (declaim (inline store-objects/generic)) ;; so storage can be specialized down the chain
+  (declaim (notinline store-objects/generic)) ;; so storage can be specialized down the chain
   (defun store-objects/generic (storage &rest stuff)
     (declare (optimize speed safety))
-    (let* ((references (make-hash-table :test 'eql :size 256 :synchronized nil))
+    (let* ((track-references *track-references*)
+	   (references (when track-references
+			 (make-hash-table :test 'eql :size 256 :synchronized nil)))
 	   (struct-info (make-hash-table :test 'eql :synchronized nil)) ;; if use the metaclass object maybe can use eq?  can I do that for structs?
 	   (*struct-info* struct-info))
       (declare (dynamic-extent struct-info references))
-      #+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
-      (dolist (elt stuff)
-       	(store-object/no-storage elt references))
-      #+debug-csf (format t "Finished reference counting pass~%")
-      (let ((new-ht (make-hash-table :test 'eql))
-	    (ref-id 0))
-	(declare (type fixnum ref-id))
-        (analyze-references-hash-table references) ;; debugging code
-	;; Now clean up the references table: delete anyone who has no references
-	#+debug-csf (format t "Generating real reference hash-table~%")
-	(maphash (lambda (k v)
-		   (when (> (the fixnum v) 1)
-		     (setf (gethash k new-ht) (- (incf ref-id))))) ; signal it needs writing
-		 references)
-	(clrhash references)		; help the gc?
-	(setf references new-ht)
-	(when (>= ref-id 8192)
-	  (write-reference-count (1+ ref-id) storage))
-	#+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht)))
+      (when track-references
+	#+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
+	(dolist (elt stuff)
+       	  (store-object/no-storage elt references))
+	#+debug-csf (format t "Finished reference counting pass~%")
+	(let ((new-ht (make-hash-table :test 'eql))
+	      (ref-id 0))
+	  (declare (type fixnum ref-id))
+          (analyze-references-hash-table references) ;; debugging code
+	  ;; Now clean up the references table: delete anyone who has no references
+	  #+debug-csf (format t "Generating real reference hash-table~%")
+	  (maphash (lambda (k v)
+		     (when (> (the fixnum v) 1)
+		       (setf (gethash k new-ht) (- (incf ref-id))))) ; signal it needs writing
+		   references)
+	  (clrhash references)		; help the gc?
+	  (setf references new-ht)
+	  (when (>= ref-id 8192)
+	    (write-reference-count (1+ ref-id) storage))
+	  #+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht))))
       (dolist (elt stuff)
 	(store-object/storage elt storage references))
       (flush-write-storage storage)))
 
   (defun store-objects/buffering-write-storage (storage &rest stuff)
-    (declare (type buffering-write-storage storage) (inline store-objects/generic))
+    (declare (type buffering-write-storage storage) (notinline store-objects/generic))
     (apply #'store-objects/generic storage stuff))
 
   (defun store-objects/sap-write-storage (storage &rest stuff)
     (declare (type sap-write-storage storage))
     (apply #'store-objects/generic storage stuff))
 
-  (declaim (inline restore-object))
+  (declaim (notinline restore-object))
   (defun restore-object (storage references &optional (tag (restore-ub8 storage)))
     (declare (notinline read-dispatch))
     (read-dispatch tag storage references))
 
-  (declaim (inline store-object))
+  (declaim (notinline store-object))
   (defun store-object (value storage references)
     (declare (notinline store-object/storage) (notinline store-object/no-storage))
     (if storage
 	(store-object/storage value storage references)
 	(store-object/no-storage value references)))
-
+  
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all elements restored."
@@ -166,46 +169,46 @@
 	(let ((rest (loop for code = (maybe-restore-ub8 storage)
 			  while code
 			  collect (read-dispatch code storage references))))
-	  (apply #'values first-result rest))))))
+	  (apply #'values first-result rest)))))
 
-(defun analyze-references-hash-table (&optional references)
-  (declare (ignorable references))
-  ;;(defparameter *saved-refs* references)
-  #+debug-csf(let ((types (make-hash-table :test 'equal))
-                   (individual-reference-counts (make-hash-table :test 'equal))
-                   (max-refed (make-hash-table :test 'equal))
-                   (total-references-used 0)
-                   (total-unique-multiply-referenced-objects 0))
-               (declare (type fixnum total-references-used total-unique-multiply-referenced-objects))
-               (maphash (lambda (k v)
-                          (let ((type (type-of k)))
-                            (incf (gethash type types 0) v)
-                            (when (> v 1)
-                              (incf total-references-used v)
-                              (incf total-unique-multiply-referenced-objects))
-                            (push v (gethash type individual-reference-counts))
-                            (when (< (car (gethash type max-refed (cons 0 nil))) v)
-                              (setf (gethash type max-refed) (cons v k)))))
-	                references)
-               (format t "Total references emitted to file ~A with total reference ids allocated ~A~%~
+  (defun analyze-references-hash-table (&optional references)
+    (declare (ignorable references))
+    ;;(defparameter *saved-refs* references)
+    #+debug-csf(let ((types (make-hash-table :test 'equal))
+                     (individual-reference-counts (make-hash-table :test 'equal))
+                     (max-refed (make-hash-table :test 'equal))
+                     (total-references-used 0)
+                     (total-unique-multiply-referenced-objects 0))
+		 (declare (type fixnum total-references-used total-unique-multiply-referenced-objects))
+		 (maphash (lambda (k v)
+                            (let ((type (type-of k)))
+                              (incf (gethash type types 0) v)
+                              (when (> v 1)
+				(incf total-references-used v)
+				(incf total-unique-multiply-referenced-objects))
+                              (push v (gethash type individual-reference-counts))
+                              (when (< (car (gethash type max-refed (cons 0 nil))) v)
+				(setf (gethash type max-refed) (cons v k)))))
+	                  references)
+		 (format t "Total references emitted to file ~A with total reference ids allocated ~A~%~
                There were ~A possible objects being referenced~%"
-                       total-references-used total-unique-multiply-referenced-objects (hash-table-count references))
-               (let (data)
-                 (format t "Reference types are:~%")
-                 (maphash (lambda (type total-count)
-                            (push (cons type total-count) data))
-                          types)
-                 (setf data (sort data #'> :key #'cdr))
-                 (map nil (lambda (d)
-                            (let ((individual-counts (gethash (car d) individual-reference-counts)))
-                              (format t "~A of type ~A (~A unique)~%     ~
+			 total-references-used total-unique-multiply-referenced-objects (hash-table-count references))
+		 (let (data)
+                   (format t "Reference types are:~%")
+                   (maphash (lambda (type total-count)
+                              (push (cons type total-count) data))
+                            types)
+                   (setf data (sort data #'> :key #'cdr))
+                   (map nil (lambda (d)
+                              (let ((individual-counts (gethash (car d) individual-reference-counts)))
+				(format t "~A of type ~A (~A unique)~%     ~
                                     avg ref count ~,3f / min ~,3f / max ~,3f / frac>1 ~,3f~%     ~
                                     most-refed: ~A)~%"
-                                      (cdr d) (car d) (length individual-counts)
-                                      (/ (cdr d) (length individual-counts) 1d0)
-                                      (loop for i fixnum in individual-counts minimizing i)
-                                      (loop for i fixnum in individual-counts maximizing i)
-                                      (/ (count-if (lambda (x) (> x 1)) individual-counts)
-                                         (length individual-counts) 1d0)
-                                      (gethash (car d) max-refed))))
-                      data))))
+					(cdr d) (car d) (length individual-counts)
+					(/ (cdr d) (length individual-counts) 1d0)
+					(loop for i fixnum in individual-counts minimizing i)
+					(loop for i fixnum in individual-counts maximizing i)
+					(/ (count-if (lambda (x) (> x 1)) individual-counts)
+                                           (length individual-counts) 1d0)
+					(gethash (car d) max-refed))))
+			data)))))

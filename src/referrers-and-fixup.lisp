@@ -33,6 +33,13 @@
 ;; contention for the reference hash table and we need eq hashing, so I cannot
 ;; just plug in a lockless hashtable.
 
+(defvar *track-references* t
+  "If you let this to NIL, then every object will be stored anew, and
+ there will be no circular reference detection.  It's a huge
+ performance win (you can hit hundreds of MB/sec instead of 10s of
+ MB/sec, but you need to make sure your data is safe to serialize and
+ you don't care about EQL checks of data..")
+
 (declaim (inline references-vector make-references))
 (defstruct references
   "During deserialization this array grows as we restore references.
@@ -46,7 +53,7 @@
 ;; Nominally we could have multiple reference hash tables if we wanted
 ;; to parallelize the storage operation more by reducing contention.
 
-(declaim (inline check/store-reference))
+(declaim (notinline check/store-reference))
 (defun check/store-reference (object storage references &optional (add-new-reference t))
   "Used during the storage phase both during the reference counting
  step and the serialization step.  This function returns T if this
@@ -59,7 +66,8 @@
  dis-allowing (for performance reasons) circularity, as we optionally
  do during cons serialization."
   (declare (optimize speed safety))
-  (if storage ; we are in the storage phase, writing things out
+  (when references
+    (if storage ; we are in the storage phase, writing things out
       (let ((ref-idx (gethash object references)))
 	(declare (type (or null fixnum) ref-idx))
 	;; When ref-idx is positive, it's a note that we have already written out the
@@ -95,7 +103,7 @@
 	   #-debug-csf(setf (gethash object references) 2)
 	   t)
 	  #-debug-csf((= number-of-times-referenced 2) t)
-	  (t nil)))))
+	  (t nil))))))
 
 ;; RESTORE PHASE
 

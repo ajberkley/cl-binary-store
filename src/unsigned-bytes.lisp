@@ -88,7 +88,7 @@
     (storage-write-ub32! storage ub32 offset)
     (setf (storage-offset storage) (+ 4 offset))))
 
-(declaim (inline store-tagged-unsigned-fixnum))
+(declaim (notinline store-tagged-unsigned-fixnum))
 (defun store-tagged-unsigned-fixnum (integer storage)
   (declare (type (and fixnum (integer 0)) integer) (optimize speed safety))
   (with-write-storage (storage)

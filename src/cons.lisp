@@ -14,35 +14,27 @@
  out data with general list circularites.  Worst case we fill your disk,
  best case you end up with multiple copies of parts of the list.")
 
-(declaim (inline store-cons))
-(defun store-cons (cons storage references &optional (tagged t))
+(declaim (notinline store-cons))
+(defun store-cons (cons storage references
+		   &optional (write-new-references t)
+		     (support-shared-list-structures *support-shared-list-structures*))
   "If TAGGED is NIL, then we elide writing out the first cons tag, but
  the rest of the list will be tagged as usual.
 
  STORAGE can be NIL, in which case we should do no writing to it but we want to
  traverse the lists anyway to count references."
-  (let ((support-references-to-this-cons t)) ;; always allow references to list head
-    (tagbody
-     next-cdr
-       (maybe-store-reference-instead (cons storage references support-references-to-this-cons)
-	 (when tagged
-	   (with-write-storage (storage)
-	     (storage-write-byte storage +cons-code+)))
-	 #+debug-csf (format t "~A CAR~%" (if storage "Analyzing" "Storing"))
-	 (store-object (car cons) storage references)
-	 (let ((cdr (cdr cons)))
-	   (if (not (consp cdr))
-	       (progn
-		 #+debug-csf
-		 (format t "~A non cons CDR~%" (if storage "Analyzing" "Storing"))
-		 (store-object cdr storage references))
-	       (progn ;; optimize for proper lists
-		 #+debug-csf (format t "~A CDR~%" (if storage "Analyzing" "Storing"))
-		 (setf tagged t cons cdr
-		       support-references-to-this-cons
-		       (and support-references-to-this-cons
-			    *support-shared-list-structures*))
-		 (go next-cdr))))))))
+  (declare (optimize (speed 3) (safety 0)))
+  ;; We always record the first cons at the head of a list
+  (when (check/store-reference cons storage references write-new-references)
+    (return-from store-cons (values)))
+  (with-write-storage (storage)
+    (storage-write-byte storage +cons-code+))
+  (store-object (car cons) storage references)
+  (let ((cdr (cdr cons)))
+    (if (consp cdr)
+	(store-cons cdr storage references support-shared-list-structures
+		    support-shared-list-structures)
+	(store-object cdr storage references))))
 
 (declaim (notinline restore-cons))
 ;; Has to be careful to not blow the stack
