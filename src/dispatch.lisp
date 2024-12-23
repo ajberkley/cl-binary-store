@@ -7,6 +7,8 @@
 ;; at best.  That's nice, and forces me to work out the parallel
 ;; disk writing, but...
 
+;; TODO CHANGE FROM STRAIGHT ECASE TO NESTED BY THE TOP LEVEL TYPE
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-read-dispatch-table (code)
     `(case ,code
@@ -60,6 +62,8 @@
   (defmacro generate-store-object (value storage references)
     "Here we specialize the calls to have storage nil or not nil so the inlined
  storage code can delete the actual storage code when not used"
+    ;; TODO CHANGE TO DUAL LAYER DISPATCH TO HELP WITH CODE GEN
+    ;; FIXNUM -> , structure-object ->, standard-object ->, vector ->, array ->, symbol ->
     `(etypecase value
        ,@(strict-subtype-ordering
 	  (let ((type-dispatch-table nil))
@@ -89,12 +93,18 @@
 	    type-dispatch-table)
 	  :key #'first)))
 
-  (declaim (notinline store-object/storage)) ;; to propagate storage / references
-  (defun store-object/storage (value storage references)
-    (generate-store-object value storage references))
+  ;; NO, so what we are going to do here is define the lambda-lists in register-code
+  ;; so users can provide optimized reference phase stuff
+
+  (declaim (notinline store-object))
+  (defun store-object (value storage references)
+    (declare (type (or null storage) storage))
+    (if storage ;; can remove by passing in a store-object func to serializers
+	(generate-store-object value storage references)
+	(generate-store-object value nil references)))
   
-  (declaim (notinline store-object/no-storage))
-  (defun store-object/no-storage (value references)
+  (declaim (notinline store-object/ref-count-phase))
+  (defun store-object/ref-count-phase (value references)
     (generate-store-object value nil references))
 
   ;; Just synchronizing references slows us to 1.2 seconds and BIG slow down
@@ -102,8 +112,8 @@
   ;; Normal: 483 ms, just synchronized hash-table single threaded 1.2 seconds.
   ;; brutal.  I suppose we could go lock-less eql hashing instead of eq hashing
   ;; for our objects
-  (declaim (notinline store-objects/generic)) ;; so storage can be specialized down the chain
-  (defun store-objects/generic (storage &rest stuff)
+  (declaim (notinline store-objects)) ;; so storage can be specialized down the chain
+  (defun store-objects (storage &rest stuff)
     (declare (optimize speed safety))
     (let* ((track-references *track-references*)
 	   (references (when track-references
@@ -114,7 +124,7 @@
       (when track-references
 	#+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
 	(dolist (elt stuff)
-       	  (store-object/no-storage elt references))
+       	  (store-object/ref-count-phase elt references))
 	#+debug-csf (format t "Finished reference counting pass~%")
 	(let ((new-ht (make-hash-table :test 'eql))
 	      (ref-id 0))
@@ -132,28 +142,13 @@
 	    (write-reference-count (1+ ref-id) storage))
 	  #+debug-csf (format t "There are ~A actual references~%" (hash-table-count new-ht))))
       (dolist (elt stuff)
-	(store-object/storage elt storage references))
+	(store-object elt storage references))
       (flush-write-storage storage)))
-
-  (defun store-objects/buffering-write-storage (storage &rest stuff)
-    (declare (type buffering-write-storage storage) (notinline store-objects/generic))
-    (apply #'store-objects/generic storage stuff))
-
-  (defun store-objects/sap-write-storage (storage &rest stuff)
-    (declare (type sap-write-storage storage))
-    (apply #'store-objects/generic storage stuff))
 
   (declaim (notinline restore-object))
   (defun restore-object (storage references &optional (tag (restore-ub8 storage)))
     (declare (notinline read-dispatch))
     (read-dispatch tag storage references))
-
-  (declaim (notinline store-object))
-  (defun store-object (value storage references)
-    (declare (notinline store-object/storage) (notinline store-object/no-storage))
-    (if storage
-	(store-object/storage value storage references)
-	(store-object/no-storage value references)))
   
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just

@@ -3,43 +3,25 @@
 ;; See also unsigned-bytes.lisp for smaller unsigned numbers
 
 (declaim (inline store-sb8))
-(defun store-sb8 (sb8 storage &optional (tag t))
+(defun store-sb8 (sb8 storage &optional (tag +sb8-code+))
   "Store an (integer -255 0) value SB8 to STORAGE.  If TAG is true,
  then will store a tag +SB8-CODE+ to storage first.  Omit TAG if your
  deserializer will know this is a SB8 value.  It's a bit odd to have these,
  but the dispatch cost is negligible... we use the tag bit as the sign bit."
   (declare (optimize speed safety) (type (integer -255 0) sb8))
-  (with-write-storage (storage)
-    (let ((offset (ensure-enough-room-to-write storage 2)))
-      (when tag
-	(storage-write-byte! storage +sb8-code+ offset)
-	(incf offset))
-      (storage-write-byte! storage (- sb8) offset)
-      (setf (storage-offset storage) (+ offset 1)))))
+  (store-ub8 (- sb8) storage tag))
 
 (declaim (inline store-sb16))
-(defun store-sb16 (sb16 storage &optional (tag t))
+(defun store-sb16 (sb16 storage &optional (tag +sb16-code+))
   (declare (optimize speed safety) (type (integer -65535 0) sb16))
-  (with-write-storage (storage)
-    (let ((offset (ensure-enough-room-to-write storage 3)))
-      (when tag
-	(storage-write-byte! storage +sb16-code+ offset)
-	(incf offset))
-      (storage-write-ub16! storage (- sb16) offset)
-      (setf (storage-offset storage) (+ offset 2)))))
+  (store-ub16 (- sb16) storage tag))
 
 (declaim (inline store-sb32))
-(defun store-sb32 (sb32 storage &optional (tag t))
+(defun store-sb32 (sb32 storage &optional (tag +sb32-code+))
   (declare (optimize speed safety) (type (integer -4294967295 0) sb32))
-  (with-write-storage (storage)
-    (let ((offset (ensure-enough-room-to-write storage 5)))
-      (when tag
-	(storage-write-byte! storage +sb32-code+ offset)
-	(incf offset))
-      (storage-write-ub32! storage (- sb32) offset)
-      (setf (storage-offset storage) (+ offset 4)))))
+  (store-ub32 (- sb32) storage tag))
 
-(declaim (inline restore-sb8))
+(declaim (notinline restore-sb8))
 (defun restore-sb8 (storage)
   "Despite the name, restore an (integer -255 0) value from storage
  that has previously been stored by STORE-SB8"
@@ -57,24 +39,19 @@
  been stored by STORE-UB32."
   (- (restore-ub32 storage)))
 
-
 (declaim (inline restore-fixnum))
 (defun restore-fixnum (storage)
   (declare (optimize speed safety))
-  (ensure-enough-data storage 8)
-  (let ((offset (storage-offset storage)))
-    (setf (storage-offset storage) (+ 8 offset))
-    (the fixnum (storage-read-sb64! storage offset))))
+  (the (values fixnum &optional) (storage-read-sb64 storage)))
 
 (declaim (notinline store-fixnum))
-(defun store-fixnum (fixnum storage &optional (tag t))
+(defun store-fixnum (fixnum storage &optional (tag +fixnum-code+))
   (declare (optimize speed safety) (type fixnum fixnum))
-  (with-write-storage (storage offset 9)
+  (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
     (when tag
-      (storage-write-byte! storage +fixnum-code+ offset)
+      (storage-write-byte! storage tag :offset offset :sap sap)
       (incf offset))
-    (storage-write-sb64! storage fixnum offset)
-    (setf (storage-offset storage) (+ offset 8))))
+    (storage-write-sb64! storage fixnum :offset offset :sap sap)))
 
 ;; Bignum code is based on code from the CL-STORE package which is
 ;; Copyright (c) 2004 Sean Ross
@@ -107,11 +84,11 @@
   (maybe-store-reference-instead (bignum storage references)
     (with-write-storage (storage)
       (storage-write-byte storage +bignum-code+)
-      (multiple-value-bind (bits count)
+      (multiple-value-bind (ub32s count)
 	  (num->bits bignum)
 	(declare (type fixnum count))
 	(store-fixnum (if (minusp bignum) (- count) count) storage nil)
-	(dolist (x bits) (store-ub32 x storage nil))))))
+	(dolist (ub32 ub32s) (store-ub32 ub32 storage nil))))))
 
 (declaim (inline restore-single-float))
 (defun restore-single-float (storage)
@@ -129,16 +106,14 @@
 (declaim (inline store-single-float))
 (defun store-single-float (single-float storage &optional (tag t))
   (declare (optimize speed safety) (type single-float single-float))
-  (with-write-storage (storage offset 5)
+  (with-write-storage (storage :offset offset :reserve-bytes (if tag 5 4) :sap sap)
     (let ((temp (make-array 1 :element-type 'single-float :initial-element single-float)))
       (declare (dynamic-extent temp))
       (when tag
-	(storage-write-byte! storage +single-float-code+ offset)
+	(storage-write-byte! storage +single-float-code+ :offset offset :sap sap)
 	(incf offset))
-      (with-storage-sap (sap storage)
-	(sb-sys:with-pinned-objects (temp)
-	  (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))
-	(setf (storage-offset storage) (+ offset 4))))))
+      (sb-sys:with-pinned-objects (temp)
+	(copy-sap sap offset (sb-sys:vector-sap temp) 0 8)))))
 
 (declaim (inline restore-double-float))
 (defun restore-double-float (storage)
@@ -172,16 +147,14 @@
   ;; determine this from common lisp, and it saves space in the image
   ;; and on disk if there are repeated numbers (like 0d0).
   (maybe-store-reference-instead (double-float storage references)
-    (with-write-storage (storage offset 9)
+    (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
       (when tag
-	(storage-write-byte! storage +double-float-code+ offset)
+	(storage-write-byte! storage +double-float-code+ :offset offset :sap sap)
 	(incf offset))
       (let ((temp (make-array 1 :element-type 'double-float :initial-element double-float)))
 	(declare (dynamic-extent temp))
-	(with-storage-sap (sap storage)
-	  (sb-sys:with-pinned-objects (temp)
-	    (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))
-	(setf (storage-offset storage) (+ offset 8)))))))
+	(sb-sys:with-pinned-objects (temp)
+	  (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))))))
 
 (defun restore-ratio (storage references)
   (declare (optimize speed safety))
@@ -191,8 +164,8 @@
 (defun store-ratio (ratio storage references)
   (declare (optimize speed safety))
   (maybe-store-reference-instead (ratio storage references)
-    (with-write-storage (storage)
-      (storage-write-byte storage +ratio-code+))
+    (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
+      (storage-write-byte! storage +ratio-code+ :offset offset :sap sap))
     (store-object (numerator ratio) storage references)
     (store-object (denominator ratio) storage references)))
 
@@ -202,8 +175,8 @@
 
 (defun store-complex (complex storage references)
   (maybe-store-reference-instead (complex storage references)
-    (with-write-storage (storage)
-      (storage-write-byte storage +complex-code+))
+    (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+      (storage-write-byte! storage +complex-code+ :offset offset :sap sap))
     (store-object (realpart complex) storage references)
     (store-object (imagpart complex) storage references)))
 
@@ -217,10 +190,10 @@
 (defun store-complex-double-float (complex-double-float storage references)
   (declare (optimize speed safety) (type (complex double-float) complex-double-float))
   (maybe-store-reference-instead (complex-double-float storage references)
-    (with-write-storage (storage)
-      (storage-write-byte storage +complex-double-float-code+)
-      (store-double-float (realpart complex-double-float) storage references nil)
-      (store-double-float (imagpart complex-double-float) storage references nil))))
+    (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
+      (storage-write-byte! storage +complex-double-float-code+ :offset offset :sap sap))
+    (store-double-float (realpart complex-double-float) storage nil nil)
+    (store-double-float (imagpart complex-double-float) storage nil nil)))
 
 (declaim (inline restore-complex-single-float))
 (defun restore-complex-single-float (storage)
@@ -232,7 +205,7 @@
 (defun store-complex-single-float (complex-single-float storage references)
   (declare (optimize speed safety) (type (complex single-float) complex-single-float))
   (maybe-store-reference-instead (complex-single-float storage references)
-    (when storage
-      (storage-write-byte storage +complex-single-float-code+)
-      (store-single-float (realpart complex-single-float) storage nil)
-      (store-single-float (imagpart complex-single-float) storage nil))))
+    (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
+      (storage-write-byte! storage +complex-single-float-code+ :sap sap :offset offset))
+    (store-single-float (realpart complex-single-float) storage nil)
+    (store-single-float (imagpart complex-single-float) storage nil)))

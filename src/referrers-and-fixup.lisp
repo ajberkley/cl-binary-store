@@ -53,7 +53,7 @@
 ;; Nominally we could have multiple reference hash tables if we wanted
 ;; to parallelize the storage operation more by reducing contention.
 
-(declaim (notinline check/store-reference))
+(declaim (inline check/store-reference))
 (defun check/store-reference (object storage references &optional (add-new-reference t))
   "Used during the storage phase both during the reference counting
  step and the serialization step.  This function returns T if this
@@ -237,56 +237,56 @@
        (progn
 	 ,@body)))
 
-(declaim (inline store-reference))
+(declaim (notinline store-reference))
 (defun store-reference (ref-index storage)
   "We store references as the minimum possible size we can"
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
-  (with-write-storage (storage)
+  (with-write-storage (storage :offset offset :over-reserve-bytes 5 :sap sap)
     #+debug-csf (format t "Writing reference ~A~%" ref-index)
-    (let ((offset (ensure-enough-room-to-write storage 5)))
-      (typecase ref-index
-	((unsigned-byte 8)
-	 (storage-write-byte! storage +referrer-ub8-code+ offset)
-	 (storage-write-byte! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 1 offset)))
-	((unsigned-byte 16)
-	 (storage-write-byte! storage +referrer-ub16-code+ offset)
-	 (storage-write-ub16! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 2 offset)))
-	((unsigned-byte 32)
-	 (storage-write-byte! storage +referrer-ub32-code+ offset)
-	 (storage-write-ub32! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 4 offset)))
-	(t
-	 (storage-write-byte! storage +referrer-code+ nil)
-	 (store-tagged-unsigned-fixnum ref-index storage))))))
+    (typecase ref-index
+      ((unsigned-byte 8)
+       (storage-write-ub16! storage (+ +referrer-ub8-code+ (ash ref-index 8))
+			    :offset offset :sap sap)
+       (setf (storage-offset storage) (+ 2 offset)))
+      ((unsigned-byte 16)
+       (storage-write-byte! storage +referrer-ub16-code+ :offset offset :sap sap)
+       (storage-write-ub16! storage ref-index :offset (incf offset) :sap sap)
+       (setf (storage-offset storage) (+ 2 offset)))
+      ((unsigned-byte 32)
+       (storage-write-byte! storage +referrer-ub32-code+ :offset offset :sap sap)
+       (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)
+       (setf (storage-offset storage) (+ 4 offset)))
+      (t
+       (storage-write-byte! storage +referrer-code+ :offset offset :sap sap)
+       (setf (storage-offset storage) (+ 1 offset))
+       (store-tagged-unsigned-fixnum ref-index storage)))))
 
-(declaim (inline store-reference-id-for-following-object))
+(declaim (notinline store-reference-id-for-following-object))
 (defun store-reference-id-for-following-object (ref-index storage)
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
-  (with-write-storage (storage)
-    #+debug-csf (format t "Writing reference ~A~%" ref-index)
-    (let ((offset (ensure-enough-room-to-write storage 5)))
-      (etypecase ref-index
-	((unsigned-byte 8)
-	 (storage-write-byte! storage +record-reference-ub8-code+ offset)
-	 (storage-write-byte! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 1 offset)))
-	((unsigned-byte 16)
-	 (storage-write-byte! storage +record-reference-ub16-code+ offset)
-	 (storage-write-ub16! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 2 offset)))
-	((unsigned-byte 32)
-	 (storage-write-byte! storage +record-reference-ub32-code+ offset)
-	 (storage-write-ub32! storage ref-index (incf offset))
-	 (setf (storage-offset storage) (+ 4 offset)))
-	(t
-	 (storage-write-byte! storage +record-reference-code+)
-	 (store-tagged-unsigned-fixnum ref-index storage))))))
+  (with-write-storage (storage :offset offset :over-reserve-bytes 5 :sap sap)
+    #+debug-csf (format t "Writing reference follows ~A~%" ref-index)
+    (typecase ref-index
+      ((unsigned-byte 8)
+       (storage-write-ub16! storage (+ +record-reference-ub8-code+ (ash ref-index 8))
+			    :offset offset :sap sap)
+       (setf (storage-offset storage) (+ 2 offset)))
+      ((unsigned-byte 16)
+       (storage-write-byte! storage +record-reference-ub16-code+ :offset offset :sap sap)
+       (storage-write-ub16! storage ref-index :offset (incf offset) :sap sap)
+       (setf (storage-offset storage) (+ 2 offset)))
+      ((unsigned-byte 32)
+       (storage-write-byte! storage +record-reference-ub32-code+ :offset offset :sap sap)
+       (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)
+       (setf (storage-offset storage) (+ 4 offset)))
+      (t
+       (storage-write-byte! storage +record-reference-code+ :offset offset :sap sap)
+       (setf (storage-offset storage) (+ 1 offset))
+       (store-tagged-unsigned-fixnum ref-index storage)))))
 
-(declaim (inline restore-reference-id-for-following-object))
+(declaim (notinline restore-reference-id-for-following-object))
 (defun restore-reference-id-for-following-object (ref-id storage references)
   "Object may not reified before other objects refer to it"
   (with-delayed-reference/fixup (ref-id references)

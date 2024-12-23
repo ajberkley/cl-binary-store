@@ -1,173 +1,164 @@
 (in-package :cl-store-faster)
 
-;; We serialize and deserialize from write-storage and read-storage.
-;; Nominally we want more than just a stream interface to avoid excess
-;; copying where we can.
-
-;; Since FAST-GENERIC-FUNCTIONS doesn't work currently on SBCL, I manually
-;; inlined all the access here all the way up to the writers and readers, so
-;; we dispatch at the top.  Ugly, but works.
-
 ;; TODO: large object write/read without copying
-;; TODO: Direct SAP buffer access (for mmap interfaces) (in progress)
+;; TODO: handle storage which ONLY has a SAP (mmap'ed memory)
 
-(declaim (inline storage-store storage-offset storage-flusher storage-size storage-max
-		 %make-buffering-write-storage))
+(declaim (inline make-storage storage-offset storage-max storage-store storage-sap
+		 storage-flusher storage-underlying-stream))
 
-(declaim (inline storage-offset))
-(defstruct (storage-base (:constructor %make-storage-base) (:conc-name storage-))
-  (offset 0 :type fixnum)) ;; Index of the next valid location to write data
+(defstruct storage
+  "For read or write"
+  (offset 0 :type fixnum) ;; index of the next valid location to write data to or read data from
+  (max 0 :type fixnum) ;; end of valid data if read, length of storage array if write
+  (store nil :type (simple-array (unsigned-byte 8) (*)))
+  (sap nil :type #+sbcl sb-alien::system-area-pointer #-sbcl (simple-array (unsigned-byte 8) (*)))
+  (flusher nil :type function)
+  (underlying-stream nil :type (or null stream)))
 
-(declaim (inline storage-store&))
-(defstruct (buffering-write-storage (:constructor %make-buffering-write-storage)
-				    (:conc-name storage-)
-				    (:include storage-base))
-  (store& (make-array 16384 :element-type '(unsigned-byte 8))
-   :type (simple-array (unsigned-byte 8) (*)))
-  ;; When called with storage, flusher writes-out or reads-in the data in seq and
-  ;; updates offset
-  (flusher (constantly nil) :type function))
+(declaim (inline read-storage-size))
+(defun read-storage-size (storage)
+  (length (storage-store storage)))
 
-(declaim (inline storage-sap& storage-sap-size&))
-(defstruct (sap-write-storage (:include storage-base) (:conc-name storage-))
-  (sap& nil) ;;:type sb-alien::system-area-pointer)
-  (sap-size& 0 :type fixnum))
+(declaim (inline sap-ref-8 (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
+		 sap-ref-32 (setf sap-ref-32) sap-ref-64 (setf sap-ref-64)
+		 signed-sap-ref-64 (setf signed-sap-ref-64)))
 
-;;(defstruct (raw-stream-write-storage (:include buffering-write-storage)))
+(defun (setf sap-ref-8) (ub8 sap offset)
+  #+sbcl (setf (sb-sys:sap-ref-8 sap offset) ub8)
+  #-sbcl (setf (aref sap offset) ub8))
 
-(declaim (inline storage-sap))
-(defmacro with-storage-sap ((sap storage) &body body)
-  (assert (atom storage))
-  `(etypecase ,storage
-     (sap-write-storage
-      (let ((,sap (storage-sap& ,storage)))
-	,@body))
-     (buffering-write-storage
-      (let ((store (storage-store& ,storage)))
-	(sb-sys:with-pinned-objects (store)
-	  (let ((,sap (sb-sys:vector-sap store)))
-	    ,@body))))
-     ;; (raw-stream-write-storage
-     ;;  ;; just treat as a buffering-write-storage
-     ;;  ;; no reason to elide copying here
-     ;;  (error "hm"))
-     ))
-     
-(declaim (inline storage-write-byte storage-write-byte!
-		 storage-write-ub16! storage-write-ub32!
-		 storage-write-ub64! storage-write-sb64!))
+(defun (setf sap-ref-16) (ub16 sap offset)
+  #+sbcl (setf (sb-sys:sap-ref-16 sap offset) ub16)
+  #-sbcl (progn (setf (aref store (+ 0 offset)) (logand ub16 #xFF))
+		(setf (aref store (+ 1 offset)) (ash ub16 -8))))
 
-(defun storage-write-byte! (storage byte &optional (offset nil offset-provided-p))
-  "If you pass in offset, then you are responsible for incrementing it"
-  (etypecase storage
-    (buffering-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (setf (aref (storage-store& storage) offset) byte)
-       (unless offset-provided-p (setf (storage-offset storage) (+ 1 offset)))))
-    (sap-write-storage
-     (let ((offset (storage-offset storage)))
-       (setf (sb-sys:sap-ref-8 (storage-sap& storage) offset) byte)
-       (unless offset-provided-p (setf (storage-offset storage) (+ 1 offset)))))))
+(defun (setf sap-ref-32) (ub32 sap offset)
+  #+sbcl (setf (sb-sys:sap-ref-32 sap offset) ub32)
+  #-sbcl (progn (setf (aref store (+ 0 offset)) (logand ub32 #xFF))
+		(setf (aref store (+ 1 offset)) (logand (ash ub32 -8) #xFF))
+		(setf (aref store (+ 2 offset)) (logand (ash ub32 -16) #xFF))
+		(setf (aref store (+ 3 offset)) (ash ub32 -24))))
 
-(defun storage-write-ub16! (storage ub16 &optional (offset nil offset-provided-p))
-  (etypecase storage
-    (buffering-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (with-storage-sap (sap storage)
-	 (setf (sb-sys:sap-ref-16 sap offset) ub16))
-       (unless offset-provided-p (setf (storage-offset storage) (+ 2 offset)))))
-    (sap-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (setf (sb-sys:sap-ref-16 (storage-sap& storage) offset) ub16)
-       (unless offset-provided-p (setf (storage-offset storage) (+ 2 offset)))))))
+(defun (setf sap-ref-64) (ub64 sap offset)
+  #+sbcl (setf (sb-sys:sap-ref-64 sap offset) ub64)
+  #-sbcl (progn (setf (aref store (+ 0 offset)) (logand ub32 #xFF))
+		(setf (aref store (+ 1 offset)) (logand (ash ub32 -8) #xFF))
+		(setf (aref store (+ 2 offset)) (logand (ash ub32 -16) #xFF))
+		(setf (aref store (+ 3 offset)) (logand (ash ub32 -24) #xFF))
+		(setf (aref store (+ 4 offset)) (logand (ash ub32 -32) #xFF))
+		(setf (aref store (+ 5 offset)) (logand (ash ub32 -40) #xFF))
+		(setf (aref store (+ 6 offset)) (logand (ash ub32 -48) #xFF))
+		(setf (aref store (+ 7 offset)) (ash ub32 -56))))
 
-(defun storage-write-ub32! (storage ub32 &optional (offset nil offset-provided-p))
-  (etypecase storage
-    (buffering-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (with-storage-sap (sap storage)
-	 (setf (sb-sys:sap-ref-32 sap offset) ub32))
-       (unless offset-provided-p (setf (storage-offset storage) (+ 4 offset)))))
-    (sap-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (setf (sb-sys:sap-ref-32 (storage-sap& storage) offset) ub32)
-       (unless offset-provided-p (setf (storage-offset storage) (+ 4 offset)))))))
+(defun (setf signed-sap-ref-64) (sb64 sap offset)
+  #+sbcl (setf (sb-sys:signed-sap-ref-64 sap offset) sb64)
+  #-sbcl (error "impl me"))
 
-(defun storage-write-ub64! (storage ub64 &optional (offset nil offset-provided-p))
-  (etypecase storage
-    (buffering-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (with-storage-sap (sap storage)
-	 (setf (sb-sys:sap-ref-64 sap offset) ub64))
-       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))
-    (sap-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (setf (sb-sys:sap-ref-64 (storage-sap& storage) offset) ub64)
-       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))))
+(declaim (inline sap-ref-8 sap-ref-16 sap-ref-32 sap-ref-64 signed-sap-ref-64))
+(defun sap-ref-8 (sap offset)
+  #+sbcl (sb-sys:sap-ref-8 sap offset)
+  #-sbcl (aref sap offset))
 
-(defun storage-write-sb64! (storage sb64 &optional (offset nil offset-provided-p))
-  (etypecase storage
-    (buffering-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (with-storage-sap (sap storage)
-	 (setf (sb-sys:signed-sap-ref-64 sap offset) sb64))
-       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))
-    (sap-write-storage
-     (let ((offset (or offset (storage-offset storage))))
-       (setf (sb-sys:signed-sap-ref-64 (storage-sap& storage) offset) sb64)
-       (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))))
+(defun sap-ref-16 (sap offset)
+  #+sbcl (sb-sys:sap-ref-16 sap offset)
+  #-sbcl (+      (aref sap (+ 0 offset))
+	    (ash (aref sap (+ 1 offset)) 8)))
 
-(declaim (inline storage-read-sb64!))
-(defun storage-read-sb64! (storage offset)
-  (let ((array (storage-store storage)))
-    (sb-sys:with-pinned-objects (array)
-      (sb-sys:signed-sap-ref-64 (sb-sys:vector-sap array) offset))))
+(defun sap-ref-32 (sap offset)
+  #+sbcl (sb-sys:sap-ref-32 sap offset)
+  #-sbcl (+      (aref sap (+ 0 offset))
+	    (ash (aref sap (+ 1 offset)) 8)
+	    (ash (aref sap (+ 2 offset)) 16)
+	    (ash (aref sap (+ 3 offset)) 24)))
 
+(defun sap-ref-64 (sap offset)
+  #+sbcl (sb-sys:sap-ref-64 sap offset)
+  #-sbcl (+      (aref sap (+ 0 offset))
+	    (ash (aref sap (+ 1 offset)) 8)
+	    (ash (aref sap (+ 2 offset)) 16)
+	    (ash (aref sap (+ 3 offset)) 24)
+	    (ash (aref sap (+ 4 offset)) 32)
+	    (ash (aref sap (+ 5 offset)) 40)
+	    (ash (aref sap (+ 6 offset)) 48)
+	    (ash (aref sap (+ 7 offset)) 56)))
+
+(defun signed-sap-ref-64 (sap offset)
+  #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
+  #-sbcl (error "imple me"))
+
+(declaim (inline storage-write-byte storage-write-byte! storage-write-ub16! storage-write-ub32!
+		 storage-write-ub64! storage-write-sb64! storage-read-sb64!))
+
+(defun storage-write-byte! (storage ub8 &key (sap (storage-sap storage))
+					   (offset nil offset-provided-p))
+  "store will be a sap on sbcl or just a ub8 array otherwise.
+ If you pass in offset, then you are responsible for incrementing it."
+  (let ((offset (or offset (storage-offset storage))))
+    (setf (sap-ref-8 sap offset) ub8)
+    (unless offset-provided-p (setf (storage-offset storage) (+ 1 offset)))))
+
+(defun storage-write-ub16! (storage ub16 &key (sap (storage-sap storage))
+					   (offset nil offset-provided-p))
+  (let ((offset (or offset (storage-offset storage))))
+    (setf (sap-ref-16 sap offset) ub16)
+    (unless offset-provided-p (setf (storage-offset storage) (+ 2 offset)))))
+
+(defun storage-write-ub32! (storage ub32 &key (sap (storage-sap storage))
+					   (offset nil offset-provided-p))
+  (let ((offset (or offset (storage-offset storage))))
+    (setf (sap-ref-32 sap offset) ub32)
+    (unless offset-provided-p (setf (storage-offset storage) (+ 4 offset)))))
+
+(defun storage-write-ub64! (storage ub64 &key (sap (storage-sap storage))
+					   (offset nil offset-provided-p))
+  (let ((offset (or offset (storage-offset storage))))
+    (setf (sap-ref-64 sap offset) ub64)
+    (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))
+
+(defun storage-write-sb64! (storage sb64 &key (sap (storage-sap storage))
+					   (offset nil offset-provided-p))
+  (let ((offset (or offset (storage-offset storage))))
+    (setf (signed-sap-ref-64 sap offset) sb64)
+    (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))
+
+(defun storage-read-sb64 (storage)
+  (let ((offset (storage-offset storage)))
+    (prog1
+	(signed-sap-ref-64 (storage-sap storage) offset)
+      (setf (storage-offset storage) (+ offset 8)))))
+
+(declaim (inline storage-write-byte))
 (defun storage-write-byte (storage byte)
   (ensure-enough-room-to-write storage 1)
   (storage-write-byte! storage byte))
 
-(defmacro with-write-storage ((storage &optional offset number-of-bytes-to-reserve) &body body)
+(defmacro with-write-storage ((storage &key offset reserve-bytes over-reserve-bytes sap)
+			      &body body)
   "Skips the body if storage does not exist"
-  (assert (atom storage))
-  `(when storage
-     (labels ((body (,storage)
-		(let (,@(when offset
-			  `((,offset ,(if number-of-bytes-to-reserve
-					  `(ensure-enough-room-to-write ,storage ,number-of-bytes-to-reserve)
-					  `(storage-offset ,storage))))))
-		  ,@body)))
-       (etypecase storage
-	 (buffering-write-storage
-	  (body storage))
-	 (sap-write-storage
-	  (body storage))))))
+  (assert (atom storage)) (assert (not (and reserve-bytes over-reserve-bytes)))
+  (let ((original-offset (gensym))
+	(reserve-bytes-sym (when reserve-bytes (gensym "RESERVE"))))
+    `(when storage
+       (let* (,@(when reserve-bytes `((,reserve-bytes-sym ,reserve-bytes)))
+	      (,original-offset ,(cond
+				   (reserve-bytes
+				    `(ensure-enough-room-to-write ,storage ,reserve-bytes-sym))
+				   (over-reserve-bytes
+				    `(ensure-enough-room-to-write ,storage ,over-reserve-bytes))
+				   (t
+				    `(storage-offset ,storage))))
+	      ,@(when offset `((,offset ,original-offset)))
+	      ,@(when sap
+		  `((,sap (storage-sap ,storage)))))
+	 (declare (ignorable ,original-offset))
+	 (progn ,@body
+		,(when reserve-bytes
+		   `(setf (storage-offset ,storage) (+ ,original-offset ,reserve-bytes-sym))))))))
 
-(declaim (inline %make-read-storage storage-read-more-func))
-(defstruct (read-storage (:constructor %make-read-storage)
-			 (:include storage-base)
-			 (:conc-name storage-))
-  (store (make-array 32768 :element-type '(unsigned-byte 8))
-   :type (simple-array (unsigned-byte 8) (*)))
-  (max 0 :type fixnum)
-  ;; read-func must return the number of bytes available
-  (read-more-func (lambda (read-storage) (declare (ignore read-storage)) (error "not implemented"))
-   :type function))
-
-(defmethod print-object ((rs read-storage) stream)
-  (print-unreadable-object (rs stream :type t :identity t)
-    (format stream "OFFSET: ~A MAX: ~A STORE: ~A"
-	    (storage-offset rs) (storage-max rs) (storage-store rs))))
-
-(declaim (inline storage-size))			       
-(defun storage-size (storage)
-  (etypecase storage
-    (buffering-write-storage
-     (length (storage-store& storage)))
-    (sap-write-storage
-     (storage-sap-size& storage))
-    (read-storage
-     (length (storage-store storage)))))
+(defmethod print-object ((s storage) stream)
+  (print-unreadable-object (s stream :type t :identity t)
+    (format stream "OFFSET: ~A MAX: ~A STORE LEN: ~A"
+	    (storage-offset s) (storage-max s) (length (storage-store s)))))
 
 (defun make-read-into-storage/stream (stream)
   (let* (#+info-csf(total-read 0)
@@ -201,36 +192,71 @@
   (declare (optimize speed safety))
   (lambda (storage)
     (declare (optimize speed safety))
-    (let ((seq (storage-store& storage)))
+    (let ((seq (storage-store storage)))
       #+debug-csf (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
       (write-sequence seq stream :end (storage-offset storage))
       (setf (storage-offset storage) 0))))
 
-(declaim (inline make-input-storage/stream))
-(defun make-input-storage/stream (stream)
-  (%make-read-storage :read-more-func (make-read-into-storage/stream stream)))
+(defun make-write-into-adjustable-ub8-vector (vector)
+  (lambda (storage)
+    (let* ((num-bytes (storage-offset storage))
+	   (bytes-available (- (array-total-size vector) (fill-pointer vector))))
+      (unless (>= bytes-available num-bytes)
+	(setf vector
+	      (adjust-array vector
+			    (let ((current-size (array-total-size vector)))
+			      (max (* 2 current-size)
+				   (+ current-size (- num-bytes bytes-available)))))))
+      (let ((start (fill-pointer vector)))
+	(incf (fill-pointer vector) (storage-offset storage))
+	(replace vector (storage-store storage)
+		 :start1 start
+		 :end1 (+ start num-bytes)
+		 :start2 0
+		 :end2 (storage-offset storage)))
+      (setf (storage-offset storage) 0))))
 
-(declaim (inline make-output-storage/stream))
-(defun make-output-storage/stream (stream &optional (buffer-size 8192))
-  (%make-buffering-write-storage :flusher (make-write-into-storage/stream stream)
-		       :store& (make-array buffer-size :element-type '(unsigned-byte 8))))
+(defmacro with-pinned-objects ((&rest objects) &body body)
+  #+sbcl
+  `(sb-sys:with-pinned-objects ,objects
+     ,@body)
+  #-sbcl `(progn ,@body))
 
-(defun shift-data-to-beginning (storage)
-  "FOR RESTORE
- Move the data in seq to the beginning and update storage-offset and storage-max.
+(defmacro vector-sap (vector)
+  #+sbcl `(sb-sys:vector-sap ,vector)
+  #-sbcl vector)
+
+(defmacro with-storage ((storage &key stream (buffer-size 8192)
+					  flusher store max) &body body)
+  (assert (and (atom storage) (atom stream) (atom buffer-size))) ;; lazy, multiply evaluating
+  (let ((vector (gensym)))
+    `(let ((,vector
+	     ,(if store store `(make-array ,buffer-size :element-type '(unsigned-byte 8)))))
+       (with-pinned-objects (,vector)
+	 (let ((,storage (make-storage
+			  :flusher ,flusher
+			  :store ,vector
+			  :max ,(if max max `(length ,vector))
+			  :sap (vector-sap ,vector)
+			  :underlying-stream ,stream)))
+	   (declare (dynamic-extent ,storage))
+	   ,@body)))))
+		
+(defun shift-data-to-beginning (read-storage)
+  "Move the data in seq to the beginning and update storage-offset and storage-max.
  Returns the index where new data can be written (storage-max storage)"
-  (let ((store (storage-store storage))
-	(offset (storage-offset storage))
-	(max (storage-max storage)))
+  (let ((store (storage-store read-storage))
+	(offset (storage-offset read-storage))
+	(max (storage-max read-storage)))
     (replace store store :start1 0 :start2 offset :end2 max) ;; move data to beginning of array
-    (setf (storage-offset storage) 0)
-    (setf (storage-max storage) (- max offset))))
+    (setf (storage-offset read-storage) 0)
+    (setf (storage-max read-storage) (- max offset))))
 
-(defun maybe-increase-size-of-read-storage (storage bytes)
-  (let ((vector-length (storage-size storage))
-	(valid-data-ends-at (storage-max storage)))
+(defun maybe-increase-size-of-read-storage (read-storage bytes)
+  (let ((vector-length (length (storage-store read-storage)))
+	(valid-data-ends-at (storage-max read-storage)))
     (when (> bytes (- vector-length valid-data-ends-at))
-      (let* ((valid-data-starts-at (storage-offset storage))
+      (let* ((valid-data-starts-at (storage-offset read-storage))
 	     (valid-data-bytes (- valid-data-ends-at valid-data-starts-at)))
 	#+debug-csf (format t "We need to increase size or move data to beginning to ~
                               satisfy request for ~A bytes (our vector is ~A long and ~
@@ -241,25 +267,25 @@
 	(cond
 	  ((<= bytes vector-length)
 	   #+debug-csf (format t "Shifting bytes to beginning~%")
-	   (shift-data-to-beginning storage))
+	   (shift-data-to-beginning read-storage))
 	  (t
 	   #+debug-csf (format t "Making new array of length ~A~%" bytes)
 	   (let ((new (make-array bytes :element-type '(unsigned-byte 8))))
-	     (replace new (storage-store storage) :start2 valid-data-starts-at
+	     (replace new (storage-store read-storage) :start2 valid-data-starts-at
 						  :end2 valid-data-ends-at)
-	     (setf (storage-store storage) new)
-	     (setf (storage-offset storage) 0)
-	     (setf (storage-max storage) valid-data-bytes))))))))
+	     (setf (storage-store read-storage) new)
+	     (setf (storage-offset read-storage) 0)
+	     (setf (storage-max read-storage) valid-data-bytes))))))))
 
-(declaim (ftype (function (buffering-write-storage fixnum) (values fixnum &optional))
+(declaim (ftype (function (storage fixnum) (values fixnum &optional))
 		flush-then-maybe-increase-size-of-storage))
 
-(defun flush-then-maybe-increase-size-of-storage (storage bytes)
+(defun flush-then-maybe-increase-size-of-storage (write-storage bytes)
   "Returns storage offset after action"
   (declare (optimize speed safety))
-  (funcall (storage-flusher storage) storage)
-  (let ((offset (storage-offset storage)))
-    (when (> bytes (- (storage-size storage) offset))
+  (funcall (storage-flusher write-storage) write-storage)
+  (let ((offset (storage-offset write-storage)))
+    (when (> bytes (- (storage-max write-storage) offset))
       (error "Not enough room to write..."))
     offset))
 
@@ -272,7 +298,7 @@
   #+debug-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A~%"
 		      bytes return-nil-on-eof)
   (maybe-increase-size-of-read-storage storage bytes)
-  (let ((storage-end (the fixnum (funcall (storage-read-more-func storage) storage))))
+  (let ((storage-end (the fixnum (funcall (storage-flusher storage) storage))))
     (if (< (- storage-end (storage-offset storage)) bytes)
         (if return-nil-on-eof
 	    nil
@@ -295,23 +321,14 @@
 
 (declaim (inline flush-write-storage))
 (defun flush-write-storage (storage)
-  (etypecase storage
-    (buffering-write-storage (funcall (storage-flusher storage) storage))
-    (sap-write-storage nil)))
+  (funcall (storage-flusher storage) storage))
 
 (declaim (inline ensure-enough-room-to-write))
 (defun ensure-enough-room-to-write (storage bytes)
   "Ensure that we have room to write BYTES to STORAGE.  Returns storage offset."
   (declare (optimize speed safety) (type fixnum bytes))
-  (etypecase storage
-    (buffering-write-storage
-     (locally (declare (type fixnum bytes))
-       (let ((offset (storage-offset storage)))
-	 (if (< (sb-ext:truly-the fixnum (+ offset bytes)) (storage-size storage))
-	     offset
-	     (flush-then-maybe-increase-size-of-storage storage bytes)))))
-    (sap-write-storage
-     (let ((offset (storage-offset storage)))
-       (assert (<= (sb-ext:truly-the fixnum (+ offset bytes)) (storage-sap-size& storage)))
-       offset))))
+  (let ((offset (storage-offset storage)))
+    (if (< (sb-ext:truly-the fixnum (+ offset bytes)) (storage-max storage))
+	offset
+	(flush-then-maybe-increase-size-of-storage storage bytes))))
 

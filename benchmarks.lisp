@@ -11,28 +11,34 @@
 	 (a (make-list len :initial-element 1)) ;; if you do this (cons 1 2) they are equal
 	 (store-size (* 32 (+ 1 len)))
 	 (a-store (make-array store-size :element-type '(unsigned-byte 8))))
-    (sb-sys:with-pinned-objects (a-store)
-      (let* ((sap (sb-sys:vector-sap a-store))
-	     (size (print (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a))))
-	(time (dotimes (x 100) (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a)))
-	;; returns words
-	(print (* 8 (length (hyperluminal-mem::mread-box/list sap 0 size))))
-	(time (dotimes (x 100) (hyperluminal-mem::mread-box/list sap 0 size)))))
+    ;; (sb-sys:with-pinned-objects (a-store)
+    ;;   (let* ((sap (sb-sys:vector-sap a-store))
+    ;; 	     (size (print (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a))))
+    ;; 	(time (dotimes (x 100) (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a)))
+    ;; 	;; returns words
+    ;; 	(print (* 8 (length (hyperluminal-mem::mread-box/list sap 0 size))))
+    ;; 	(time (dotimes (x 100) (hyperluminal-mem::mread-box/list sap 0 size)))))
     (let* ((cl-store-faster::*support-shared-list-structures* nil)
 	   (cl-store-faster::*track-references* nil)
 	   (size (cl-store-faster:store a-store a))
 	   (data (subseq a-store 0 size)))
       (print size)
-      (time (dotimes (x 100) (cl-store-faster:store data a)))
+      (sb-sprof:with-profiling (:report :graph)
+	(time (dotimes (x 100) (cl-store-faster:store data a))))
       (time (dotimes (x 100) (cl-store-faster:restore data)))
       (values))))
 
 ;; 1M long list with constant small integer:
 ;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (900Mobj/sec; 3.6GB/sec)
-;; cl-store-faster writes in 1150 ms and reads in 1000 ms (170Mobj/sec;  250 MB/sec)
+;; cl-store-faster writes in 870 ms and reads in 1400 ms (170Mobj/sec;  250 MB/sec)
 ;; THe cl-store output size is 38% the size of the hlmem output.
 ;; Read time is similar 0.9 vs 1.0 seconds about 1.6 GB/sec consing on read.
 ;; If you make a list of (cons 1 2) then they perform equally (except the hlmem output is large)
+
+;; Current status
+   1     49  57.0     84  97.7     49  57.0        -  CL-STORE-FASTER::STORE-CONS
+   2     35  40.7     35  40.7     84  97.7        -  CL-STORE-FASTER::STORE-OBJECT
+
 
 (defun long-simple-list ()
   (let ((a (loop repeat 1000

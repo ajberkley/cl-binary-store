@@ -83,7 +83,7 @@
 			 8)))))
 
 (defun write-sap-data-to-storage (sap num-bytes storage)
-  (let ((storage-size (storage-size storage)))
+  (let ((storage-size (storage-max storage)))
     (declare (type (and (integer 1) fixnum) storage-size))
     (loop
       with num-bytes-remaining fixnum = num-bytes
@@ -94,14 +94,13 @@
 	 (let ((write-length (min storage-size num-bytes-remaining)))
 	   (ensure-enough-room-to-write storage write-length)
 	   (let ((offset (storage-offset storage)))
-	     (with-storage-sap (storage-sap storage)
-	       (copy-sap storage-sap offset sap sap-offset write-length))
+	     (copy-sap (storage-sap storage) offset sap sap-offset write-length)
 	     (incf sap-offset write-length)
 	     (decf num-bytes-remaining write-length)
 	     (assert (>= num-bytes-remaining 0))
 	     (setf (storage-offset storage) (+ offset write-length)))))))
 
-(declaim (inline store-simple-base-string))
+(declaim (notinline store-simple-base-string))
 (defun store-simple-base-string (string storage &optional references)
   (declare (optimize speed safety) (type simple-base-string string))
   (labels ((write-it ()
@@ -142,7 +141,7 @@
 		 (storage-write-byte storage +simple-string-code+)
 		 (store-tagged-unsigned-fixnum num-bytes storage)
 		 (let ((offset (ensure-enough-room-to-write storage num-bytes)))
-		   (replace (storage-store& storage) output :start1 offset :end2 num-bytes)
+		   (replace (storage-store storage) output :start1 offset :end2 num-bytes)
 		   (setf (storage-offset storage) (+ offset num-bytes))))
 	       #-sb-unicode (store-simple-base-string string storage nil))))
     (declare (inline write-it))
@@ -174,7 +173,7 @@
     (simple-base-string (store-simple-base-string string storage nil))
     (simple-string (store-simple-string string storage nil))))
 
-(declaim (inline restore-string))
+(declaim (notinline restore-string))
 (defun restore-string (storage)
   "Can only be used if you are sure that the strings are not references,
  so that means they must have been stored with store-string/no-refs"
@@ -195,7 +194,7 @@
       (#.+simple-string-code+ (restore-simple-string storage))
       (otherwise (read-dispatch code storage references)))))
 
-(declaim (inline store-simple-specialized-vector))
+(declaim (notinline store-simple-specialized-vector))
 (defun store-simple-specialized-vector (sv storage &optional references)
   (declare (optimize speed safety) (type (simple-array * (*)) sv))
   (labels ((write-it ()

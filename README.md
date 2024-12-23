@@ -158,7 +158,7 @@ second.  It's about 3-4x faster than cl-store in the same mode.  This
 isn't the main focus of this package, though, so if you want > 1GB/sec
 speeds, you will do a better with hyperluminal mem (though data is a
 bit smaller with this package).  This package is about 1-4x slower than
-hyperluminal-mem.  The more complex the data the more similar.
+hyperluminal-mem.
 
 ## Parallelization
 

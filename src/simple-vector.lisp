@@ -3,8 +3,9 @@
 (defun store-simple-vector (sv storage references)
   (declare (optimize speed safety) (type simple-vector sv))
   (maybe-store-reference-instead (sv storage references)
-    (store-ub8 +simple-vector+ storage nil)
-    (store-tagged-unsigned-fixnum (length sv) storage)
+    (when storage
+      (store-ub8 +simple-vector+ storage nil)
+      (store-tagged-unsigned-fixnum (length sv) storage))
     (map nil (lambda (elt) (store-object elt storage references)) sv)))
 
 (defun restore-simple-vector (storage references)

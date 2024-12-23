@@ -10,6 +10,7 @@
     (store-object (hash-table-test ht) storage references) ;; a symbol
     (store-object (hash-table-rehash-threshold ht) storage references) ;; float
     (store-object (hash-table-rehash-size ht) storage references) ;; float
+    ;; TODO FIXME, THIS MEANS WE CANNOT LOAD THIS BACK INTO A NON-SBCL
     #+sbcl (store-boolean (sb-ext:hash-table-synchronized-p ht) storage)
     #+sbcl (store-object (sb-ext:hash-table-weakness ht) storage references)
     (maphash (lambda (k v)

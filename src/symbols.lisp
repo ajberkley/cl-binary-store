@@ -22,7 +22,7 @@
   (declare (ignorable storage))
   t)
 
-(declaim (inline store-symbol))
+(declaim (notinline store-symbol))
 (defun store-symbol (symbol storage references)
   (declare (notinline store-simple-specialized-vector))
   (let ((symbol-package (symbol-package symbol)))
@@ -32,23 +32,23 @@
 	 #+debug-csf
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
-	 (with-write-storage (storage)
-	   (store-ub8 +symbol-code+ storage nil)
+	 (when storage
+	   (storage-write-byte storage +symbol-code+)
 	   (store-string/no-refs (symbol-name symbol) storage))
 	 (store-object (package-name symbol-package) storage references)))
       (t ;; symbols without a package, (symbol-package (gensym)) -> nil
        #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
        ;;these can never be the same string
-       (with-write-storage (storage)
-	 (store-ub8 +gensym-code+ storage nil)
+       (when storage
+	 (storage-write-byte storage +gensym-code+)
 	 (store-string/no-refs (symbol-name symbol) storage))))))
 
-(declaim (inline store-keyword))
+(declaim (notinline store-keyword))
 (defun store-keyword (keyword storage references)
   (maybe-store-reference-instead (keyword storage references)
-    (with-write-storage (storage)
-      (store-ub8 +keyword-code+ storage nil))
-    (store-string/no-refs (symbol-name keyword) storage)))
+    (when storage
+      (storage-write-byte storage +keyword-code+)
+      (store-string/no-refs (symbol-name keyword) storage))))
 
 (declaim (inline restore-keyword))
 (defun restore-keyword (storage)

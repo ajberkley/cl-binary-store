@@ -15,6 +15,7 @@
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 							      "features"))
                (:file "actions" :depends-on ("unsigned-bytes" "storage"))
+	       (:file "reference-count" :depends-on ("actions" "numbers"))
                (:file "magic-numbers" :depends-on ("actions" "numbers"))
 	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"
 								"features"))
@@ -31,10 +32,12 @@
 								    "unsigned-bytes" "features"))
 	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes" "features"))
 	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes" "features"))
+
 	       (:file "dispatch" :depends-on ("codes" "array" "symbols" "simple-vector" "cons"
 						      "hash-table" "features" "actions" "magic-numbers"
 						      "referrers-and-fixup" "numbers" "pathname"
-						      "unsigned-bytes" "objects" "storage"))
+						      "unsigned-bytes" "objects" "storage"
+						      "reference-count"))
 	       (:file "user" :depends-on ("dispatch" "storage" "features" "magic-numbers"))
 	       )
   :license :BSD-3

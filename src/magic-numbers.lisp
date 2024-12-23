@@ -30,6 +30,5 @@
     (make-magic-number :number magic-number)))
 
 (defmethod store-action ((action magic-number) storage references)
-  (with-write-storage (storage)
-    (store-fixnum (magic-number-number action) storage t)))
+  (store-fixnum (magic-number-number action) storage))
   

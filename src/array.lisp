@@ -60,7 +60,8 @@
 		(store-cons elt-type storage references))))
       (cond
 	(next-array
-	 (store-tagged-unsigned-fixnum offset storage)
+	 (when storage
+	   (store-tagged-unsigned-fixnum offset storage))
 	 (store-array next-array storage references))
 	(t
 	 ;; We have to store the array elements even past the fill pointer

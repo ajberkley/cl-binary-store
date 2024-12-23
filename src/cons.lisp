@@ -14,6 +14,8 @@
  out data with general list circularites.  Worst case we fill your disk,
  best case you end up with multiple copies of parts of the list.")
 
+;; TODO CHANGE THE INTERFACE HERE TO TAKE INFO AND TO DEFINE THE
+;; LAMBDA-LIST DIFFERENTLY FOR REF PHASE AND NOT REF PHASE
 (declaim (notinline store-cons))
 (defun store-cons (cons storage references
 		   &optional (write-new-references t)
@@ -27,7 +29,7 @@
   ;; We always record the first cons at the head of a list
   (when (check/store-reference cons storage references write-new-references)
     (return-from store-cons (values)))
-  (with-write-storage (storage)
+  (when storage
     (storage-write-byte storage +cons-code+))
   (store-object (car cons) storage references)
   (let ((cdr (cdr cons)))
