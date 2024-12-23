@@ -154,10 +154,9 @@ If your data does not contain multiple references, then you can let
 depending on your data (unicode strings are currently a bit slow as we
 are not using a fast utf-8 encoder) and 100M cons+integer objects per
 second.  It's about 3-4x faster than cl-store.  This isn't the main
-focus of this package, you might do better with hyperluminal mem but
-the data is quite a lot smaller with this package.
-
-
+focus of this package, though, so if you want > 1GB/sec speeds, you
+will do a better with hyperluminal mem (though data is a bit
+smaller with this package).
 
 ## Parallelization
 
