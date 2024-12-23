@@ -28,9 +28,10 @@
       (values))))
 
 ;; 1M long list with constant small integer:
-;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (90Mobj/sec; 360 MB/sec)
-;; cl-store-faster writes in 1150 ms and reads in 1070 ms (17Mobj/sec;  26 MB/sec)
+;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (900Mobj/sec; 3.6GB/sec)
+;; cl-store-faster writes in 1150 ms and reads in 1000 ms (170Mobj/sec;  250 MB/sec)
 ;; THe cl-store output size is 38% the size of the hlmem output.
+;; Read time is similar 0.9 vs 1.0 seconds about 1.6 GB/sec consing on read.
 ;; If you make a list of (cons 1 2) then they perform equally (except the hlmem output is large)
 
 (defun long-simple-list ()
