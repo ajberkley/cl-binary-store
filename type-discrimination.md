@@ -10,27 +10,38 @@ million small numbers).  My dispatch mechanism is just a flat
 etypecase grouped into disjoint types and sorted by subtype.  So, for
 example, I allow dispatch to different functions for an (unsigned-byte
 8) and a fixnum, or for a (simple-array double-float (*)) versus just
-a simple-vector.  Nominally I'd expect the CLOS infrastructure for
-dispatch to be relatively fast, but you cannot do easy top level
-specialization for things like (simple-array (signed-byte 8) (4)), for
-example, which in some cases it makes sense to do (for what I care
-about, maybe not for the rest of the world!)
+a simple-vector.
+
+Nominally I'd expect the CLOS infrastructure for dispatch to be
+relatively fast, but you cannot do easy top level specialization for
+things like (simple-array (signed-byte 8) (4)), for example, which in
+some cases it makes sense to do (for what I care about, maybe not for
+the rest of the world!).
 
 So, you'll find in the file src/type-discrimation.lisp my very crude
-cut at determining how fast you can generate code use a tree of
-discriminators (don't judge the code please, I wrote it as fast as
-possible because I wanted to see the results).  First, I cut my type
-space automatically into disjoint subsets (either fully or with some
-hinting as to a good order to do the top level discrimination) and
-then I compile discriminators, like I'd expect the compiler to do in a
-nested typecase scenario.  At each node in the tree, I know what the
-object under test's super-type is (even if just T) and what I have
-learned so far about what the object is not.  I do a rough count of
-the number of instructions, function-calls, and compares done to get
-to a decision.  So, for an example, here I choose a not so random
-top-level ordering (the first few are immediate/unboxed objects in a
-sense, and so should be easy to discriminate) (you can also run this
-with just '(t) as a singular tree root, but it's far from optimal!).
+cut at determining how fast I'd expect a not-so-smart compiler to be
+able to determine types of objects.  Remember, I am currently just
+using a flat typecase sorted by subtype for cl-store-faster.  Anyway,
+here my model is a bunch of nested, auto-generated, typecases that
+mirror the Common Lisp type hierarchy.  Now, nominally there are
+tricks that are smarter than this based on tag hashing and jump tables
+probably, but I've got to start with my understanding somewhere.  So,
+anyway, I cobbled together an estimator for what it would take to do
+dispatch using a tree of discriminators (don't judge the code please,
+I wrote it as fast as possible because I wanted to see the results).
+
+First, I cut my type space automatically into disjoint subsets (either
+fully or with some hinting as to a good order to do the top level
+discrimination) and then I compile discriminators, like I'd expect the
+compiler to do in a nested typecase scenario.  At each node in the
+tree, I know what the object under test's super-type is (even if just
+T) and what I have learned so far about what the object is not.  I do
+a rough count of the number of instructions, function-calls, and
+compares done to get to a decision.  So, for an example, here I choose
+a not so random top-level ordering (the first few are
+immediate/unboxed objects in a sense, and so should be easy to
+discriminate) (you can also run this with just '(t) as a singular tree
+root, but it's far from optimal!).
 
     (simulate-discriminators *many-types*
        '(cons fixnum null (eql t) single-float
@@ -107,4 +118,6 @@ find:
 
 So here the discrimination is best-cased for ratio which is tested
 before integer.  So far I haven't put this information into use, but
-it's cool.
+it's cool.  Anyhow, this is a work in progress, I'm posting this to in
+the hope that someone will get annoyed and show me a how to do this
+way faster.
