@@ -3,7 +3,25 @@
 ;; array-dimensions and other stuff.
 
 (quicklisp:quickload "cl-store")
+(quicklisp:quickload "hyperluminal-mem")
 (require 'sb-sprof)
+
+(defun test-untracked-against-hlmem ()
+  (let* ((a (make-list 5 :initial-element 0))
+	 (b (make-list 5 :initial-element 1))
+	 (c (make-list 100000 :initial-element (list a b)))
+	 (d (make-array 100000000 :element-type '(unsigned-byte 8))))
+    (hyperluminal-mem:with-mem-words (var 1000000)
+      (let ((size (print (hyperluminal-mem::mwrite-box/list var 0 10000000 c))))
+	(time (dotimes (x 10) (hyperluminal-mem::mwrite-box/list var 0 10000000 c)))
+	(time (dotimes (x 10) (hyperluminal-mem::mread-box/list var 0 size)))))
+    (let* ((cl-store-faster::*support-shared-list-structures* nil)
+	   (cl-store-faster::*track-references* nil)
+	   (size (cl-store-faster:store d c))
+	   (data (subseq d 0 size)))
+      (time (dotimes (x 10) (cl-store-faster:store data c)))
+      (time (dotimes (x 10) (cl-store-faster:restore data)))
+      (values))))
 
 (defun long-simple-list ()
   (let ((a (loop repeat 1000

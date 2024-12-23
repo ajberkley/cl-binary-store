@@ -76,7 +76,9 @@
 	 (storage (%make-buffering-write-storage :store& temp-vector :flusher flusher)))
     (declare (dynamic-extent temp-vector storage flusher) (type fixnum offset))
     (store-objects/buffering-write-storage storage data)
-    offset))
+    (if is-simple-octet-array
+	(storage-offset storage)
+	offset)))
 
 (defun restore-from-vector (vector)
   (declare (optimize speed safety))
