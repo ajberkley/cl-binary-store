@@ -106,23 +106,6 @@ focus of this package, you might do better with hyperluminal mem but
 the data is quite a lot smaller with this package.
 
 ## User interface
-### Options
-
-\*track-references\* default is T.  Let this to NIL if you have simple
-data with no references between them at all (so lists of data, no
-circularity, no repeated objects).  This is very fast.
-
-\*support-shared-list-structures\* default is T.  let this to NIL if you have
-references to the middle of lists, or circularity that isn't just
-back to the head of a list.
-
-\*store-class-slots\* default is NIL. Standard object class allocated
-slots will be stored if this is T
-
-\*write-magic-number\* default is NIL.  If T we will write out a magic
-number and the \*write-version\* to the output, which will then be
-validated against \*supported-versions\* when read back in.
-
 ### (store place &rest data)
 
 *place* can be string or pathname referring to a file, or a stream, or a
@@ -152,6 +135,28 @@ a vector.
                (store "blarg.bin" 'a 'b 'c v)
                (format nil "~A" (restore "blarg.bin")))
     "(A B C #1=#(#1#))"
+
+### Configurable options
+
+\*track-references\* default is T.  Let this to NIL if you have simple
+data with no references between them at all (so lists of data, no
+circularity, no repeated objects).  This is very fast (100s of MB/sec
+for small data; > 500 MB/sec for big data chunks; on my laptop).
+
+\*support-shared-list-structures\* default is T.  Let this to NIL if
+you have no list circularity (when it is NIL basic circular lists are
+supported as the first CONS we see in a list is recorded as a
+reference, so almost all data will work fine with this NIL; NIL makes
+this package behave like cl-store which will die / explode if given
+any complex circularity in a list).  Setting this to NIL is a
+significant performance improvement if you have list heavy data.
+
+\*store-class-slots\* default is NIL. Standard object class allocated
+slots will be stored if this is T
+
+\*write-magic-number\* default is NIL.  If T we will write out a magic
+number and the \*write-version\* to the output, which will then be
+validated against \*supported-versions\* when read back in.
 
 ## TODO
 
