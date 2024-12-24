@@ -213,10 +213,36 @@
 					       ;; (random 1f0) slows cl-store crazily
 					       #()))))))
 
+;; With reference counting on everyone
+;; HYPERLUMINAL-MEM
+;;  OUTPUT SIZE: 3.20 MB
+;;  HLMEM WRITE: 18.52 ms at 173 MB/sec
+;;  HLMEM READ : 33.32 ms at 96 MB/sec
+;; CL-STORE-FASTER
+;;  OUTPUT SIZE: 0.99 MB
+;;  CL-STORE-FASTER WRITE: 37.32 ms at 26 MB/sec
+;;  CL-STORE-FASTER READ : 29.08 ms at 34 MB/sec
+;; CL-STORE
+;;  OUTPUT SIZE: 1.24MB
+;;  CL-STORE WRITE: 59.99 ms at 21 MB/sec
+;;  CL-STORE READ : 69.99 ms at 18 MB/sec
 (defun lots-of-keywords ()
-  (loop for i fixnum from 0 below 1000000
+  (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'keyword)))
 
+;; With referencing counting on everyone
+;; HYPERLUMINAL-MEM
+;;  OUTPUT SIZE: 3.20 MB
+;;  HLMEM WRITE: 8.56 ms at 374 MB/sec
+;;  HLMEM READ : 18.92 ms at 169 MB/sec
+;; CL-STORE-FASTER
+;;  OUTPUT SIZE: 1.15 MB
+;;  CL-STORE-FASTER WRITE: 22.88 ms at 50 MB/sec
+;;  CL-STORE-FASTER READ : 18.24 ms at 63 MB/sec
+;; CL-STORE
+;;  OUTPUT SIZE: 1.24MB
+;;  CL-STORE WRITE: 35.20 ms at 35 MB/sec
+;;  CL-STORE READ : 51.59 ms at 24 MB/sec
 (defun lots-of-symbols ()
-  (loop for i fixnum from 0 below 1000000
+  (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'cl-user)))
