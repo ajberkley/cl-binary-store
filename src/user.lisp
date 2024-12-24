@@ -14,7 +14,7 @@
 
 (defun restore-from-stream (stream)
   (declare (optimize speed safety))
-  (with-storage (storage :flusher (make-read-into-storage/stream stream))
+  (with-storage (storage :flusher (make-read-into-storage/stream stream) :max 0)
     (restore-objects storage)))
 
 ;;; UB8 VECTORS
