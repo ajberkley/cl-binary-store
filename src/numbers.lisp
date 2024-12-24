@@ -47,7 +47,7 @@
 (declaim (notinline store-fixnum))
 (defun store-fixnum (fixnum storage &optional (tag +fixnum-code+))
   (declare (optimize (speed 3) (safety 0)) (type fixnum fixnum)
-	   (type storage storage))
+	   (type (or null storage) storage))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
     (when tag
       (storage-write-byte! storage tag :offset offset :sap sap)
