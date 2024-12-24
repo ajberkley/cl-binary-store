@@ -7,8 +7,9 @@
  referenced (by elements in the list itself or other objects).  When
  this is NIL, though this is similar to the behavior of CL-STORE where
  circular lists make everything explode.  If you aren't storing large
- lists this is not that expensive.  For a 1 million long list we are
- about 3x slower than CL-STORE when it has this feature disabled.
+ lists this is not that expensive.  For a 1 million long list with this
+ feature enabled (full tracking of all elements of the list), we are
+ similar speed to CL-STORE which is not tracking all the conses.
 
  WARNING: it is very very bad to set this to NIL and then try to write
  out data with general list circularites.  Worst case we fill your disk,
@@ -24,11 +25,7 @@
 (defun store-cons! (cons storage references
 		   &optional (write-new-references t)
 		     (support-shared-list-structures *support-shared-list-structures*))
-  "If TAGGED is NIL, then we elide writing out the first cons tag, but
- the rest of the list will be tagged as usual.
-
- STORAGE can be NIL, in which case we should do no writing to it but we want to
- traverse the lists anyway to count references."
+  "This is called during the actual storage output phase."
   (declare (optimize (speed 3) (safety 0)) (type storage storage))
   ;; We always record the first cons at the head of a list
   (when (check/store-reference cons storage references write-new-references)
@@ -46,11 +43,7 @@
 (defun search-cons (cons references
 		   &optional (write-new-references t)
 		     (support-shared-list-structures *support-shared-list-structures*))
-  "If TAGGED is NIL, then we elide writing out the first cons tag, but
- the rest of the list will be tagged as usual.
-
- STORAGE can be NIL, in which case we should do no writing to it but we want to
- traverse the lists anyway to count references."
+  "This is called during the reference counting phase"
   (declare (optimize (speed 3) (safety 0)))
   ;; We always record the first cons at the head of a list
   (when (check/store-reference cons nil references write-new-references)
@@ -63,7 +56,6 @@
 	(store-object/ref-count-phase cdr references))))
 
 (declaim (notinline restore-cons))
-;; Has to be careful to not blow the stack
 (defun restore-cons (storage references)
   (declare (optimize (speed 3) (safety 0) (debug 0)))
   (let ((first-cons (cons nil nil)))
