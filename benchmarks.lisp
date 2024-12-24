@@ -4,7 +4,8 @@
 
 (defun test-untracked-single-list-against-hlmem (&key (hlmem t) (cl-store nil) (cl-store-faster t))
   (let* ((len 1000000)
-	 (a (make-list len :initial-element (list (coerce "abcdefgh" 'simple-base-string));; (coerce "ab" 'simple-base-string)
+	 (a (make-list len :initial-element 123
+		       ;; (list (coerce "abcdefgh" 'simple-base-string))
 		       ))
 	 (store-size 64000000)
 	 (a-store (make-array store-size :element-type '(unsigned-byte 8))))
