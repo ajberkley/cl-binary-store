@@ -81,13 +81,10 @@
     (simple-array fixnum (*))
     (simple-array fixnum *)))
 
-(defun simulate-discriminators
-    (type-specifiers &optional (top-level-type-bins '(t)))
-  "A nice discrimator tree:
- (simulate-discriminators *many-types*
-   '(cons fixnum null (eql t) single-float array number structure-object standard-object t))"
-  ;; We want to prefer directly tagged elements at the high level, so we don't
-  ;; actually try to build the type-tree, we just manually put them first
+(defvar *good-top-levels* '(fixnum cons single-float nil simple-vector simple-array vector array structure-object structure-class t))
+
+(defun build-discriminator-tree
+    (type-specifiers &optional (top-level-type-bins *good-top-levels*))
   (let* ((fixed-bins top-level-type-bins)
 	 (trimmed-type-specifiers (remove-if
 				   (lambda (type) (member type fixed-bins :test 'equal))
@@ -105,41 +102,47 @@
     (labels ((walk (bins)
 	       (loop for (parent-type . sub-types) in bins
 		     collect (cons parent-type (walk (binned-disjoint-types sub-types))))))
-      (let ((results (walk bins)))
-	(labels ((print-it (bins parent &optional (spacing "") (num-branches 0)
-					  (num-instructions 0) (function-calls 0))
-		   (loop for (type . sub-types) in bins
-			 for discriminator = `(lambda (x)
-						(declare 
-						 (optimize
-						  (speed 3) (safety 0) (debug 0))
-						 (type (and ,parent
-							    ,@(loop for fail in failed-types
-							      	    collect `(not ,fail)))
-						       x))
-						(typep x ',type))
-			 for code
-			   = (with-output-to-string (str)
-			       (disassemble (compile nil discriminator) :stream str))
-			 do
-			    (incf function-calls (cl-ppcre:count-matches "FDEF" code))
-			    (incf num-branches (+ (cl-ppcre:count-matches "JEQ" code)
-						  (cl-ppcre:count-matches "JE" code)
-						  (cl-ppcre:count-matches "JB" code)
-						  (cl-ppcre:count-matches "JA" code)
-						  (cl-ppcre:count-matches "JNE" code)
-						  (cl-ppcre:count-matches "CMOV" code)))
-			    (incf num-instructions (count #\Newline code))
-			    (format t "~A~A ~A compares, ~A instructions, and ~A function-calls~%"
-				    spacing type num-branches num-instructions function-calls)
-			    (print-it sub-types type 
-				      (concatenate 'string " " spacing)
-				      num-branches
-				      num-instructions
-				      function-calls)
-			 collect type into failed-types)))
-	  (print-it results t)
-	  results)))))
+      (walk bins))))
+
+(defun analyze-discriminators
+    (type-specifiers &optional (top-level-type-bins *good-top-levels*))
+  "A nice discrimator tree:
+ (simulate-discriminators *many-types*
+   '(cons fixnum null (eql t) single-float array number structure-object standard-object t))"
+  (let ((results (build-discriminator-tree type-specifiers top-level-type-bins)))
+    (labels ((print-it (bins parent &optional (spacing "") (num-branches 0)
+				      (num-instructions 0) (function-calls 0))
+	       (loop for (type . sub-types) in bins
+		     for discriminator = `(lambda (x)
+					    (declare 
+					     (optimize
+					      (speed 3) (safety 0) (debug 0))
+					     (type (and ,parent
+							,@(loop for fail in failed-types
+							      	collect `(not ,fail)))
+						   x))
+					    (typep x ',type))
+		     for code
+		       = (with-output-to-string (str)
+			   (disassemble (compile nil discriminator) :stream str))
+		     do
+			(incf function-calls (cl-ppcre:count-matches "FDEF" code))
+			(incf num-branches (+ (cl-ppcre:count-matches "JEQ" code)
+					      (cl-ppcre:count-matches "JE" code)
+					      (cl-ppcre:count-matches "JB" code)
+					      (cl-ppcre:count-matches "JA" code)
+					      (cl-ppcre:count-matches "JNE" code)
+					      (cl-ppcre:count-matches "CMOV" code)))
+			(incf num-instructions (count #\Newline code))
+			(format t "~A~A ~A compares, ~A instructions, and ~A function-calls~%"
+				spacing type num-branches num-instructions function-calls)
+			(print-it sub-types type 
+				  (concatenate 'string " " spacing)
+				  num-branches
+				  num-instructions
+				  function-calls)
+		     collect type into failed-types)))
+      (print-it results t))))
 
 
 ;; Let's compare this to sbcl generated code
