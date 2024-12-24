@@ -2,10 +2,11 @@
 (quicklisp:quickload "hyperluminal-mem")
 (require 'sb-sprof)
 
-(defun test-untracked-single-list-against-hlmem (&key (hlmem t) (cl-store t) (cl-store-faster t))
+(defun test-untracked-single-list-against-hlmem (&key (hlmem t) (cl-store nil) (cl-store-faster t))
   (let* ((len 1000000)
-	 (a (make-list len :initial-element (coerce "a" 'simple-base-string)))
-	 (store-size (* 32 (+ 1 len)))
+	 (a (make-list len :initial-element (list "abcdefgh");; (coerce "ab" 'simple-base-string)
+		       ))
+	 (store-size 64000000)
 	 (a-store (make-array store-size :element-type '(unsigned-byte 8))))
     (when hlmem
       (sb-sys:with-pinned-objects (a-store)
@@ -14,8 +15,7 @@
 	  (format t "Hyperluminal mem storage~%")
 	  (time (dotimes (x 100) (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a)))
 	  ;; returns words
-	  (format t "Hyperluminal output size: ~,2f MB~%"
-		  (/ (* 8 (length (hyperluminal-mem::mread-box/list sap 0 size))) 1e6))
+	  (format t "Hyperluminal output size: ~,2f MB~%" (/ (* 8 size) 1e6))
 	  (format t "Hyperluminal mem restore~%")
 	  (time (dotimes (x 100) (hyperluminal-mem::mread-box/list sap 0 size))))))
     ;; Note cl-store run 10x less cause it's too slow in this mode
@@ -30,7 +30,7 @@
     (when cl-store-faster
       (let* ((cl-store-faster::*support-shared-list-structures* nil)
 	     (cl-store-faster::*track-references* t)
-	     (size (print (cl-store-faster:store a-store a)))
+	     (size (cl-store-faster:store a-store a))
 	     (data (subseq a-store 0 size)))
 	(format t "Cl-STORE-FASTER output size ~,2f MB~%" (/ size 1e6))
 	;;(sb-sprof:with-profiling (:report :graph)
