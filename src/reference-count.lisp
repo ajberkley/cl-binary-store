@@ -11,8 +11,10 @@
   (reference-count nil :type fixnum :read-only t))
 
 (defun write-reference-count (number-of-references storage)
-  (store-action +set-reference-action-code+ storage)
-  (store-tagged-unsigned-fixnum number-of-references storage))
+  (store-object (make-write-reference-count :reference-count number-of-references) storage nil))
+
+(defmethod store-action ((action write-reference-count) storage references)
+  (store-tagged-unsigned-fixnum (write-reference-count-reference-count action) storage))
 
 (defmethod action ((code (eql +set-reference-action-code+)) storage references)
   (let ((num-refs (restore-object storage nil)))

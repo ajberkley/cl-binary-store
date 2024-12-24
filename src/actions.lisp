@@ -33,5 +33,5 @@
 (defun store-action& (action storage references)
   (with-write-storage (storage)
     (store-ub8 +action-code+ storage nil)
-    (store-ub8 (action-code action) storage nil)
-    (store-action action storage references)))
+    (store-ub8 (action-code action) storage nil))
+  (store-action action storage references))

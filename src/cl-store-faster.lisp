@@ -40,6 +40,7 @@
    #:out-of-space
    #:out-of-space-current-offset
    #:out-of-space-wanted-bytes
-   #:replace-store-sap-buffer))
+   #:replace-store-sap-buffer
+   #:*track-references*))
 
 (in-package :cl-store-faster)
