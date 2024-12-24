@@ -75,6 +75,8 @@
 
    #:action
    #:action-code
+
+   #:replace-storage
    ))
 
 (in-package :cl-store-faster-extensions)

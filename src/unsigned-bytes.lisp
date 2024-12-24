@@ -8,7 +8,7 @@
   (and (ensure-enough-data storage 1 t)
        (let ((offset (storage-offset storage)))
 	 (setf (storage-offset storage) (1+ offset))
-	 (aref (storage-store storage) offset))))
+         (sap-ref-8 (storage-sap storage) offset))))
 
 (declaim (inline restore-ub8))
 (defun restore-ub8 (storage)
@@ -16,11 +16,10 @@
  been stored by STORE-UB8."
   (declare (optimize (speed 3) (safety 0) (debug 0))) ;; called all the time!
   (ensure-enough-data storage 1)
-  (let ((offset (storage-offset storage))
-	(array (storage-store storage)))
+  (let ((offset (storage-offset storage)))
     (prog1
-	(aref array offset)
-    (setf (storage-offset storage) (+ 1 offset)))))
+	(sap-ref-8 (storage-sap storage) offset)
+      (setf (storage-offset storage) (+ 1 offset)))))
 
 (declaim (inline restore-ub16))
 (defun restore-ub16 (storage)
@@ -29,10 +28,9 @@
   (declare (optimize speed safety))
   (ensure-enough-data storage 2)
   (let ((offset (storage-offset storage))
-        (array (storage-store storage)))
+        (sap (storage-sap storage)))
     (setf (storage-offset storage) (+ 2 offset))
-    (+ (aref array offset)
-       (ash (aref array (incf offset)) 8))))
+    (sap-ref-16 sap offset)))
 
 (declaim (inline restore-ub32))
 (defun restore-ub32 (storage)
@@ -41,12 +39,9 @@
   (declare (optimize speed safety))
   (ensure-enough-data storage 4)
   (let ((offset (storage-offset storage))
-        (array (storage-store storage)))
+        (sap (storage-sap storage)))
     (setf (storage-offset storage) (+ 4 offset))
-    (+ (aref array offset)
-       (ash (aref array (incf offset)) 8)
-       (ash (aref array (incf offset)) 16)
-       (ash (aref array (incf offset)) 24))))
+    (sap-ref-32 sap offset)))
 
 (declaim (inline store-ub8))
 (defun store-ub8 (ub8 storage &optional (tag +ub8-code+))

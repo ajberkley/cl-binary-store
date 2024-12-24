@@ -314,12 +314,40 @@
 		  (let ((*write-magic-number* t))
 		    (store nil "check"))))))
   
-(define-test test-condition-serialization
+#+sbcl(define-test test-condition-serialization
   ;; On sbcl a condition is neither a standard-object nor a structure-object
-  #+sbcl
   (let* ((a (make-condition 'simple-error :format-control "hi ~A" :format-arguments (list 123)))
          (b (restore (store nil a))))
     (is 'eql (type-of a) (type-of b))
     (is 'eql (class-of a) (class-of b))
     (is 'equalp (simple-condition-format-control a) (simple-condition-format-control b))
     (is 'equal (simple-condition-format-arguments a) (simple-condition-format-arguments b))))
+
+#+sbcl(define-test test-sap-write/read
+        ;; Normal use
+        (let ((a (make-array 24 :element-type '(unsigned-byte 8) :initial-element 0))
+              (input (list 1 2)))
+          (is 'equal
+              (cl-store-faster::with-pinned-objects (a)
+                (let ((len (store-to-sap (cl-store-faster::vector-sap a) (length a) input)))
+                  (restore-from-sap (cl-store-faster::vector-sap a) len)))
+              input))
+        ;; Not enough space
+        (let ((a (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0))
+              (input (list 1 2)))
+              (cl-store-faster::with-pinned-objects (a)
+                (fail (store-to-sap (cl-store-faster::vector-sap a) (length a) input))))
+        ;; Dynamic sap replacement for mmap'ed files
+        (let ((a (make-array 24 :element-type '(unsigned-byte 8) :initial-element 0))
+              (data (list 1d0 2 3)))
+          ;; Here we don't actually reallocate, we just lie and say we did
+          (cl-store-faster::with-pinned-objects (a)
+            (let* ((len
+                     (handler-bind ((out-of-space
+                                      (lambda (e)
+                                        (replace-store-sap-buffer
+                                         (cl-store-faster::vector-sap a)
+                                         :sap-offset (out-of-space-current-offset e)
+                                         :sap-size (length a)))))
+                       (store-to-sap (sb-sys:vector-sap a) 1 data))))
+              (is 'equal data (restore-from-sap (sb-sys:vector-sap a) len))))))

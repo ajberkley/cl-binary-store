@@ -34,6 +34,11 @@
    #:magic-number
    #:magic-number-number
    #:*version-being-read*
-   #:*supported-versions*))
+   #:*supported-versions*
+   #:store-to-sap
+   #:restore-from-sap
+   #:out-of-space
+   #:out-of-space-current-offset
+   #:out-of-space-wanted-bytes))
 
 (in-package :cl-store-faster)

@@ -1,8 +1,5 @@
 (in-package :cl-store-faster)
 
-;; TODO: large object write/read without copying
-;; TODO: handle storage which ONLY has a SAP (mmap'ed memory)
-
 (declaim (inline make-storage storage-offset storage-max storage-store storage-sap
 		 storage-flusher storage-underlying-stream))
 
@@ -12,12 +9,8 @@
   (max 0 :type fixnum) ;; end of valid data if read, length of storage array if write
   (store nil :type (simple-array (unsigned-byte 8) (*)))
   (sap nil :type #+sbcl sb-alien::system-area-pointer #-sbcl (simple-array (unsigned-byte 8) (*)))
-  (flusher nil :type function)
+  (flusher nil :type function) ;; on read return number of available bytes, on write storage-offset
   (underlying-stream nil :type (or null stream))) ;; if exists... I have found no use for this yet
-
-(declaim (inline read-storage-size))
-(defun read-storage-size (storage)
-  (length (storage-store storage)))
 
 (declaim (inline sap-ref-8 (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
 		 sap-ref-32 (setf sap-ref-32) sap-ref-64 (setf sap-ref-64)
@@ -157,8 +150,9 @@
 
 (defmethod print-object ((s storage) stream)
   (print-unreadable-object (s stream :type t :identity t)
-    (format stream "OFFSET: ~A MAX: ~A STORE LEN: ~A"
-	    (storage-offset s) (storage-max s) (length (storage-store s)))))
+    (format stream "OFFSET: ~A MAX: ~A STORE LEN: ~A SAP: ~A"
+	    (storage-offset s) (storage-max s) (length (storage-store s))
+            (storage-sap s))))
 
 (defun make-read-into-storage/stream (stream)
   (let* (#+info-csf(total-read 0)
@@ -223,11 +217,25 @@
   #-sbcl `(progn ,@body))
 
 (defmacro vector-sap (vector)
+  "On sbcl, return a SAP referring to the backing store of vector, otherwise the
+ vector itself"
   #+sbcl `(sb-sys:vector-sap ,vector)
   #-sbcl vector)
 
+(defmacro array-sap (array)
+  "Return a SAP referring to the backing store of array-sap (on sbcl) otherwise the
+ 1D vector backing-store of the vector."
+  #+sbcl
+  (let ((g (gensym)))
+    `(sb-kernel:with-array-data ((,g ,array) (start) (end))
+       (assert (zerop start))
+       (with-pinned-objects (,g)
+         (vector-sap ,g))))
+  #-sbcl
+  (error "unimplemented"))
+
 (defmacro with-storage ((storage &key stream (buffer-size 8192)
-					  flusher store max) &body body)
+                                 sap flusher store max) &body body)
   (assert (and (atom storage) (atom stream) (atom buffer-size))) ;; lazy, multiply evaluating
   (let ((vector (gensym)))
     `(let ((,vector
@@ -237,7 +245,7 @@
 			  :flusher ,flusher
 			  :store ,vector
 			  :max ,(if max max `(length ,vector))
-			  :sap (vector-sap ,vector)
+			  :sap ,(if sap sap `(vector-sap ,vector))
 			  :underlying-stream ,stream)))
 	   (declare (dynamic-extent ,storage))
 	   ,@body)))))
@@ -252,54 +260,26 @@
     (setf (storage-offset read-storage) 0)
     (setf (storage-max read-storage) (- max offset))))
 
-(defun maybe-increase-size-of-read-storage (read-storage bytes)
+(defun maybe-shift-data-to-beginning-of-read-storage (read-storage bytes)
+  "Returns nil on failure.  If all we have is a sap the store is a length 0
+ vector so this fails gracefully"
   (let ((vector-length (length (storage-store read-storage)))
 	(valid-data-ends-at (storage-max read-storage)))
-    (when (> bytes (- vector-length valid-data-ends-at))
-      (let* ((valid-data-starts-at (storage-offset read-storage))
-	     (valid-data-bytes (- valid-data-ends-at valid-data-starts-at)))
-	#+debug-csf (format t "We need to increase size or move data to beginning to ~
-                              satisfy request for ~A bytes (our vector is ~A long and ~
-                              we have used ~A..~A bytes of it which is ~A bytes)~%"
-			    bytes vector-length valid-data-starts-at valid-data-ends-at
-			    valid-data-bytes)
-
-	(cond
-	  ((<= bytes vector-length)
-	   #+debug-csf (format t "Shifting bytes to beginning~%")
-	   (shift-data-to-beginning read-storage))
-	  (t
-	   #+debug-csf (format t "Making new array of length ~A~%" bytes)
-	   (let ((new (make-array bytes :element-type '(unsigned-byte 8))))
-	     (replace new (storage-store read-storage) :start2 valid-data-starts-at
-						  :end2 valid-data-ends-at)
-	     (setf (storage-store read-storage) new)
-	     (setf (storage-offset read-storage) 0)
-	     (setf (storage-max read-storage) valid-data-bytes))))))))
-
-(declaim (ftype (function (storage fixnum) (values fixnum &optional))
-		flush-then-maybe-increase-size-of-storage))
-
-(defun flush-then-maybe-increase-size-of-storage (write-storage bytes)
-  "Returns storage offset after action"
-  (declare (optimize speed safety))
-  (funcall (storage-flusher write-storage) write-storage)
-  (let ((offset (storage-offset write-storage)))
-    (when (> bytes (- (storage-max write-storage) offset))
-      (error "Not enough room to write..."))
-    offset))
+    (when (and (> bytes (- vector-length valid-data-ends-at))
+               (< (+ bytes (- valid-data-ends-at (storage-offset read-storage)))
+                  vector-length))
+      (shift-data-to-beginning read-storage))))
 
 (define-condition end-of-data (simple-error)
   ())
 
 (defun refill-read-storage (storage bytes return-nil-on-eof)
-  (declare (optimize (debug 3))
-	   (type fixnum bytes))
+  (declare (optimize speed safety) (type fixnum bytes))
   #+debug-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A~%"
 		      bytes return-nil-on-eof)
-  (maybe-increase-size-of-read-storage storage bytes)
-  (let ((storage-end (the fixnum (funcall (storage-flusher storage) storage))))
-    (if (< (- storage-end (storage-offset storage)) bytes)
+  (maybe-shift-data-to-beginning-of-read-storage storage bytes)
+  (let ((num-bytes-available (the fixnum (funcall (storage-flusher storage) storage))))
+    (if (< num-bytes-available bytes)
         (if return-nil-on-eof
 	    nil
             (progn
@@ -319,11 +299,38 @@
   (or (<= (sb-ext:truly-the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
       (refill-read-storage storage bytes return-nil-on-eof)))
 
-(declaim (inline flush-write-storage))
-(defun flush-write-storage (storage)
-  (funcall (storage-flusher storage) storage))
+(declaim (notinline flush-write-storage))
+(declaim (ftype (function (storage &optional fixnum) (values fixnum &optional))
+		flush-write-storage))
 
-(declaim (ftype (function (storage fixnum) (values fixnum &optional)) ensure-enough-room-to-write))
+(define-condition out-of-space (error)
+  ((current-offset :initarg :current-offset :reader out-of-space-current-offset)
+   (wanted-bytes :initarg :wanted-bytes :reader out-of-space-wanted-bytes)))
+
+(defun flush-write-storage (storage &optional (bytes 0))
+  "Make sure everything is written out of storage to whatever backing store
+ there is, and assert there is room to write a further number of BYTES returns
+ the current (storage-offset write-storage) after flushing.  Will signal an
+ error if not enough room available"
+  (let ((offset (funcall (storage-flusher storage) storage)))
+    (when (> bytes (- (storage-max storage) offset))
+      ;; In the case where we are writing to a raw sap, we can restart this
+      ;; gracefully, not so for the case where we need to keep the object
+      ;; pinned.  So we only throw this in the case of zero length storage
+      ;; which is the signal we are storing to a sap.
+      (if (= (length (storage-store storage)) 0)
+          (restart-case
+              (error 'out-of-space :current-offset (storage-offset storage))
+            (replace-storage (sap sap-size sap-offset)
+              :report "Replace storage (non interactive only!)"
+              (setf (storage-sap storage) sap)
+              (setf (storage-max storage) sap-size)
+              (setf (storage-offset storage) sap-offset)))
+          (error 'out-of-space-to-write :current-offset (storage-offset storage))))
+    offset))
+
+(declaim (ftype (function (storage fixnum) (values fixnum &optional))
+                ensure-enough-room-to-write))
 (declaim (inline ensure-enough-room-to-write))
 (defun ensure-enough-room-to-write (storage bytes)
   "Ensure that we have room to write BYTES to STORAGE.  Returns storage offset."
@@ -331,5 +338,5 @@
   (let ((offset (storage-offset storage)))
     (if (< (sb-ext:truly-the fixnum (+ offset bytes)) (storage-max storage))
 	offset
-	(flush-then-maybe-increase-size-of-storage storage bytes))))
+	(flush-write-storage storage bytes))))
 

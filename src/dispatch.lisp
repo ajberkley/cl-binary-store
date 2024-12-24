@@ -30,7 +30,10 @@
 				 restore-codes))))
 		     *code-info*)
 	    restore-codes)
-	  #'< :key #'first)))
+	  #'< :key #'first)
+       (otherwise
+        (error 'simple-error
+               :format-control "Unknown code ~A found in stream" :format-arguments (list code)))))
   
   (defmacro make-read-dispatch ()
     `(progn
@@ -40,7 +43,6 @@
 	 ,(make-read-dispatch-table 'code))))
   
   (make-read-dispatch)
-
 
   (defun strict-subtype-ordering (type-specs &key (key #'identity))
     ;; This sort of works, but some weird issues I haven't debugged yet
@@ -215,6 +217,9 @@
       (when first-code
 	(let ((rest (loop for code = (maybe-restore-ub8 storage)
 			  while code
+                          #+debug-csf do
+                          #+debug-csf (format t "Read code ~A (offset ~A max ~A)~%" code
+                                           (storage-offset storage) (storage-max storage))
 			  collect (read-dispatch code storage references))))
 	  (apply #'values first-result rest)))))
 
@@ -249,13 +254,16 @@
                    (map nil (lambda (d)
                               (let ((individual-counts (gethash (car d) individual-reference-counts)))
 				(format t "~A of type ~A (~A unique)~%     ~
-                                    avg ref count ~,3f / min ~,3f / max ~,3f / frac>1 ~,3f~%     ~
-                                    most-refed: ~A)~%"
+                                    avg ref count ~,3f / min ~,3f / max ~,3f / frac>1 ~,3f~
+                                    ~A"
 					(cdr d) (car d) (length individual-counts)
 					(/ (cdr d) (length individual-counts) 1d0)
 					(loop for i fixnum in individual-counts minimizing i)
 					(loop for i fixnum in individual-counts maximizing i)
 					(/ (count-if (lambda (x) (> x 1)) individual-counts)
                                            (length individual-counts) 1d0)
-					(gethash (car d) max-refed))))
+					(let ((obj (gethash (car d) max-refed)))
+                                          (if (> (car obj) 1)
+                                              (format nil "~%     most-refed: ~S~%" obj)
+                                              (format nil "~%"))))))
 			data)))))

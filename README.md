@@ -43,12 +43,27 @@ supported.
 ### (store place &rest data)
 
 *place* can be string or pathname referring to a file, or a stream, or a
- vector, or NIL (in which case you will be returned a vector of data)
+ vector, or NIL (in which case you will be returned a vector of data).
 
 ### (restore place)
 
 *place* can be a string or pathname referring to a file, or a stream, or
-a vector.
+a vector.  For restoring to a system-area-pointer use restore-from-sap
+as you have to note how much data is available (good for mmap'ed files and
+large arrays).
+
+### (store-to-sap sap size &rest data)
+### (restore-from-sap sap size)
+ If you have an mmap'ed file or a raw system-area-pointer, you can store to
+ it and restore from it.  For storing, if your allocated size (or mmap-ed
+ file size) is not enough you will be thrown an 
+
+For storing to one, you'll have to know that there
+ is enough room otherwise we will error (storage is stateful so not
+ easily restartable from the middle)
+ a system-area-pointer for storing to say an mmap'ed file... up to you to
+ know there is enough space though.  Good for large arrays, etc., which will
+ be blitted directly into there at high speed.
 
 ## Examples
 
@@ -210,7 +225,6 @@ the stream if one exists, but it wasn't any faster.
 ## TODO
 
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
-- [ ] detect class and structure change on restore (just on the struct-info restore)
 - [ ] support store/restore from raw memory (mmap, sap, etc) and reduced copying in this case
 - [ ] Parallel store and restore ... restore is easy but store is near impossible
 - [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.

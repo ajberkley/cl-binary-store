@@ -1,8 +1,10 @@
 (in-package :cl-store-faster)
 
-;; User facing
+;; User facing interface is generally just `restore' and `store' except
+;; for SAPs which would be `restore-from-sap' `store-to-sap' and `replace-store-sap-buffer'
 
-;; STREAMS
+;;; STREAMS
+
 (defun store-to-stream (stream &rest elements)
   (declare (dynamic-extent elements) (optimize speed safety))
   (with-storage (storage :flusher (make-write-into-storage/stream stream))
@@ -15,7 +17,7 @@
   (with-storage (storage :flusher (make-read-into-storage/stream stream))
     (restore-objects storage)))
 
-;; UB8 VECTORS
+;;; UB8 VECTORS
 
 (defun store-to-vector (&rest elements)
   (declare (dynamic-extent elements) (optimize speed safety))
@@ -25,6 +27,8 @@
       (apply #'store-objects storage elements)
       (flush-write-storage storage)
       output-vector)))
+
+(define-condition out-of-space-in-fixed-vector (simple-error) ())
 
 (defun store-to-extant-vector (vector &rest data)
   (declare (optimize speed safety))
@@ -44,7 +48,6 @@
 	      (make-write-into-adjustable-ub8-vector vector))
 	     (t
 	       (lambda (storage)
-		 (storage-offset storage)
 		 (assert (> (- vector-len offset)
 			    (storage-offset storage))
 			 nil
@@ -79,6 +82,42 @@
 	(with-storage (storage :flusher (make-read-into-storage/stream str) :max 0)
 	  (restore-objects storage)))))
 
+;;; SAP vectors
+
+(defun replace-store-sap-buffer (sap &key (sap-size 0) (sap-offset 0))
+  (invoke-restart 'replace-storage sap sap-size sap-offset))
+
+(defun store-to-sap (sap size &rest data)
+  "This may error with 'out-of-space (which contains
+ out-of-space-current-offset and out-of-space-wanted-bytes).  The
+ out-of-space-current-offset is the amount of data that has been
+ written so far.  out-of-space-wanted-bytes is not useful unless you
+ happen to be writing very large stuff as it will likely be a small
+ number representing the immediate need.  Best to allocate a big chunk
+ and when this finally returns we return the amount of data we wrote
+ to the chunk.  Call (replace-store-sap-buffer sap sap-offset) in a
+ handler-bind to do this updating.  See test test-sap-write/read for
+ an example."
+  (let ((store (make-array 0 :element-type '(unsigned-byte 8))))
+    (declare (dynamic-extent store))
+    (with-storage (storage :flusher (lambda (storage) (storage-offset storage))
+                           :sap sap :store store :max size :buffer-size nil)
+      (apply #'store-objects storage data)
+      (storage-offset storage))))
+
+(defun restore-from-sap (sap size)
+  (declare (optimize speed safety))
+  (let ((store (make-array 0 :element-type '(unsigned-byte 8))))
+    (declare (dynamic-extent store))
+    (with-storage (storage :flusher
+		   (lambda (storage)
+                     (the fixnum (- (storage-max storage)
+				    (storage-offset storage))))
+	                   :sap sap :max size :store store :buffer-size nil)
+      (values (restore-objects storage)))))
+
+;;; FILES
+
 (defun store-to-file (filename &rest elements)
   (declare (optimize speed safety))
   (with-open-file (str filename :direction :output
@@ -92,6 +131,8 @@
   (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
     (with-storage (storage :flusher (make-read-into-storage/stream str))
       (restore-objects storage))))
+
+;;; General interface
 
 (defvar *write-magic-number* nil
   "If T we will write out a magic number and *write-version* to the stream, which will be
@@ -112,8 +153,6 @@
      (restore-from-stream place))
     (vector
      (restore-from-vector place))))
-
-(define-condition out-of-space-in-fixed-vector (simple-error) ())
 
 (defun store (place &rest data)
   "When place is NIL, returns a (vector (unsigned-byte 8) (*)) with fill-pointer
