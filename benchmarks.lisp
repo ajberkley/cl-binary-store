@@ -30,6 +30,7 @@
 	(time (dotimes (x 100) (cl-store-faster:store data a)));;)
 	;;(sb-sprof:with-profiling (:report :graph)
 	(format t "CL-STORE-FASTER restore from vector~%")
+        ;;(sb-sprof:with-profiling (:report :graph)
 	(time (dotimes (x 100) (cl-store-faster:restore data)));;)
 	(values)))
     ;; if you try and dump it to a flexi-streams sequence it's 4x slower than this!
@@ -44,7 +45,9 @@
 
 ;; 1M long list with constant small integer:
 ;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (900Mobj/sec; 3.6GB/sec)
-;; cl-store-faster writes in 750 ms and reads in 580 ms (270Mobj/sec;  400 MB/sec)
+;; cl-store-faster writes in 540 ms and reads in 730 ms (270Mobj/sec;  400 MB/sec)
+;; these numbers move around as I poke at code... read is a bit slower than it
+;; used to be, so maybe can tweak it a bit.
 ;; The cl-store-faster output size is 38% the size of the hlmem output.
 ;; Once you put anything complicated in (or require reference tracking) then the
 ;; performance equals out or hyperluminal mem loses.

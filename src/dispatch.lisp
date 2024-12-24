@@ -39,7 +39,7 @@
     `(progn
        (declaim (sb-ext:maybe-inline read-dispatch))
        (defun read-dispatch (code storage references)
-	 (declare (optimize speed safety))
+	 (declare (optimize (speed 3) safety))
 	 ,(make-read-dispatch-table 'code))))
   
   (make-read-dispatch)
@@ -199,7 +199,8 @@
 	(store-object elt storage references))
       (flush-write-storage storage)))
 
-  (declaim (notinline restore-object))
+  (declaim #+sbcl (sb-ext:maybe-inline restore-object)
+           #-sbcl (notinline restore-object))
   (defun restore-object (storage references &optional (tag (restore-ub8 storage)))
     (declare (notinline read-dispatch))
     (read-dispatch tag storage references))

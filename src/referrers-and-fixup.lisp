@@ -58,7 +58,7 @@
   (when references
     (check/store-reference& object storage references add-new-reference)))
 
-(declaim (notinline check/store-reference))
+(declaim (notinline check/store-reference&))
 (defun check/store-reference& (object storage references &optional (add-new-reference t))
   "Used during the storage phase both during the reference counting
  step and the serialization step.  This function returns T if this

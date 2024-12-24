@@ -57,7 +57,8 @@
 
 (declaim (notinline restore-cons))
 (defun restore-cons (storage references)
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare (optimize (speed 3) (safety 0) (debug 0))
+           (inline restore-object))
   (let ((first-cons (cons nil nil)))
     (loop
       with cons = first-cons
