@@ -246,3 +246,53 @@
 (defun lots-of-symbols ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'cl-user)))
+
+(defstruct blarg
+  a
+  b)
+
+;; hyperluminal mem needs an extension for this so skipping it for now
+;; CL-STORE-FASTER
+;;  OUTPUT SIZE: 1.79 MB
+;;  CL-STORE-FASTER WRITE: 56.11 ms at 32 MB/sec
+;;  CL-STORE-FASTER READ : 11.32 ms at 158 MB/sec
+;; CL-STORE
+;;  OUTPUT SIZE: 6.69MB
+;;  CL-STORE WRITE: 168.78 ms at 40 MB/sec
+;;  CL-STORE READ : 184.78 ms at 36 MB/sec
+(defun lots-of-structure-objects ()
+  (loop for i below 100000
+        collect (make-blarg :a (random 1d0) :b (format nil "~A" (random 100)))))
+
+;; HYPERLUMINAL-MEM
+;;  OUTPUT SIZE: 2.40 MB
+;;  HLMEM WRITE: 4.04 ms at 594 MB/sec
+;;  HLMEM READ : 2.80 ms at 857 MB/sec
+;; CL-STORE-FASTER
+;;  OUTPUT SIZE: 0.99 MB
+;;  CL-STORE-FASTER WRITE: 2.68 ms at 369 MB/sec
+;;  CL-STORE-FASTER READ : 2.92 ms at 339 MB/sec
+;; CL-STORE
+;;  OUTPUT SIZE: 0.99MB
+;;  CL-STORE WRITE: 11.60 ms at 85 MB/sec
+;;  CL-STORE READ : 8.00 ms at 124 MB/sec
+(defun simple-base-strings ()
+  (loop for i below 100000
+        collect (coerce (format nil "~A" (random 1000000)) 'simple-base-string)))
+
+;; Terrible unicode decoding :(
+;; HYPERLUMINAL-MEM
+;;  OUTPUT SIZE: 2.40 MB
+;;  HLMEM WRITE: 4.68 ms at 513 MB/sec
+;;  HLMEM READ : 5.08 ms at 472 MB/sec
+;; CL-STORE-FASTER
+;;  OUTPUT SIZE: 1.19 MB
+;;  CL-STORE-FASTER WRITE: 3.92 ms at 303 MB/sec
+;;  CL-STORE-FASTER READ : 25.08 ms at 47 MB/sec
+;; CL-STORE
+;;  OUTPUT SIZE: 2.08MB
+;;  CL-STORE WRITE: 20.80 ms at 100 MB/sec
+;;  CL-STORE READ : 12.40 ms at 168 MB/sec
+(defun simple-strings ()
+  (loop for i below 100000
+        collect (format nil "~A~A" (random 1000000) #\U+03b1)))
