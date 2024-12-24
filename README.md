@@ -216,4 +216,4 @@ worth it.
 - [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
 - [ ] Provide non-sbcl specific serializers
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
-
+- [ ] Sort reference-ids by use amount if we have more than 255 or 65535 of them to shrink file?  An approximate radix sort might work quickly enough, but the cost of an extra puthash to keep an exact count is probably not worth it.
