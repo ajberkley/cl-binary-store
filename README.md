@@ -1,22 +1,16 @@
 # cl-store-faster
 
-A fast and lightly customizable serializer/deserializer of Common Lisp
-objects to compact binary format.  There is some simple versioning so
-far, but I would not use this in production yet as I am still
-developing this (22 Dec 2025).
+A fast and reasonably customizable serializer/deserializer of Common Lisp
+objects to compact binary format.
 
-Currently have a bunch of sbcl specific code and no alternative for other
-Common Lisp implementations (see TODO).
-
-I suggest for the time being you just continue to use cl-store which works
-well and is not terribly slow.
+Currently has a bunch of sbcl specific code though it shouldn't be too
+hard to make work with other systems, just not top of mind right now. (see TODO).
 
 ## Focus
 - Data that has multiple references to the same object as well as circular references
-  - This dominates serialization time, so should be disable-able.
-  - Complex list circularity and references (other than to the head of lists, separately disable-able))
+  - This dominates serialization time, so you can disable this.
+  - Complex list circularity and references (other than to the head of lists, separately disableable))
 - Speed and compactness
-- Speed of restore
 
 ## General features
 
@@ -31,13 +25,19 @@ double-floats, fixnums, sb8, sb16, sb32, sb64, ub2, ub4, ub7, ub8, ub15, ub16, u
 ub62, and ub64 (all these being supported by SBCL).
 
 structure-objects and standard-objects have good default
-serialize/deserializers.
+serialize/deserializers and also conditions.
 
 symbols, hash-tables, and pathnames are supported.
 
 Multiply referenced objects are stored as references so equality is
 preserved across serialization / deserialization and circularity is
-supported.
+supported.  If you disable reference tracking serialization is quite
+fast and appropriate for large simple-arrays.
+
+Support for writing and reading from files, vectors, streams, and
+raw memory without having to jump through hoops.
+
+A very very simple versioning scheme is implemented.
 
 ## User interface
 ### (store place &rest data)
@@ -118,7 +118,8 @@ For serializing objects, the default behavior is probably good enough
 for 95% of users.  We provide a simple extension point with a generic
 function serializable-slot-info which you can change the behavior of,
 for example to enable calling initialize-instance instead of
-allocate-instance.  See comments in src/objects.lisp for an example.
+allocate-instance, or to not save certain slots or transform them
+before saving.  See comments in src/objects.lisp for an example.
 
 If that is not enough, I suggest adding a new store / restore method
 on your object type or class.
@@ -148,8 +149,10 @@ It also doesn't support complex list circularity in a reasonable way
 I have also used
 [hyperluminal-mem](https://github.com/cosmos72/hyperluminal-mem),
 which is really fast if you meet the restrictions it has.  It does not
-support delayed object construction or references really, though you
-can extend it with manual referencing on a per type basis.
+support delayed object construction or references really, nor a nice
+default for structures and classes (though you can extend it with
+manual referencing on a per type basis and with serializers for each
+structure or class you want).
 
 ## What is different here?
 
@@ -204,30 +207,11 @@ and the sbcl synchronized hash tables are way too slow.
 Parallelization during restore is much easier, but performance is
 quite good already, so this isn't top of my list.
 
-## Random comments
-
-Using single floats makes cl-store grind to a halt --- it's something
-bad in eql hash tables with mixed objects with a few single floats
-around.  The hash function for single floats is not amazing, but I
-don't think that's the problem.  Also, the final hash table we
-construct in these tests has a good bucket / object ratio, so it can't
-be collisions...  but a million objects can take ten seconds.  I don't
-see an easy way to instrument the hash table code, so I'm going to
-just ignore this for now.  We don't hash single floats in this package
-because they are immediates so any deduplication is not useful.  It
-would shrink the file size by maximally 3 bytes per single float
-(assuming we have less than 256 reference ids in the file) but not
-worth it.
-
-I tried putting in a bypass for ub8 vectors that writes directly to
-the stream if one exists, but it wasn't any faster.
-
 ## TODO
 
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
-- [ ] support store/restore from raw memory (mmap, sap, etc) and reduced copying in this case
 - [ ] Parallel store and restore ... restore is easy but store is near impossible
-- [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
+- [ ] Separate EQ and EQL reference tables.
 - [ ] Provide non-sbcl specific serializers
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
 - [ ] Sort reference-ids by use amount if we have more than 255 or 65535 of them to shrink file?  An approximate radix sort might work quickly enough, but the cost of an extra puthash to keep an exact count is probably not worth it.
