@@ -9,7 +9,7 @@
 	       (:file "cl-store-faster")
 	       (:file "cl-store-faster-extensions")
 	       (:file "codes" :depends-on ("features"))
-	       (:file "type-discrimination" :depends-on ("codes"))
+	       ;;(:file "type-discrimination" :depends-on ("codes"))
 	       (:file "storage" :depends-on ("features"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features"))
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"))
@@ -38,7 +38,7 @@
 						      "hash-table" "features" "actions" "magic-numbers"
 						      "referrers-and-fixup" "numbers" "pathname"
 						      "unsigned-bytes" "objects" "storage"
-						      "reference-count" "type-discrimination"))
+						      "reference-count"))
 	       (:file "user" :depends-on ("dispatch" "storage" "features" "magic-numbers")))
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-store-faster-tests))))

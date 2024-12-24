@@ -46,7 +46,7 @@
 
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage &optional (tag +fixnum-code+))
-  (declare (optimize (speed 3) (safety 0)) (type fixnum fixnum)
+  (declare #-debug-csf (optimize (speed 3) (safety 0)) (type fixnum fixnum)
 	   (type (or null storage) storage))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
     (when tag

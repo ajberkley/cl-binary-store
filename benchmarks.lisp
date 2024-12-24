@@ -53,7 +53,7 @@
 ;; performance equals out or hyperluminal mem loses.
 
 (defun long-simple-list ()
-  (let ((a (loop repeat 1000
+  (let ((a (loop repeat 100
 		 collect
 		 (coerce
 		  (loop for i fixnum from 0 below 10000
@@ -62,15 +62,15 @@
 			) '(simple-array (unsigned-byte 8) (*))))))
     (gc :full t)
     (let ((cl-store-faster::*support-shared-list-structures* nil))
-      (time (dotimes (x 10) (cl-store-faster:store-to-file "blarg.bin" a))))
+      (time (dotimes (x 1) (cl-store-faster:store-to-file "blarg.bin" a))))
     (with-open-file (str "blarg.bin")
       (format t "CL-STORE-FASTER: file length ~,2fMB~%" (/ (file-length str) 1d6)))
-    (time (dotimes (x 10) (cl-store-faster:restore-from-file "blarg.bin")))
-    ;; (gc :full t)
-    ;; (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-    ;; (with-open-file (str "blarg.bin")
-    ;;   (format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1d6)))
-    ;; (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
+    (time (dotimes (x 1) (cl-store-faster:restore-from-file "blarg.bin")))
+    (gc :full t)
+    (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+    (with-open-file (str "blarg.bin")
+      (format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1d6)))
+    (time (dotimes (x 10) (cl-store:restore "blarg.bin")))
     )
   (gc :full t))
 

@@ -173,7 +173,7 @@
       (is 'equalp result s))))
 
 (define-test test-struct-info
-  (let ((b (compute-slot-info (make-instance 'blarg))))
+  (let ((b (cl-store-faster::compute-slot-info (make-instance 'blarg))))
     (is 'equalp
 	(restore-from-vector (store-to-vector b))
 	b)))

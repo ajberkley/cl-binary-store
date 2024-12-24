@@ -1,16 +1,18 @@
 (in-package :cl-store-faster)
 
 (declaim (inline make-storage storage-offset storage-max storage-store storage-sap
-		 storage-flusher storage-underlying-stream))
+		 storage-flusher storage-underlying-stream storage-size))
 
 (defstruct storage
   "For read or write"
   (offset 0 :type fixnum) ;; index of the next valid location to write data to or read data from
   (max 0 :type fixnum) ;; end of valid data if read, length of storage array if write
-  (store nil :type (simple-array (unsigned-byte 8) (*)))
+  (store nil :type (simple-array (unsigned-byte 8) (*))) ;; If we are writing/reading from a pure
+                                                         ;; pure sap, store is a 0 length array
   (sap nil :type #+sbcl sb-alien::system-area-pointer #-sbcl (simple-array (unsigned-byte 8) (*)))
   (flusher nil :type function) ;; on read return number of available bytes, on write storage-offset
-  (underlying-stream nil :type (or null stream))) ;; if exists... I have found no use for this yet
+  (size 0 :type fixnum);; ;; storage-size is only used for read, so we know how to chunk
+  (underlying-stream nil :type (or null stream)))  ;; if exists... I have found no use for this yet
 
 (declaim (inline sap-ref-8 (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
 		 sap-ref-32 (setf sap-ref-32) sap-ref-64 (setf sap-ref-64)
@@ -235,7 +237,7 @@
   (error "unimplemented"))
 
 (defmacro with-storage ((storage &key stream (buffer-size 8192)
-                                 sap flusher store max) &body body)
+                                 sap flusher store max size) &body body)
   (assert (and (atom storage) (atom stream) (atom buffer-size))) ;; lazy, multiply evaluating
   (let ((vector (gensym)))
     `(let ((,vector
@@ -246,7 +248,8 @@
 			  :store ,vector
 			  :max ,(if max max `(length ,vector))
 			  :sap ,(if sap sap `(vector-sap ,vector))
-			  :underlying-stream ,stream)))
+			  :underlying-stream ,stream
+                          :size ,(or size `(length ,vector)))))
 	   (declare (dynamic-extent ,storage))
 	   ,@body)))))
 		
@@ -261,21 +264,24 @@
     (setf (storage-max read-storage) (- max offset))))
 
 (defun maybe-shift-data-to-beginning-of-read-storage (read-storage bytes)
-  "Returns nil on failure.  If all we have is a sap the store is a length 0
- vector so this fails gracefully"
-  (let ((vector-length (length (storage-store read-storage)))
+  "If all we have is a sap the store is a length 0 vector so this
+ fails gracefully"
+  (let ((vector-length (storage-size read-storage))
 	(valid-data-ends-at (storage-max read-storage)))
-    (when (and (> bytes (- vector-length valid-data-ends-at))
-               (< (+ bytes (- valid-data-ends-at (storage-offset read-storage)))
-                  vector-length))
-      (shift-data-to-beginning read-storage))))
+    (when (and (> bytes (- vector-length valid-data-ends-at)) ;; we don't have room
+               (<= bytes vector-length))
+      #+debug-csf(format t "Shifting data to beginning~%")
+      (shift-data-to-beginning read-storage)
+      #+debug-csf(format t "Now storage offset is ~A and storage max is ~A~%" (storage-offset read-storage)
+              (storage-max read-storage)))))
 
 (define-condition end-of-data (simple-error)
   ())
 
 (defun refill-read-storage (storage bytes return-nil-on-eof)
-  (declare (optimize speed safety) (type fixnum bytes))
-  #+debug-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A~%"
+  (declare #+debug-csf (optimize (debug 3)) #-debug-csf (optimize speed safety)
+           (type fixnum bytes))
+  #+debug-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A)~%"
 		      bytes return-nil-on-eof)
   (maybe-shift-data-to-beginning-of-read-storage storage bytes)
   (let ((num-bytes-available (the fixnum (funcall (storage-flusher storage) storage))))
@@ -290,12 +296,14 @@
 	      (error 'end-of-data :format-control "Out of data")))
         t)))
 
-(declaim (inline ensure-enough-data))
+(declaim (#-debug-csf inline #+debug-csf notinline ensure-enough-data))
 (defun ensure-enough-data (storage bytes &optional (return-nil-on-eof nil))
   "For RESTORE operation.
  Ensure that we have at least BYTES of data in STORAGE.  May signal `end-of-data'
- unless return-nil-on-eof is t."
-  (declare (optimize (speed 3) (safety 0) (debug 0)) (type fixnum bytes))
+ unless return-nil-on-eof is t.  Do not ask for more than (storage-size storage),
+ which is guaranteed to be >8192 bytes."
+  (declare #-debug-csf (optimize (speed 3) (safety 0) (debug 0))
+           (type (and fixnum (integer 0)) bytes))
   (or (<= (sb-ext:truly-the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
       (refill-read-storage storage bytes return-nil-on-eof)))
 

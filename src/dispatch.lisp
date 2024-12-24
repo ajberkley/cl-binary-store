@@ -39,7 +39,7 @@
     `(progn
        (declaim (sb-ext:maybe-inline read-dispatch))
        (defun read-dispatch (code storage references)
-	 (declare (optimize (speed 3) safety))
+	 #-debug-csf(declare (optimize (speed 3) safety))
 	 ,(make-read-dispatch-table 'code))))
   
   (make-read-dispatch)
@@ -264,7 +264,8 @@
 					(/ (count-if (lambda (x) (> x 1)) individual-counts)
                                            (length individual-counts) 1d0)
 					(let ((obj (gethash (car d) max-refed)))
-                                          (if (> (car obj) 1)
-                                              (format nil "~%     most-refed: ~S~%" obj)
-                                              (format nil "~%"))))))
+                                          (let ((*print-circle* t))
+                                            (if (> (car obj) 1)
+                                                (format nil "~%     most-refed: ~S~%" obj)
+                                                (format nil "~%")))))))
 			data)))))

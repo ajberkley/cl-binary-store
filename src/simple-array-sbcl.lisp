@@ -227,22 +227,38 @@
 	  (write-it))
 	(write-it))))
 
+(declaim (notinline read-chunked))
+(defun read-chunked (target-sap storage num-bytes-remaining)
+  (declare (optimize speed safety) (type fixnum num-bytes-remaining))
+  (loop
+    with storage-size = (storage-size storage)
+    with sap = (storage-sap storage)
+    with num-bytes-read fixnum = 0
+    while (> num-bytes-remaining 0)
+    for bytes-to-read fixnum = (if (/= (storage-offset storage) (storage-max storage))
+                                   (min (- (storage-max storage) (storage-offset storage)) num-bytes-remaining)
+                                   (min storage-size num-bytes-remaining))
+    do
+       #+debug-csf(format t "At storage offset ~A and storage-max ~A, asking for ~A bytes to read, ~A bytes remaining~%"
+               (storage-offset storage) (storage-max storage) bytes-to-read num-bytes-remaining)
+       (ensure-enough-data storage bytes-to-read)
+       (let ((offset (storage-offset storage)))
+         (copy-sap target-sap num-bytes-read sap offset bytes-to-read)
+         (incf num-bytes-read bytes-to-read)
+         (decf num-bytes-remaining bytes-to-read)
+	 (setf (storage-offset storage) (+ bytes-to-read offset)))))
+
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize speed safety))
   (let ((num-elts (restore-object storage nil)))
-    #+debug-csf (format t "NUM ELETS ~A~%" num-elts)
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
 	  (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
 	#+debug-csf (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
 			    (type-of sv) num-bytes num-elts encoded-element-info)
-	(ensure-enough-data storage num-bytes)
-	(let ((offset (storage-offset storage))
-	      (sap (storage-sap storage)))
-          (with-pinned-objects (sv)
-            (copy-sap (vector-sap sv) 0 sap offset num-bytes))
-	  (setf (storage-offset storage) (+ num-bytes offset))
-	  sv)))))
+        (with-pinned-objects (sv)
+          (read-chunked (vector-sap sv) storage num-bytes))
+        sv))))
 
 (defun store-simple-specialized-array (sa storage references)
   (declare (optimize speed safety)
@@ -278,11 +294,7 @@
 	(sbcl-make-simple-array-from-encoded-element-type
 	 encoded-element-info (reduce #'* array-dimensions) array-dimensions)
       #+debug-csf (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
-	(type-of sa) num-bytes array-dimensions encoded-element-info)
-      (ensure-enough-data storage num-bytes)
-      (let ((offset (storage-offset storage))
-	    (sap (storage-sap storage)))
-        (with-pinned-objects (sa)
-	  (copy-sap (array-sap sa) 0 sap offset num-bytes))
-	(setf (storage-offset storage) (+ num-bytes offset))
-	sa))))
+	                  (type-of sa) num-bytes array-dimensions encoded-element-info)
+      (with-pinned-objects (sa)
+        (read-chunked (array-sap sa) storage num-bytes))
+      sa)))
