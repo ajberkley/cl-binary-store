@@ -21,11 +21,11 @@
     ;; Note cl-store run 10x less cause it's too slow in this mode
     ;; if you try and dump it to a flexi-streams sequence it's 4x slower than this!
     (when cl-store
-      (format t "CL-STORE store output to file~%")
+      (format t "CL-STORE store output to file (10x fewer runs)~%")
       (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
       (with-open-file (str "blarg.bin")
 	(format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1e6)))
-      (format t "CL-STORE restore output from file~%")
+      (format t "CL-STORE restore output from file (10x fewer runs)~%")
       (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
     (when cl-store-faster
       (let* ((cl-store-faster::*support-shared-list-structures* nil)
