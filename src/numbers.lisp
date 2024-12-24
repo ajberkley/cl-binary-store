@@ -157,8 +157,8 @@
 	(incf offset))
       (let ((temp (make-array 1 :element-type 'double-float :initial-element double-float)))
 	(declare (dynamic-extent temp))
-	(sb-sys:with-pinned-objects (temp)
-	  (copy-sap sap offset (sb-sys:vector-sap temp) 0 8))))))
+	(with-pinned-objects (temp)
+	  (copy-sap sap offset (vector-sap temp) 0 8))))))
 
 (defun restore-ratio (storage references)
   (declare (optimize speed safety))
