@@ -81,36 +81,3 @@
       (storage-write-byte! storage tag :offset offset :sap sap)
       (incf offset))
     (storage-write-ub32! storage ub32 :offset offset :sap sap)))
-
-(declaim (notinline store-tagged-unsigned-fixnum))
-(defun store-tagged-unsigned-fixnum (integer storage)
-  (declare (type (and fixnum (integer 0)) integer) (optimize speed safety)
-	   (type storage storage))
-  (when storage
-    (if (< integer 256)
-	(store-ub8 integer storage)
-	(if (< integer 65536)
-	    (store-ub16 integer storage)
-	    (if (< integer (expt 2 32))
-		(store-ub32 integer storage)
-		(store-fixnum integer storage))))))
-
-(declaim (inline store-tagged-unsigned-integer))
-(defun store-tagged-unsigned-integer (integer storage references)
-  "Because this is stored tagged, you can restore it using
- RESTORE-OBJECT."
-  (when storage
-    (if (typep integer 'fixnum)
-	(store-tagged-unsigned-fixnum integer storage)
-	(store-bignum integer storage references))))
-
-(defun restore-tagged-unsigned-fixnum (storage)
-  (let ((tag (restore-ub8 storage)))
-    (ecase tag
-      (#.+ub8-code+ (restore-ub8 storage))
-      (#.+ub16-code+ (restore-ub16 storage))
-      (#.+ub32-code+ (restore-ub32 storage))
-      (#.+fixnum-code+ (restore-fixnum storage)))))
-
-;; TODO write restore-tagged-unsigned-fixnum to bypass some
-;; dispatch?
