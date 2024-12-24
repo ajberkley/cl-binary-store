@@ -44,48 +44,10 @@
 
 ;; 1M long list with constant small integer:
 ;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (900Mobj/sec; 3.6GB/sec)
-;; cl-store-faster writes in 870 ms and reads in 1400 ms (170Mobj/sec;  250 MB/sec)
-;; THe cl-store output size is 38% the size of the hlmem output.
-;; Read time is similar 0.9 vs 1.0 seconds about 1.6 GB/sec consing on read.
-;; If you make a list of (cons 1 2) then they perform equally (except the hlmem output is large)
-
-;; Current status:
-;;   1    487  56.5    809  93.9    487  56.5        -  CL-STORE-FASTER::STORE-CONS
-;;   2    330  38.3    330  38.3    817  94.8        -  CL-STORE-FASTER::STORE-OBJECT
-;; So about 40% of the time in dispatch to fixnum
-;; Let's just cheat and add a test to cons to see how fast it *could* go
-;;   1    477  66.0    663  91.7    477  66.0        -  CL-STORE-FASTER::STORE-CONS
-;;   2    209  28.9    209  28.9    686  94.9        -  CL-STORE-FASTER::STORE-FIXNUM
-;;   3      0   0.0    723 100.0    686  94.9        -  CL-STORE-FASTER::STORE-OBJECTS
-;; So now we are down to 725 ms by doing this:
-;; (if (typep (car cons) 'fixnum)
-;;     (store-fixnum (car cons) storage)
-;;     (store-object (car cons) storage references))
-;; below makes no difference, so function dispatch isn't a big deal (nothing is inlined)
-;; (if (typep (car cons) 'fixnum)
-;;     (when storage (store-fixnum (car cons) storage))
-;;     (store-object (car cons) storage references))
-;; (speed 3) (safety 0) on store-fixnum brings us to 700 ms.
-;; 675 ms by declaring that store-fixnum takes storage of type storage (on speed 3 safety 0)
-
-;; 1    528  61.0    811  93.8    528  61.0        -  CL-STORE-FASTER::STORE-CONS
-;; 2    177  20.5    234  27.1    705  81.5        -  CL-STORE-FASTER::STORE-FIXNUM
-;; 3     56   6.5     56   6.5    761  88.0        -  ENSURE-ENOUGH-ROOM-TO-WRITE
-;; Re-inlining ensure-enough-room-to-write
-;; 1    470  69.8    626  93.0    470  69.8        -  CL-STORE-FASTER::STORE-CONS
-;; 2    166  24.7    166  24.7    636  94.5        -  CL-STORE-FASTER::STORE-FIXNUM
-;; So should be focused on store-cons.  I'd like to split it into the reference counting case
-;; and the normal case
-
-;; Now down to 403 ms with the inlined dispatch.  Removing inlined dispatch and
-;; we are back to 620 ms.  OK, so we should work on dispatch a little bit.
-;; Let's try the chunked dispatch
-
-(defgeneric blarg (x))
-
-(defmethod blarg ((a simple-array)))
-(defmethod blarg ((a (simple-array double-float (*)))))
-
+;; cl-store-faster writes in 750 ms and reads in 580 ms (270Mobj/sec;  400 MB/sec)
+;; The cl-store-faster output size is 38% the size of the hlmem output.
+;; Once you put anything complicated in (or require reference tracking) then the
+;; performance equals out or hyperluminal mem loses.
 
 (defun long-simple-list ()
   (let ((a (loop repeat 1000
