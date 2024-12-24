@@ -60,6 +60,53 @@
       (loop for g across groups
 	    appending (stable-sort (reverse g) #'subtypep :key key))))
 
+  ;; (defmacro generate-store-object (value storage references)
+  ;;   (labels ((make-call (type)
+  ;; 	       (let ((ci (gethash type *code-info*)))
+  ;; 		 `(,type
+  ;; 		   (,(code-info-store-func-name ci)
+  ;; 		    ,value ,storage
+  ;; 		    ,@(when (code-info-store-references ci) `(,references)))))))
+  ;;     `(etypecase ,value
+  ;; 	 ,(make-call 'cons)
+  ;; 	 (fixnum
+  ;; 	  (etypecase ,value
+  ;; 	    ,(make-call '(unsigned-byte 8))
+  ;; 	    ,(make-call '(unsigned-byte 16))
+  ;; 	    ,(make-call '(unsigned-byte 32))
+  ;; 	    ,(make-call '(integer -255 0))
+  ;; 	    ,(make-call '(integer -65535 0))
+  ;; 	    ,(make-call '(integer -4294967295 0))
+  ;; 	    ,(make-call 'fixnum)))
+  ;; 	 ,(make-call 'null)
+  ;; 	 ,(make-call 'single-float)
+  ;; 	 (symbol
+  ;; 	  (etypecase ,value
+  ;; 	    ,(make-call 'symbol)
+  ;; 	    ,(make-call 'keyword)))
+  ;; 	 ,(make-call 'double-float)
+  ;; 	 ,(make-call 'simple-vector)
+  ;; 	 ((simple-array * (*))
+  ;; 	  (etypecase ,value
+  ;; 	    ,(make-call 'simple-base-string)
+  ;; 	    ,(make-call 'simple-string)
+  ;; 	    ,(make-call '(SIMPLE-ARRAY * (*)))
+  ;; 	    ,(make-call '(AND (SIMPLE-ARRAY * *) (NOT (SIMPLE-ARRAY T *))))))
+  ;; 	 ,(make-call 'hash-table)
+  ;; 	 (structure-object
+  ;; 	  (etypecase ,value
+  ;; 	    ,(make-call 'action)
+  ;; 	    ,(make-call 'structure-object)))
+  ;; 	 ,(make-call 'array)
+  ;; 	 ,(make-call 'pathname)
+  ;; 	 ,(make-call '(eql t))
+  ;; 	 ,(make-call 'standard-object)
+  ;; 	 ,(make-call '(complex double-float))
+  ;; 	 ,(make-call '(complex single-float))
+  ;; 	 ,(make-call 'complex)
+  ;; 	 ,(make-call 'ratio)
+  ;; 	 ,(make-call 'bignum))))
+  
   (defmacro generate-store-object (value storage references)
     "Here we specialize the calls to have storage nil or not nil so the inlined
  storage code can delete the actual storage code when not used"
@@ -97,16 +144,20 @@
   ;; NO, so what we are going to do here is define the lambda-lists in register-code
   ;; so users can provide optimized reference phase stuff
 
-  (declaim (notinline store-object))
+  (declaim (inline store-object))
   (defun store-object (value storage references)
-    (declare (type (or null storage) storage))
     (if storage ;; can remove by passing in a store-object func to serializers
-	(generate-store-object value storage references)
-	(generate-store-object value nil references)))
+	(store-object/store-phase value storage references)
+	(store-object/ref-count-phase value references)))
   
   (declaim (notinline store-object/ref-count-phase))
   (defun store-object/ref-count-phase (value references)
     (generate-store-object value nil references))
+
+  (declaim (notinline store-object/ref-count-phase))
+  (defun store-object/store-phase (value storage references)
+    (declare (type storage storage))
+    (generate-store-object value storage references))
 
   ;; Just synchronizing references slows us to 1.2 seconds and BIG slow down
   ;; while actually parallelizing the reference counting pass.
@@ -115,7 +166,7 @@
   ;; for our objects
   (declaim (notinline store-objects)) ;; so storage can be specialized down the chain
   (defun store-objects (storage &rest stuff)
-    (declare (optimize speed safety))
+    (declare (optimize speed safety) (type storage storage))
     (let* ((track-references *track-references*)
 	   (references (when track-references
 			 (make-hash-table :test 'eql :size 256 :synchronized nil)))

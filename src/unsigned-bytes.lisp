@@ -1,25 +1,26 @@
 (in-package :cl-store-faster)
 
-(declaim (notinline maybe-restore-ub8))
+(declaim (inline maybe-restore-ub8))
 (defun maybe-restore-ub8 (storage)
   "Maybe restore an (unsigned-byte 8) value from storage that has previously
  been stored by STORE-UB8.  If there is no more data available will return NIL."
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 0) (debug 0))) ;; this is called all the time!
   (and (ensure-enough-data storage 1 t)
        (let ((offset (storage-offset storage)))
 	 (setf (storage-offset storage) (1+ offset))
 	 (aref (storage-store storage) offset))))
 
-(declaim (notinline restore-ub8))
+(declaim (inline restore-ub8))
 (defun restore-ub8 (storage)
   "Restore an (unsigned-byte 8) value from storage that has previously
  been stored by STORE-UB8."
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 0) (debug 0))) ;; called all the time!
   (ensure-enough-data storage 1)
   (let ((offset (storage-offset storage))
 	(array (storage-store storage)))
-    (setf (storage-offset storage) (+ 1 offset))
-    (aref array offset)))
+    (prog1
+	(aref array offset)
+    (setf (storage-offset storage) (+ 1 offset)))))
 
 (declaim (inline restore-ub16))
 (defun restore-ub16 (storage)

@@ -44,7 +44,7 @@
   (declare (optimize speed safety))
   (the (values fixnum &optional) (storage-read-sb64 storage)))
 
-(declaim (notinline store-fixnum))
+(declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage &optional (tag +fixnum-code+))
   (declare (optimize (speed 3) (safety 0)) (type fixnum fixnum)
 	   (type (or null storage) storage))

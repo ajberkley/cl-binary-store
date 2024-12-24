@@ -36,12 +36,12 @@
   (storage-write-byte storage +cons-code+)
   ;; (if (typep (car cons) 'fixnum)
   ;;     (store-fixnum (car cons) storage)
-  (store-object (car cons) storage references)
+  (store-object/store-phase (car cons) storage references)
   (let ((cdr (cdr cons)))
     (if (consp cdr)
 	(store-cons! cdr storage references support-shared-list-structures
 		    support-shared-list-structures)
-	(store-object cdr storage references))))
+	(store-object/store-phase (the (not cons) cdr) storage references))))
 
 (defun search-cons (cons references
 		   &optional (write-new-references t)
@@ -55,16 +55,17 @@
   ;; We always record the first cons at the head of a list
   (when (check/store-reference cons nil references write-new-references)
     (return-from search-cons (values)))
-  (store-object (car cons) nil references)
+  (store-object/ref-count-phase (car cons) references)
   (let ((cdr (cdr cons)))
     (if (consp cdr)
 	(search-cons cdr references support-shared-list-structures
 		    support-shared-list-structures)
-	(store-object cdr nil references))))
+	(store-object/ref-count-phase cdr references))))
 
 (declaim (notinline restore-cons))
 ;; Has to be careful to not blow the stack
 (defun restore-cons (storage references)
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (let ((first-cons (cons nil nil)))
     (loop
       with cons = first-cons

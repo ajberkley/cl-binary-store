@@ -53,8 +53,13 @@
 ;; Nominally we could have multiple reference hash tables if we wanted
 ;; to parallelize the storage operation more by reducing contention.
 
-(declaim (notinline check/store-reference))
+(declaim (inline check/store-reference))
 (defun check/store-reference (object storage references &optional (add-new-reference t))
+  (when references
+    (check/store-reference& object storage references add-new-reference)))
+
+(declaim (notinline check/store-reference))
+(defun check/store-reference& (object storage references &optional (add-new-reference t))
   "Used during the storage phase both during the reference counting
  step and the serialization step.  This function returns T if this
  object has already been written out, in which case the caller should
@@ -66,8 +71,7 @@
  dis-allowing (for performance reasons) circularity, as we optionally
  do during cons serialization."
   (declare (optimize speed safety))
-  (when references
-    (if storage ; we are in the storage phase, writing things out
+  (if storage	     ; we are in the storage phase, writing things out
       (let ((ref-idx (gethash object references)))
 	(declare (type (or null fixnum) ref-idx))
 	;; When ref-idx is positive, it's a note that we have already written out the
@@ -103,7 +107,7 @@
 	   #-debug-csf(setf (gethash object references) 2)
 	   t)
 	  #-debug-csf((= number-of-times-referenced 2) t)
-	  (t nil))))))
+	  (t nil)))))
 
 ;; RESTORE PHASE
 
@@ -242,24 +246,23 @@
   "We store references as the minimum possible size we can"
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
-  (with-write-storage (storage :offset offset :over-reserve-bytes 5 :sap sap)
+  (when storage
     #+debug-csf (format t "Writing reference ~A~%" ref-index)
     (typecase ref-index
       ((unsigned-byte 8)
-       (storage-write-ub16! storage (+ +referrer-ub8-code+ (ash ref-index 8))
-			    :offset offset :sap sap)
-       (setf (storage-offset storage) (+ 2 offset)))
+       (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
+	 (storage-write-ub16! storage (+ +referrer-ub8-code+ (ash ref-index 8))
+			      :offset offset :sap sap)))
       ((unsigned-byte 16)
-       (storage-write-byte! storage +referrer-ub16-code+ :offset offset :sap sap)
-       (storage-write-ub16! storage ref-index :offset (incf offset) :sap sap)
-       (setf (storage-offset storage) (+ 2 offset)))
+       (with-write-storage (storage :offset offset :reserve-bytes 3 :sap sap)
+	 (storage-write-byte! storage +referrer-ub16-code+ :offset offset :sap sap)
+	 (storage-write-ub16! storage ref-index :offset (incf offset) :sap sap)))
       ((unsigned-byte 32)
-       (storage-write-byte! storage +referrer-ub32-code+ :offset offset :sap sap)
-       (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)
-       (setf (storage-offset storage) (+ 4 offset)))
+       (with-write-storage (storage :offset offset :reserve-bytes 5 :sap sap)
+	 (storage-write-byte! storage +referrer-ub32-code+ :offset offset :sap sap)
+	 (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)))
       (t
-       (storage-write-byte! storage +referrer-code+ :offset offset :sap sap)
-       (setf (storage-offset storage) (+ 1 offset))
+       (storage-write-byte storage +referrer-code+)
        (store-tagged-unsigned-fixnum ref-index storage)))))
 
 (declaim (notinline store-reference-id-for-following-object))

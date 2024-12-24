@@ -315,7 +315,7 @@
   "For RESTORE operation.
  Ensure that we have at least BYTES of data in STORAGE.  May signal `end-of-data'
  unless return-nil-on-eof is t."
-  (declare (optimize speed safety) (type fixnum bytes))
+  (declare (optimize (speed 3) (safety 0) (debug 0)) (type fixnum bytes))
   (or (<= (sb-ext:truly-the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
       (refill-read-storage storage bytes return-nil-on-eof)))
 

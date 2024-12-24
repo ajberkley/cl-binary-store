@@ -1,4 +1,5 @@
 ;; This has to be the most hideous code I've written in awhile,
+(in-package :cl-store-faster)
 
 (defun binned-disjoint-types (type-specifiers)
   "Returns an alist with keys being a type and values being sub-types of the values.
@@ -46,6 +47,8 @@
 		     finally (return remaining-types))))
 	finally (return bins)))
 
+(binned-disjoint-types '((unsigned-byte 8) (unsigned-byte 16)))
+
 (defun satisfies-test (x) (< x 3))
 (deftype satisfies-something () '(satisfies satisfies-test))
 (defstruct another)
@@ -81,7 +84,8 @@
     (simple-array fixnum (*))
     (simple-array fixnum *)))
 
-(defvar *good-top-levels* '(fixnum cons single-float nil simple-vector simple-array vector array structure-object structure-class t))
+(defvar *good-top-levels* '(fixnum cons single-float nil simple-vector simple-array vector
+			    array structure-object structure-class t))
 
 (defun build-discriminator-tree
     (type-specifiers &optional (top-level-type-bins *good-top-levels*))
@@ -144,7 +148,40 @@
 		     collect type into failed-types)))
       (print-it results t))))
 
-
+(defun build-store-dispatch (code-info value storage references)
+  "code-info is a `code-info', information about types and functions for
+ serialization/deserialization.  This function builds etypecase dispatch
+ code"
+  (let ((dispatch-tree
+	  (build-discriminator-tree
+	   (print 
+	    (loop
+	      for key being the hash-keys of *code-info*
+	      when (not (numberp key)) collect key)))))
+    (print dispatch-tree)
+    (labels ((get-code-info (type)
+	       (gethash type code-info))
+	     (walk (tree parent)
+	       (loop for (type . sub-types) in tree
+		     for code-info = (print (get-code-info type))
+		     collect `(,type
+			       ,@(if code-info
+				     `((,(code-info-store-func-name code-info)
+					,value
+					,storage
+					,@(when (code-info-store-references code-info)
+					    `(,references))))
+				     (list
+				      `(declare (type (and ,parent 
+							   ,@(loop for fail in failed-types
+								   collect `(not ,fail))))
+						,value)
+				      `(etypecase ,value
+					 ,(walk sub-types type)))))
+		     collect type into failed-types)))
+  `(etypecase ,value
+     ,(walk dispatch-tree t)))))
+     
 ;; Let's compare this to sbcl generated code
 
 (defun trust-sbcl (x)

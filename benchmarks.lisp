@@ -1,32 +1,45 @@
-;; TODO ADD A SIMPLE-BASE-STRING tag code and a SIMPLE-STRING tag code
-;; about 10% of the time is spent in upgraded-array-element-type and
-;; array-dimensions and other stuff.
-
 (quicklisp:quickload "cl-store")
 (quicklisp:quickload "hyperluminal-mem")
 (require 'sb-sprof)
 
-(defun test-untracked-single-list-against-hlmem ()
+(defun test-untracked-single-list-against-hlmem (&key (hlmem t) (cl-store t) (cl-store-faster t))
   (let* ((len 1000000)
-	 (a (make-list len :initial-element 1)) ;; if you do this (cons 1 2) they are equal
+	 (a (make-list len :initial-element (coerce "a" 'simple-base-string)))
 	 (store-size (* 32 (+ 1 len)))
 	 (a-store (make-array store-size :element-type '(unsigned-byte 8))))
-    ;; (sb-sys:with-pinned-objects (a-store)
-    ;;   (let* ((sap (sb-sys:vector-sap a-store))
-    ;; 	     (size (print (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a))))
-    ;; 	(time (dotimes (x 100) (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a)))
-    ;; 	;; returns words
-    ;; 	(print (* 8 (length (hyperluminal-mem::mread-box/list sap 0 size))))
-    ;; 	(time (dotimes (x 100) (hyperluminal-mem::mread-box/list sap 0 size)))))
-    (let* ((cl-store-faster::*support-shared-list-structures* nil)
-	   (cl-store-faster::*track-references* nil)
-	   (size (cl-store-faster:store a-store a))
-	   (data (subseq a-store 0 size)))
-      (print size)
-      (sb-sprof:with-profiling (:report :graph)
-	(time (dotimes (x 1000) (cl-store-faster:store data a))))
-      (time (dotimes (x 100) (cl-store-faster:restore data)))
-      (values))))
+    (when hlmem
+      (sb-sys:with-pinned-objects (a-store)
+	(let* ((sap (sb-sys:vector-sap a-store))
+	       (size (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a)))
+	  (format t "Hyperluminal mem storage~%")
+	  (time (dotimes (x 100) (hyperluminal-mem::mwrite-box/list sap 0 (floor store-size 8) a)))
+	  ;; returns words
+	  (format t "Hyperluminal output size: ~,2f MB~%"
+		  (/ (* 8 (length (hyperluminal-mem::mread-box/list sap 0 size))) 1e6))
+	  (format t "Hyperluminal mem restore~%")
+	  (time (dotimes (x 100) (hyperluminal-mem::mread-box/list sap 0 size))))))
+    ;; Note cl-store run 10x less cause it's too slow in this mode
+    ;; if you try and dump it to a flexi-streams sequence it's 4x slower than this!
+    (when cl-store
+      (format t "CL-STORE store output to file~%")
+      (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
+      (with-open-file (str "blarg.bin")
+	(format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1e6)))
+      (format t "CL-STORE restore output from file~%")
+      (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
+    (when cl-store-faster
+      (let* ((cl-store-faster::*support-shared-list-structures* nil)
+	     (cl-store-faster::*track-references* t)
+	     (size (print (cl-store-faster:store a-store a)))
+	     (data (subseq a-store 0 size)))
+	(format t "Cl-STORE-FASTER output size ~,2f MB~%" (/ size 1e6))
+	;;(sb-sprof:with-profiling (:report :graph)
+	(format t "CL-STORE-FASTER store to vector~%")
+	(time (dotimes (x 100) (cl-store-faster:store data a)));;)
+	;;(sb-sprof:with-profiling (:report :graph)
+	(format t "CL-STORE-FASTER restore from vector~%")
+	(time (dotimes (x 100) (cl-store-faster:restore data)));;)
+	(values)))))
 
 ;; 1M long list with constant small integer:
 ;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (900Mobj/sec; 3.6GB/sec)

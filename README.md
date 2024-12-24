@@ -115,10 +115,9 @@ It also doesn't support complex list circularity in a reasonable way
 
 I have also used
 [hyperluminal-mem](https://github.com/cosmos72/hyperluminal-mem),
-which is fast if you meet the restrictions it has.  It does not
-support delayed object	  
-construction or references really, though you can extend it with
-manual referencing on a per type basis.
+which is really fast if you meet the restrictions it has.  It does not
+support delayed object construction or references really, though you
+can extend it with manual referencing on a per type basis.
 
 ## What is different here?
 
@@ -150,15 +149,17 @@ implementation.  This also makes it near impossible to parallelize
 serialization because the default sbcl hash table is too slow when
 synchronized.
 
-If your data does not contain multiple references, then you can let
-\*track-references\* to NIL and you can hit hundreds of MB/sec
+If your data does not contain multiple references or repeated objects
+(in particular, repeated symbols will be stored repeatedly!), then you
+can let \*track-references\* to NIL and you can hit hundreds of MB/sec
 depending on your data (unicode strings are currently a bit slow as we
 are not using a fast utf-8 encoder) and 100M cons+integer objects per
-second.  It's about 3-4x faster than cl-store in the same mode.  This
+second.  It's about 10-30x faster than cl-store in this mode.  This
 isn't the main focus of this package, though, so if you want > 1GB/sec
 speeds, you will do a better with hyperluminal mem (though data is a
-bit smaller with this package).  This package is about 1-4x slower than
-hyperluminal-mem.
+bit smaller with this package).  This package is between 3x faster and
+3x slower than hyperluminal-mem depending on data patterns both on
+store and restore.
 
 ## Parallelization
 
