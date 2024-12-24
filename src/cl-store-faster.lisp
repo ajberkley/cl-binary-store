@@ -39,6 +39,7 @@
    #:restore-from-sap
    #:out-of-space
    #:out-of-space-current-offset
-   #:out-of-space-wanted-bytes))
+   #:out-of-space-wanted-bytes
+   #:replace-store-sap-buffer))
 
 (in-package :cl-store-faster)
