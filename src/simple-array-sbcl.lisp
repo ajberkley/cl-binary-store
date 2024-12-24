@@ -120,7 +120,7 @@
 (declaim (inline restore-simple-base-string))
 (defun restore-simple-base-string (storage)
   (declare (optimize speed safety))
-  (let* ((num-bytes (restore-object storage nil))
+  (let* ((num-bytes (restore-tagged-unsigned-fixnum storage))
 	 (string (make-string num-bytes :element-type 'base-char)))
     (ensure-enough-data storage num-bytes)
     (let ((offset (storage-offset storage))
@@ -155,20 +155,20 @@
 (declaim (notinline restore-simple-string))
 (defun restore-simple-string (storage)
   (declare (optimize speed safety))
-  (let* ((num-bytes (restore-object storage nil))) ;; restore-unsigned-fixnum?
+  (let* ((num-bytes (restore-tagged-unsigned-fixnum storage)))
     (ensure-enough-data storage num-bytes)
     (let ((offset (storage-offset storage))
           (store (storage-store storage))
 	  (sap (storage-sap storage)))
       (setf (storage-offset storage) (+ num-bytes offset))
       (if (> (length store) 0)
-          (sb-ext:octets-to-string store :external-format :utf-8 :start offset
-				         :end (+ offset num-bytes))
+          (babel:octets-to-string store :encoding :utf-8 :start offset
+				         :end (the fixnum (+ offset num-bytes)))
           (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
             (declare (dynamic-extent a))
             (with-pinned-objects (a)
               (copy-sap (vector-sap a) 0 sap offset num-bytes))
-            (sb-ext:octets-to-string a :external-format :utf-8 :start 0
+            (babel:octets-to-string a :encoding :utf-8 :start 0
                                      :end num-bytes))))))
 
 (declaim (notinline store-string))

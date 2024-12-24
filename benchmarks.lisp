@@ -280,19 +280,18 @@
   (loop for i below 100000
         collect (coerce (format nil "~A" (random 1000000)) 'simple-base-string)))
 
-;; Terrible unicode decoding :(
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 2.40 MB
-;;  HLMEM WRITE: 4.68 ms at 513 MB/sec
-;;  HLMEM READ : 5.08 ms at 472 MB/sec
+;;  HLMEM WRITE: 4.56 ms at 526 MB/sec
+;;  HLMEM READ : 3.12 ms at 769 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 1.19 MB
 ;;  CL-STORE-FASTER WRITE: 3.92 ms at 303 MB/sec
-;;  CL-STORE-FASTER READ : 25.08 ms at 47 MB/sec
+;;  CL-STORE-FASTER READ : 9.08 ms at 131 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 2.08MB
-;;  CL-STORE WRITE: 20.80 ms at 100 MB/sec
-;;  CL-STORE READ : 12.40 ms at 168 MB/sec
+;;  CL-STORE WRITE: 20.00 ms at 104 MB/sec
+;;  CL-STORE READ : 12.00 ms at 173 MB/sec
 (defun simple-strings ()
   (loop for i below 100000
         collect (format nil "~A~A" (random 1000000) #\U+03b1)))
