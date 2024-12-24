@@ -127,21 +127,17 @@
   (ensure-enough-room-to-write storage 1)
   (storage-write-byte! storage byte))
 
-(defmacro with-write-storage ((storage &key offset reserve-bytes over-reserve-bytes sap)
+(defmacro with-write-storage ((storage &key offset reserve-bytes sap)
 			      &body body)
   "Skips the body if storage does not exist"
-  (assert (atom storage)) (assert (not (and reserve-bytes over-reserve-bytes)))
+  (assert (atom storage))
   (let ((original-offset (gensym))
 	(reserve-bytes-sym (when reserve-bytes (gensym "RESERVE"))))
     `(when storage
        (let* (,@(when reserve-bytes `((,reserve-bytes-sym ,reserve-bytes)))
-	      (,original-offset ,(cond
-				   (reserve-bytes
-				    `(ensure-enough-room-to-write ,storage ,reserve-bytes-sym))
-				   (over-reserve-bytes
-				    `(ensure-enough-room-to-write ,storage ,over-reserve-bytes))
-				   (t
-				    `(storage-offset ,storage))))
+	      (,original-offset ,(if reserve-bytes
+				    `(ensure-enough-room-to-write ,storage ,reserve-bytes-sym)
+				    `(storage-offset ,storage)))
 	      ,@(when offset `((,offset ,original-offset)))
 	      ,@(when sap
 		  `((,sap (storage-sap ,storage)))))
