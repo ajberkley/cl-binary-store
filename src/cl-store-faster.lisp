@@ -34,7 +34,6 @@
    #:magic-number
    #:magic-number-number
    #:*version-being-read*
-   #:*supported-versions*
-))
+   #:*supported-versions*))
 
 (in-package :cl-store-faster)

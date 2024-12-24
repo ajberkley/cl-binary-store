@@ -60,6 +60,13 @@
    #:store-structure-object
    #:restore-structure-object
 
+   #:slot-info
+   #:slot-info-class
+   #:slot-info-slot-names
+   #:slot-info-call-initialize-instance
+   #:make-slot-info
+   #:compute-slot-info
+   
    #:ensure-enough-room-to-write
    #:storage-store
    #:storage-offset

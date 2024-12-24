@@ -132,9 +132,9 @@
   (register-code 32 :restore 'restore-complex-single-float :store 'store-complex-single-float
 		 :type '(complex single-float) :store-references t))
 
-(defconstant +struct-info-code+
-  (register-code 33 :restore 'restore-struct-info :store 'store-struct-info
-		 :type 'struct-info :store-references t :restore-references t))
+(defconstant +slot-info-code+
+  (register-code 33 :restore 'restore-slot-info :store 'store-slot-info
+		 :type 'slot-info :store-references t :restore-references t))
 
 (defconstant +unbound-code+ (register-code 34 :restore 'restore-unbound :store 'store-unbound))
 
@@ -165,3 +165,10 @@
 					     :type 'action
 					     :restore-references t
 					     :store-references t))
+
+;; On sbcl a condition is neither a structure-object nor a standard-object
+#+sbcl (defconstant +condition-object+ (register-code 41 :restore 'restore-standard-object
+                                                  :store 'store-standard-object
+                                                  :type 'condition
+                                                  :restore-references t
+                                                  :store-references t))

@@ -85,12 +85,29 @@ this package behave like cl-store which will die / explode if given
 any complex circularity in a list).  Setting this to NIL is a
 significant performance improvement if you have list heavy data.
 
-\*store-class-slots\* default is NIL. Standard object class allocated
-slots will be stored if this is T
+\*store-class-slots\* default is NIL. Standard object :class allocated
+slots will be stored if this is T.
 
 \*write-magic-number\* default is NIL.  If T we will write out a magic
 number and the \*write-version\* to the output, which will then be
 validated against \*supported-versions\* when read back in.
+
+### Extension points
+
+Each object is stored with a 8-bit type tag.  You can define new
+type tags and write specialized storage and restore methods.  See
+codes.lisp for examples.  If you do this, you probably want to change
+the \*write-version\* and \*supported-versions\*.
+
+For serializing objects, the default behavior is probably good enough
+for 95% of users.  We provide a simple extension point with a generic
+function serializable-slot-info which you can change the behavior of,
+for example to enable calling initialize-instance instead of
+allocate-instance.  See comments in src/objects.lisp for an example.
+
+If that is not enough, I suggest adding a new store / restore method
+on your object type or class.
+
 ## Why?
 
 I've been using [cl-store](https://cl-store.common-lisp.dev/) forever
@@ -194,10 +211,9 @@ worth it.
 - [ ] detect class and structure change on restore (just on the struct-info restore)
 - [ ] support store/restore from raw memory (mmap, sap, etc)
 - [ ] very large object storage without copying
-- [ ] Parallel store and restore
 - [ ] Reduced copying if using a sap backend?
+- [ ] Parallel store and restore ... restore is easy but store is near impossible
 - [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
 - [ ] Provide non-sbcl specific serializers
-- [ ] Address slow compilation (a bit too much inlining --- remove most of it based on testing without reference table.
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
 

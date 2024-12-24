@@ -109,5 +109,13 @@
 	(store-tagged-unsigned-fixnum integer storage)
 	(store-bignum integer storage references))))
 
+(defun restore-tagged-unsigned-fixnum (storage)
+  (let ((tag (restore-ub8 storage)))
+    (ecase tag
+      (#.+ub8-code+ (restore-ub8 storage))
+      (#.+ub16-code+ (restore-ub16 storage))
+      (#.+ub32-code+ (restore-ub32 storage))
+      (#.+fixnum-code+ (restore-fixnum storage)))))
+
 ;; TODO write restore-tagged-unsigned-fixnum to bypass some
 ;; dispatch?

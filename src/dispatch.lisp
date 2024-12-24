@@ -170,9 +170,9 @@
     (let* ((track-references *track-references*)
 	   (references (when track-references
 			 (make-hash-table :test 'eql :size 256 :synchronized nil)))
-	   (struct-info (make-hash-table :test 'eql :synchronized nil)) ;; if use the metaclass object maybe can use eq?  can I do that for structs?
-	   (*struct-info* struct-info))
-      (declare (dynamic-extent struct-info references))
+	   (slot-info (make-hash-table :test 'eql :synchronized nil))
+	   (*slot-info* slot-info))
+      (declare (dynamic-extent slot-info references))
       (when track-references
 	#+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
 	(dolist (elt stuff)

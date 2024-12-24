@@ -1,11 +1,11 @@
 (defpackage #:cl-store-faster-tests
-  (:use #:common-lisp #:parachute #:cl-store-faster))
+  (:use #:common-lisp #:parachute #:cl-store-faster #:cl-store-faster-extensions))
 
 (in-package #:cl-store-faster-tests)
 
 (define-test test-very-basic-list-cdr-circularity
   (let ((a (list 123 456))
-	(cl-store-faster::*support-shared-list-structures* nil))
+	(*support-shared-list-structures* nil))
     (setf (cddr a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
       ;; (let ((*print-circle* t))
@@ -16,7 +16,7 @@
 
 (define-test test-very-basic-list-car-circularity
   (let ((a (list nil "abcd"))
-	(cl-store-faster::*support-shared-list-structures* nil))
+	(*support-shared-list-structures* nil))
     (setf (first a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
       ;; (let ((*print-circle* t))
@@ -27,7 +27,7 @@
 
 (define-test test-non-basic-circularity
   (let ((a (list 123 456))
-	(cl-store-faster::*support-shared-list-structures* t))
+	(*support-shared-list-structures* t))
     (setf (cdr (last a)) (nthcdr 1 a)) ;; loop back to second element
     (let ((result (restore-from-vector (store-to-vector a))))
       (is '= (first result) 123)
@@ -37,7 +37,7 @@
 (define-test test-simple-displaced-array-circularity
   (let* ((a (make-array 1))
 	 (b (make-array 1 :displaced-to a))
-	 (cl-store-faster::*support-shared-list-structures* nil))
+	 (*support-shared-list-structures* nil))
     (setf (aref a 0) b)
     (let ((c (restore-from-vector (store-to-vector b))))
       (let ((*print-circle* t))
@@ -49,7 +49,7 @@
 (define-test test-displaced-array-circularity
   (let* ((a (make-array 3))
 	 (b (make-array 1 :displaced-to a))
-	 (cl-store-faster::*support-shared-list-structures* nil))
+	 (*support-shared-list-structures* nil))
     (setf (aref a 0) b)
     (setf (aref a 1) (list "blarg" a b))
     (setf (aref a 2) (make-array 3 :initial-element b))
@@ -173,7 +173,7 @@
       (is 'equalp result s))))
 
 (define-test test-struct-info
-  (let ((b (cl-store-faster::compute-struct-info (make-instance 'blarg))))
+  (let ((b (compute-slot-info (make-instance 'blarg))))
     (is 'equalp
 	(restore-from-vector (store-to-vector b))
 	b)))
@@ -238,8 +238,8 @@
 (define-test test-non-proper-list
   (let ((non-proper-list '(1 . 2)))
     (is 'equal
-	(cl-store-faster::restore-from-vector
-	 (cl-store-faster::store-to-vector
+	(restore-from-vector
+	 (store-to-vector
 	  non-proper-list))
 	non-proper-list)))
 
@@ -314,3 +314,12 @@
 		  (let ((*write-magic-number* t))
 		    (store nil "check"))))))
   
+(define-test test-condition-serialization
+  ;; On sbcl a condition is neither a standard-object nor a structure-object
+  #+sbcl
+  (let* ((a (make-condition 'simple-error :format-control "hi ~A" :format-arguments (list 123)))
+         (b (restore (store nil a))))
+    (is 'eql (type-of a) (type-of b))
+    (is 'eql (class-of a) (class-of b))
+    (is 'equalp (simple-condition-format-control a) (simple-condition-format-control b))
+    (is 'equal (simple-condition-format-arguments a) (simple-condition-format-arguments b))))

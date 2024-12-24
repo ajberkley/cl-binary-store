@@ -70,6 +70,8 @@
 
 (declaim (inline restore-symbol))
 (defun restore-symbol (storage references)
+  "Do not call me directly because if you called store-symbol you may have
+ ended up writing a reference to the symbol object instead of the symbol object."
   (let* ((symbol-string (restore-string storage))
 	 (package-string (restore-object storage references)))
       (if (find-package package-string)
@@ -77,7 +79,5 @@
 	  (signal-missing-package symbol-string package-string))))
 
 (defun restore-gensym (storage)
-  ;; Can never be referred to by anything
-  (let ((symbol-string (restore-object storage nil);; (restore-string storage)
-		       ))
-    (make-symbol symbol-string)))
+  "You can call this directly since we never store references"
+  (make-symbol (restore-string storage)))
