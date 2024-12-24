@@ -13,7 +13,7 @@
   (store nil :type (simple-array (unsigned-byte 8) (*)))
   (sap nil :type #+sbcl sb-alien::system-area-pointer #-sbcl (simple-array (unsigned-byte 8) (*)))
   (flusher nil :type function)
-  (underlying-stream nil :type (or null stream)))
+  (underlying-stream nil :type (or null stream))) ;; if exists... I have found no use for this yet
 
 (declaim (inline read-storage-size))
 (defun read-storage-size (storage)

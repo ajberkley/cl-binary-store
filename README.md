@@ -204,14 +204,14 @@ would shrink the file size by maximally 3 bytes per single float
 (assuming we have less than 256 reference ids in the file) but not
 worth it.
 
+I tried putting in a bypass for ub8 vectors that writes directly to
+the stream if one exists, but it wasn't any faster.
 
 ## TODO
 
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
 - [ ] detect class and structure change on restore (just on the struct-info restore)
-- [ ] support store/restore from raw memory (mmap, sap, etc)
-- [ ] very large object storage without copying
-- [ ] Reduced copying if using a sap backend?
+- [ ] support store/restore from raw memory (mmap, sap, etc) and reduced copying in this case
 - [ ] Parallel store and restore ... restore is easy but store is near impossible
 - [ ] Separate EQ and EQL reference tables.  Support no reference table as an option for speed.
 - [ ] Provide non-sbcl specific serializers
