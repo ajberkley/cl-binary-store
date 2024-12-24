@@ -19,15 +19,6 @@
 	  (format t "Hyperluminal output size: ~,2f MB~%" (/ (* 8 size) 1e6))
 	  (format t "Hyperluminal mem restore~%")
 	  (time (dotimes (x 100) (hyperluminal-mem::mread-box/list sap 0 size))))))
-    ;; Note cl-store run 10x less cause it's too slow in this mode
-    ;; if you try and dump it to a flexi-streams sequence it's 4x slower than this!
-    (when cl-store
-      (format t "CL-STORE store output to file (10x fewer runs)~%")
-      (time (dotimes (x 10) (cl-store:store a "blarg.bin")))
-      (with-open-file (str "blarg.bin")
-	(format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1e6)))
-      (format t "CL-STORE restore output from file (10x fewer runs)~%")
-      (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
     (when cl-store-faster
       (let* ((cl-store-faster::*support-shared-list-structures* nil)
 	     (cl-store-faster::*track-references* nil)
@@ -40,7 +31,16 @@
 	;;(sb-sprof:with-profiling (:report :graph)
 	(format t "CL-STORE-FASTER restore from vector~%")
 	(time (dotimes (x 100) (cl-store-faster:restore data)));;)
-	(values)))))
+	(values)))
+    ;; if you try and dump it to a flexi-streams sequence it's 4x slower than this!
+    (when cl-store
+      (let ((cl-store:*check-for-circs* nil))
+        (format t "CL-STORE store output to file~%")
+        (time (dotimes (x 100) (cl-store:store a "blarg.bin")))
+        (with-open-file (str "blarg.bin")
+	  (format t "CL-STORE: file length ~,2fMB~%" (/ (file-length str) 1e6)))
+        (format t "CL-STORE restore output from file~%")
+        (time (dotimes (x 100) (cl-store:restore "blarg.bin")))))))
 
 ;; 1M long list with constant small integer:
 ;; HLMEM is very fast.  It writes in 220 ms, reads in 415 ms (900Mobj/sec; 3.6GB/sec)
