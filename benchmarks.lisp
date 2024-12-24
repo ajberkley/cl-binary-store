@@ -4,7 +4,7 @@
 
 (defun test-untracked-single-list-against-hlmem (&key (hlmem t) (cl-store nil) (cl-store-faster t))
   (let* ((len 1000000)
-	 (a (make-list len :initial-element (list "abcdefgh");; (coerce "ab" 'simple-base-string)
+	 (a (make-list len :initial-element (list (coerce "abcdefgh" 'simple-base-string));; (coerce "ab" 'simple-base-string)
 		       ))
 	 (store-size 64000000)
 	 (a-store (make-array store-size :element-type '(unsigned-byte 8))))
@@ -29,7 +29,7 @@
       (time (dotimes (x 10) (cl-store:restore "blarg.bin"))))
     (when cl-store-faster
       (let* ((cl-store-faster::*support-shared-list-structures* nil)
-	     (cl-store-faster::*track-references* t)
+	     (cl-store-faster::*track-references* nil)
 	     (size (cl-store-faster:store a-store a))
 	     (data (subseq a-store 0 size)))
 	(format t "Cl-STORE-FASTER output size ~,2f MB~%" (/ size 1e6))
