@@ -216,9 +216,6 @@
       (when first-code
         (multiple-value-bind (first-result ignore)
             (read-dispatch first-code storage references)
-          (print first-result)
-          (print ignore)
-          
 	  (let ((rest (loop for code = (maybe-restore-ub8 storage)
 			    while code
                             with object and ignore
