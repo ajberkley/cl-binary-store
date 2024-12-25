@@ -35,7 +35,9 @@ symbols, hash-tables, and pathnames are supported.
 Multiply referenced objects are stored as references so equality is
 preserved across serialization / deserialization and circularity is
 supported.  If you disable reference tracking serialization is quite
-fast and appropriate for large simple-arrays which have dedicated (at
+fast.
+
+Large simple-arrays have dedicated (at
 least on sbcl) serializers / deserializers which should be close to
 disk/network/memory bandwidth limited.
 
