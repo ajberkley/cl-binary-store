@@ -8,9 +8,11 @@ hard to make work with other systems, just not top of mind right now. (see TODO)
 
 ## Focus
 - Data that has multiple references to the same object as well as circular references
-  - This dominates serialization time, so you can disable this.
-  - Complex list circularity and references (other than to the head of lists, separately disableable))
+  - This dominates serialization time (but you can disable this feature to get crazy speeds)
+  - Complex list circularity and references (other than to the head of lists, separately disableable as well))
 - Speed and compactness
+- Extensibility for specialized data
+- Should work out of the box without any effort with an easy programmer / user interface
 
 ## General features
 
@@ -19,13 +21,14 @@ compact and fast writers for ub8, ub16, ub32, ub64, sb8, sb16, sb32,
 fixnum, single-float, double-float, (complex double-float), and
 (complex single-float).
 
-All array types are supported, with the addition of specialized compact and fast
-writers for vectors and arrays of simple-bit-vectors, simple-base-string, single-floats,
-double-floats, fixnums, sb8, sb16, sb32, sb64, ub2, ub4, ub7, ub8, ub15, ub16, ub31, ub32,
-ub62, and ub64 (all these being supported by SBCL).
+All array types are supported, with the addition of specialized
+compact and very fast writers / readers for vectors and arrays of
+simple-bit-vectors, simple-base-string, single-floats, double-floats,
+fixnums, sb8, sb16, sb32, sb64, ub2, ub4, ub7, ub8, ub15, ub16, ub31,
+ub32, ub62, and ub64 (all these being supported by SBCL).
 
 structure-objects and standard-objects have good default
-serialize/deserializers and also conditions.
+serialize/deserializers, and also conditions.
 
 symbols, hash-tables, and pathnames are supported.
 
@@ -57,15 +60,13 @@ large arrays).
 ### (store-to-sap sap size &rest data)
 ### (restore-from-sap sap size)
  If you have an mmap'ed file or a raw system-area-pointer, you can store to
- it and restore from it.  For storing, if your allocated size (or mmap-ed
- file size) is not enough you will be thrown an 
+ it and restore from it.
 
-For storing to one, you'll have to know that there
- is enough room otherwise we will error (storage is stateful so not
- easily restartable from the middle)
- a system-area-pointer for storing to say an mmap'ed file... up to you to
- know there is enough space though.  Good for large arrays, etc., which will
- be blitted directly into there at high speed.
+ For storing to one, you don't need to know the size in advance as we throw
+ a restartable error allow you to allocate more system memory and continue
+ on.  See tests/cl-store-faster-tests.lisp test-sap-write/read for a silly
+ example of how to use this.  Nominally you'll be updating mmap regions of
+ files or something.
 
 ## Examples
 git clone the repo into your local quicklisp directory (usually ~/quicklisp/local-packages)
@@ -97,8 +98,9 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
 
 \*track-references\* default is T.  Let this to NIL if you have simple
 data with no references between them at all (so lists of data, no
-circularity, no repeated objects).  This is very fast (100s of MB/sec
-for small data; > 500 MB/sec for big data chunks; on my laptop).
+circularity, no repeated objects).  This then goes very fast
+(>500MB/sec / > 500 Mobjects/second for lists of numbers; > 5000
+MB/sec for big simple arrays chunks).
 
 \*support-shared-list-structures\* default is T.  Let this to NIL if
 you have no list circularity (when it is NIL basic circular lists are
@@ -120,7 +122,10 @@ validated against \*supported-versions\* when read back in.
 Each object is stored with a 8-bit type tag.  You can define new
 type tags and write specialized storage and restore methods.  See
 codes.lisp for examples.  If you do this, you probably want to change
-the \*write-version\* and \*supported-versions\*.
+the \*write-version\* and \*supported-versions\*.  Currently there isn't
+an easy way to trigger rebuilding of the dispatch code --- I've just been
+recompiling the dispatch.lisp and codes.lisp file.  It's on my TODO
+list.
 
 For serializing objects, the default behavior is probably good enough
 for 95% of users.  We provide a simple extension point with a generic
@@ -182,44 +187,25 @@ though I haven't implemented it because it's already reasonably fast
 
 Performance during serialization is dominated by the reference hash
 table building and use.  This is quite hard to improve as the hash
-table is an eq / eql table.  I could move the eql stuff (double-floats,
-symbols, ratios, bignums, complex) to a separate table, which then
-in principle would allow me to use a lockless table which would
-enable parallelization.  That's a TODO item.  BUT, for my use case
-it's the eq stuff (lots of cons'es) that dominates, which is
-hard to improve without hacking on the internals of the common lisp
-implementation.  This also makes it near impossible to parallelize
-serialization because the default sbcl hash table is too slow when
-synchronized.
+table is an eq table.  To enable parallelization on the serialization
+side would require hacking the internals of the system.
 
 If your data does not contain multiple references or repeated objects
 (in particular, repeated symbols will be stored repeatedly!), then you
 can let \*track-references\* to NIL and you can hit hundreds of MB/sec
 depending on your data (unicode strings are currently a bit slow as we
-are not using a fast utf-8 encoder) and 100M cons+integer objects per
+are not using a fast utf-8 encoder) and 500M cons+integer objects per
 second.  It's about 10-30x faster than cl-store in this mode.  This
-isn't the main focus of this package, though, so if you want > 1GB/sec
-speeds, you will do a better with hyperluminal mem (though data is a
-bit smaller with this package).  This package is between 3x faster and
-3x slower than hyperluminal-mem depending on data patterns both on
-store and restore.
-
-## Parallelization
-
-Unless we are using \*track-references\* nil we cannot come close
-to hitting disk bandwidths on the storage phase.  So, one possible
-direction is trying to parallelize the storage phase.  Unfortunately,
-that is quite hard to do, as we are eq hash-table performance limited
-and the sbcl synchronized hash tables are way too slow.
-
-Parallelization during restore is much easier, but performance is
-quite good already, so this isn't top of my list.
+package is between 3x faster and 3x slower than hyperluminal-mem
+depending on data patterns both on store and restore.  If you are
+storing simple arrays though, you want to use this package instead.
 
 ## TODO
 
+- [ ] Make it easy for extensions to trigger a rebuild of dispatch code after adding new codes / extensions
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
 - [ ] Parallel store and restore ... restore is easy but store is near impossible
-- [ ] Separate EQ and EQL reference tables.
 - [ ] Provide non-sbcl specific serializers
-- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string... babel is faster)
+- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)
 - [ ] Sort reference-ids by use amount if we have more than 255 or 65535 of them to shrink file?  An approximate radix sort might work quickly enough, but the cost of an extra puthash to keep an exact count is probably not worth it.
+- [ ] Add an end/stop marker so user can read objects one by one from raw memory or vectors or files?  Or more easily from sap vectors.

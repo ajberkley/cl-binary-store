@@ -82,7 +82,7 @@
 ;;  HLMEM READ : 5.04 ms at 1587 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 3.00 MB
-;;  CL-STORE-FASTER WRITE: 3.60 ms at 833 MB/sec
+;;  CL-STORE-FASTER WRITE: 3.60 ms at 833 MB/sec ;; (/ 2e6 3.6e-3) = 550Mobjs/second
 ;;  CL-STORE-FASTER READ : 8.20 ms at 366 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 5.00MB
