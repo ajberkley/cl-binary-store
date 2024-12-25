@@ -72,9 +72,9 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
     CL-USER> (quicklisp:quickload "cl-store-faster")
     CL-USER> (in-package :cl-store-faster)
     CL-STORE-FASTER> (store nil (list "abcd" 1234))
-    #(14 38 0 4 97 98 99 100 14 1 210 4 15)
-    ;; 14 = cons, 38 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 14 = cons
-    ;; 1 210 4 = 16 bit integer 1234, 15 = nil
+    #(4 39 0 4 97 98 99 100 4 1 210 4 5)
+    ;; 4 = cons, 39 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 4 = cons
+    ;; 1 210 4 = 16 bit integer 1234, 5 = nil
     
     CL-STORE-FASTER> (restore (store nil (list "abcd" 1234)))
     ("abcd" 1234)
@@ -82,14 +82,15 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
     CL-STORE-FASTER> (store "blarg.bin" 'hi)
     "blarg.bin"
     CL-STORE-FASTER> (restore "blarg.bin")
+    HI
     CL-STORE-FASTER> (store nil (make-string 1 :initial-element #\U+03b1))
-    #(38 0 2 206 177) ;; 4 bytes, 38 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
+    #(39 0 2 206 177) ;; 4 bytes, 39 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
 
     CL-STORE-FASTER> (let* ((*print-circle* t)
     		            (v (make-array 1)))
                         (setf (svref v 0) v)
                         (store "blarg.bin" 'a 'b 'c v)
-                        (format nil "~A" (restore "blarg.bin")))
+                        (format nil "~A" (multiple-value-list (restore "blarg.bin"))))
     "(A B C #1=#(#1#))"
 
 ### Configurable options
