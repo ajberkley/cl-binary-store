@@ -193,7 +193,7 @@
 	   (funcall restore-object)))
 
 (defun store-complex (complex storage store-object)
-  (declare (type complex complex) (type storage storage))
+  (declare (type complex complex) (type (or null storage) storage))
   (typecase complex
     ;; We do not try to match double-floats in complex numbers to others... (except 0d0)
     ((complex double-float) (store-complex-double-float complex storage))

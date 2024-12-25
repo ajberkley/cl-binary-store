@@ -123,9 +123,9 @@
       (loop for name across (slot-info-slot-names slot-info)
 	    do (funcall store-object (slot-value struct name))))))
 
-(defun restore-struct (storage restore-object)
+(defun restore-struct (restore-object)
   (declare (type function restore-object))
-  (let* ((slot-info (funcall restore-object storage))
+  (let* ((slot-info (funcall restore-object))
          (class (slot-info-class slot-info))
 	 (struct (if (slot-info-call-initialize-instance slot-info)
                      (make-instance class)

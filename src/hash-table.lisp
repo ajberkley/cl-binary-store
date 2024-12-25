@@ -4,8 +4,8 @@
   (declare (optimize speed safety) (type hash-table ht) (type function store-object))
   (when storage
     (store-ub8 +hash-table-code+ storage nil)
-    (store-tagged-unsigned-fixnum (hash-table-count ht) storage)
-    (store-tagged-unsigned-fixnum (hash-table-size ht) storage))
+    (store-unsigned-fixnum (hash-table-count ht) storage)
+    (store-unsigned-fixnum (hash-table-size ht) storage))
   (funcall store-object (hash-table-test ht)) ;; a symbol
   (funcall store-object (hash-table-rehash-threshold ht)) ;; float
   (funcall store-object (hash-table-rehash-size ht)) ;; float
@@ -18,7 +18,6 @@
 	     (funcall store-object v))
 	   ht))
 
-;; WE NEED TO USE VERSIONING TO HANDLE THE LACK OF SYNCHRONIZED/WEAKNESS KEYS
 (defun restore-hash-table (storage restore-object)
   (declare (type function restore-object))
   (let* ((hash-table-count (restore-tagged-unsigned-fixnum storage))

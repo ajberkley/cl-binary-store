@@ -22,7 +22,7 @@
   (number 2718281828 :type integer :read-only t))
 
 (defmethod action ((code (eql +magic-number-action-code+)) storage refrences restore-object)
-  (let ((magic-number (restore-object storage nil)))
+  (let ((magic-number (funcall restore-object)))
     (unless (member magic-number *supported-versions*)
       (error "Unsupported version #x~X, we support ~{#x~X~^ ~}"
 	     magic-number *supported-versions*))

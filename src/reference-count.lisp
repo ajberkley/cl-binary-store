@@ -17,7 +17,7 @@
   (store-tagged-unsigned-fixnum (write-reference-count-reference-count action) storage))
 
 (defmethod action ((code (eql +set-reference-action-code+)) storage references restore-object)
-  (let ((num-refs (restore-object storage nil)))
+  (let ((num-refs (funcall restore-object)))
     #+info-csf(format t "This file has ~A references~%" num-refs)
     (setf (references-vector references) (make-array num-refs))))
 

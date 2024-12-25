@@ -262,7 +262,7 @@
   ;; STRUCTURE-OBJECTS (defstruct) and STANDARD-CLASS (defclass)
   (defstore structure-object (store-struct obj storage eq-refs store-object))
   (defstore standard-object (store-standard-object obj storage eq-refs store-object))
-  (defrestore +structure-object-code+ (restore-struct storage restore-object))
+  (defrestore +structure-object-code+ (restore-struct restore-object))
   (defrestore +standard-object-code+ (restore-standard-object restore-object))
 
   ;; REFERENCES
@@ -297,7 +297,7 @@
   (defstore array (store-array obj storage eq-refs store-object))
   (defrestore +array-code+ (restore-array storage restore-object))
 
-  (defstore slot-info (store-slot-info obj storage eq-refs))
+  (defstore slot-info (store-slot-info obj storage eq-refs store-object))
   (defrestore +slot-info-code+ (restore-slot-info storage restore-object))
 
   ;; UNBOUND MARKER
