@@ -351,3 +351,11 @@
                                          :sap-size (length a)))))
                        (store-to-sap (sb-sys:vector-sap a) 1 data))))
               (is 'equal data (restore-from-sap (sb-sys:vector-sap a) len))))))
+
+(define-test test-store/restore-to-file
+  (let ((data1 (make-array 398423 :initial-element 3))
+        (data2 (make-list 1234 :initial-element "hi")))
+    (multiple-value-bind (d1 d2)
+        (restore (store "blarg-test-cl-store.bin" data1 data2))
+      (is 'equalp data1 d1)
+      (is 'equalp data2 d2))))
