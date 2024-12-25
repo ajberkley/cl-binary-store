@@ -32,7 +32,9 @@ symbols, hash-tables, and pathnames are supported.
 Multiply referenced objects are stored as references so equality is
 preserved across serialization / deserialization and circularity is
 supported.  If you disable reference tracking serialization is quite
-fast and appropriate for large simple-arrays.
+fast and appropriate for large simple-arrays which have dedicated (at
+least on sbcl) serializers / deserializers which should be close to
+disk/network/memory bandwidth limited.
 
 Support for writing and reading from files, vectors, streams, and
 raw memory without having to jump through hoops.
@@ -66,23 +68,28 @@ For storing to one, you'll have to know that there
  be blitted directly into there at high speed.
 
 ## Examples
-
-    CL-USER> (cl-store nil (list "abcd" 1234))
+git clone the repo into your local quicklisp directory (usually ~/quicklisp/local-packages)
+    CL-USER> (quicklisp:quickload "cl-store-faster")
+    CL-USER> (in-package :cl-store-faster)
+    CL-STORE-FASTER> (store nil (list "abcd" 1234))
     #(14 38 0 4 97 98 99 100 14 1 210 4 15)
     ;; 14 = cons, 38 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 14 = cons
     ;; 1 210 4 = 16 bit integer 1234, 15 = nil
     
-    CL-USER> (restore (cl-store nil (list "abcd" 1234)))
+    CL-STORE-FASTER> (restore (store nil (list "abcd" 1234)))
     ("abcd" 1234)
 
-    CL-USER> (cl-store-faster:store nil (make-string 1 :initial-element #\U+03b1))
+    CL-STORE-FASTER> (store "blarg.bin" 'hi)
+    "blarg.bin"
+    CL-STORE-FASTER> (restore "blarg.bin")
+    CL-STORE-FASTER> (store nil (make-string 1 :initial-element #\U+03b1))
     #(38 0 2 206 177) ;; 4 bytes, 38 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
 
-    CL-USER> (let* ((*print-circle* t)
-    		    (v (make-array 1)))
-		(setf (svref v 0) v)
-               (store "blarg.bin" 'a 'b 'c v)
-               (format nil "~A" (restore "blarg.bin")))
+    CL-STORE-FASTER> (let* ((*print-circle* t)
+    		            (v (make-array 1)))
+                        (setf (svref v 0) v)
+                        (store "blarg.bin" 'a 'b 'c v)
+                        (format nil "~A" (restore "blarg.bin")))
     "(A B C #1=#(#1#))"
 
 ### Configurable options

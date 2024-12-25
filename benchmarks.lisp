@@ -242,12 +242,12 @@
 ;;  HLMEM READ : 18.92 ms at 169 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 1.15 MB
-;;  CL-STORE-FASTER WRITE: 18.60 ms at 62 MB/sec
-;;  CL-STORE-FASTER READ : 16.84 ms at 68 MB/sec
+;;  CL-STORE-FASTER WRITE: 31.88 ms at 36 MB/sec
+;;  CL-STORE-FASTER READ : 32.12 ms at 36 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 1.24MB
-;;  CL-STORE WRITE: 34.80 ms at 36 MB/sec
-;;  CL-STORE READ : 47.20 ms at 26 MB/sec
+;;  CL-STORE WRITE: 56.00 ms at 22 MB/sec
+;;  CL-STORE READ : 70.00 ms at 18 MB/sec
 (defun lots-of-symbols ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'cl-user)))

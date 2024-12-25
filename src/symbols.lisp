@@ -66,9 +66,9 @@
   (let* ((symbol-string (restore-string storage))
 	 (package-string (funcall (the function restore-object)))) ;; might be a reference
       (if (find-package package-string)
-	  (intern symbol-string package-string)
+	  (values (intern symbol-string package-string))
 	  (signal-missing-package symbol-string package-string))))
 
 (defun restore-uninterned-symbol (storage)
   "You can call this directly since we never store references"
-  (make-symbol (restore-string storage)))
+  (values (make-symbol (restore-string storage))))

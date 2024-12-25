@@ -129,7 +129,8 @@
 (defun restore-from-file (filename)
   (declare (optimize speed safety))
   (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
-    (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0)
+    (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0
+                   :stream str)
       (restore-objects storage))))
 
 ;;; General interface
