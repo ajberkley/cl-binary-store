@@ -81,12 +81,12 @@
 	(if ref-idx
 	    (cond
 	      ((>= ref-idx 0)
-	       #+debug-csf (format t "Storing a reference (#~A) which is to a ~A~%"
+	       #+dribble-csf (format t "Storing a reference (#~A) which is to a ~A~%"
 				   ref-idx (type-of object))
 	       (store-reference ref-idx storage)
 	       t)
 	      (t
-	       #+debug-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
+	       #+dribble-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
 				   (- ref-idx) (type-of object))
 	       (setf ref-idx (- ref-idx))
 	       (store-reference-id-for-following-object ref-idx storage)
@@ -247,7 +247,7 @@
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
   (when storage
-    #+debug-csf (format t "Writing reference ~A~%" ref-index)
+    #+dribble-csf (format t "Writing reference ~A~%" ref-index)
     (typecase ref-index
       ((unsigned-byte 8)
        (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
@@ -269,7 +269,7 @@
 (defun store-reference-id-for-following-object (ref-index storage)
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
-  #+debug-csf (format t "Writing reference follows ~A~%" ref-index)
+  #+dribble-csf (format t "Writing reference follows ~A~%" ref-index)
   (typecase ref-index
     ((unsigned-byte 8)
      (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)

@@ -28,7 +28,8 @@
 
 (defun restore-action& (storage references)
   (let ((command (restore-ub8 storage)))
-    (action command storage references)))
+    (action command storage references))
+  (values nil t))
 
 (defun store-action& (action storage references)
   (with-write-storage (storage)

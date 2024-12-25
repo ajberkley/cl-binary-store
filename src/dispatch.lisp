@@ -126,7 +126,7 @@
 			   (push
 			    (list
 			     type-spec
-			     #+debug-csf
+			     #+dribble-csf
 			     `(format t ,(format nil
 						 "Dispatching to code ~A: ~A~~%"
 						 code func-name))
@@ -208,21 +208,29 @@
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just
  returns it, otherwise returns a list of all elements restored."
-    ;; NOMINALLY WE SHOULD BE WRITING OUT THE NUMBER OF REFERENCES TO AVOID RESIZING
     (let* ((references-vector (make-array 8192))
 	   (references (make-references :vector references-vector))
 	   (first-code (maybe-restore-ub8 storage))
-	   (first-result (when first-code (read-dispatch first-code storage references)))
 	   (*version-being-read* nil))
       (declare (dynamic-extent references references-vector))
       (when first-code
-	(let ((rest (loop for code = (maybe-restore-ub8 storage)
-			  while code
-                          #+debug-csf do
-                          #+debug-csf (format t "Read code ~A (offset ~A max ~A)~%" code
-                                           (storage-offset storage) (storage-max storage))
-			  collect (read-dispatch code storage references))))
-	  (apply #'values first-result rest)))))
+        (multiple-value-bind (first-result ignore)
+            (read-dispatch first-code storage references)
+          (print first-result)
+          (print ignore)
+          
+	  (let ((rest (loop for code = (maybe-restore-ub8 storage)
+			    while code
+                            with object and ignore
+                            #+debug-csf do
+                            #+debug-csf (format t "Read code ~A (offset ~A max ~A)~%" code
+                                                (storage-offset storage) (storage-max storage))
+			    do (setf (values object ignore) (read-dispatch code storage references))
+                            unless ignore
+                              collect object)))
+            (if ignore
+                (apply #'values rest)
+	        (apply #'values first-result rest)))))))
 
   (defun analyze-references-hash-table (&optional references)
     (declare (ignorable references))
