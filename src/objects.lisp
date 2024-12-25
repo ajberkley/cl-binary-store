@@ -86,7 +86,7 @@
     (let ((slot-names (slot-info-slot-names slot-info)))
       (when storage
 	(store-ub8 +slot-info-code+ storage nil)
-	(store-tagged-unsigned-fixnum (length slot-names) storage)
+	(store-unsigned-fixnum (length slot-names) storage)
         (store-boolean (slot-info-call-initialize-instance slot-info) storage))
       (store-symbol (slot-info-type slot-info) storage eq-refs store-object)
       (loop for name across slot-names

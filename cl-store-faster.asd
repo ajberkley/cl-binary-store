@@ -4,7 +4,7 @@
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :long-name "Fast serialization / deserialization library"
   :pathname "src/"
-  :depends-on (#:flexi-streams #:babel)
+  :depends-on (#:flexi-streams #:babel #:cl-ppcre)
   :components ((:file "features")
 	       (:file "cl-store-faster")
 	       (:file "cl-store-faster-extensions")

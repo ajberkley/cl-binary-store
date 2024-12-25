@@ -234,18 +234,24 @@
   (store-single-float (realpart complex-single-float) storage nil)
   (store-single-float (imagpart complex-single-float) storage nil))
 
+(declaim (inline store-unsigned-fixnum))
+(defun store-unsigned-fixnum (fixnum storage)
+  (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
+  (when storage
+    (if (< fixnum 256)
+        (store-ub8 fixnum storage)
+        (if (< fixnum 65536)
+	    (store-ub16 fixnum storage)
+	    (if (< fixnum #.(expt 2 32))
+	        (store-ub32 fixnum storage)
+	        (store-only-fixnum fixnum storage))))))
+  
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage)
   (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
   (when storage
     (if (> fixnum 0)
-        (if (< fixnum 256)
-	    (store-ub8 fixnum storage)
-	    (if (< fixnum 65536)
-	        (store-ub16 fixnum storage)
-	        (if (< fixnum #.(expt 2 32))
-		    (store-ub32 fixnum storage)
-		    (store-only-fixnum fixnum storage))))
+        (store-unsigned-fixnum fixnum storage)
         (if (> fixnum -256)
             (store-sb8 fixnum storage)
             (if (> fixnum -65536)
@@ -260,7 +266,7 @@
  RESTORE-OBJECT."
   (when storage
     (if (typep integer 'fixnum)
-	(store-tagged-unsigned-fixnum integer storage)
+	(store-fixnum integer storage)
 	(store-bignum integer storage references))))
 
 (declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
