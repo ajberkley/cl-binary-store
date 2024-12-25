@@ -224,13 +224,13 @@
 ;;  HLMEM WRITE: 18.52 ms at 173 MB/sec
 ;;  HLMEM READ : 33.32 ms at 96 MB/sec
 ;; CL-STORE-FASTER
-;;  OUTPUT SIZE: 0.99 MB
-;;  CL-STORE-FASTER WRITE: 37.32 ms at 26 MB/sec
-;;  CL-STORE-FASTER READ : 29.08 ms at 34 MB/sec
+;;  OUTPUT SIZE: 1.15 MB
+;;  CL-STORE-FASTER WRITE: 28.56 ms at 40 MB/sec
+;;  CL-STORE-FASTER READ : 29.36 ms at 39 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 1.24MB
-;;  CL-STORE WRITE: 59.99 ms at 21 MB/sec
-;;  CL-STORE READ : 69.99 ms at 18 MB/sec
+;;  CL-STORE WRITE: 52.80 ms at 24 MB/sec
+;;  CL-STORE READ : 63.60 ms at 20 MB/sec
 (defun lots-of-keywords ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'keyword)))
@@ -242,12 +242,12 @@
 ;;  HLMEM READ : 18.92 ms at 169 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 1.15 MB
-;;  CL-STORE-FASTER WRITE: 22.88 ms at 50 MB/sec
-;;  CL-STORE-FASTER READ : 18.24 ms at 63 MB/sec
+;;  CL-STORE-FASTER WRITE: 18.60 ms at 62 MB/sec
+;;  CL-STORE-FASTER READ : 16.84 ms at 68 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 1.24MB
-;;  CL-STORE WRITE: 35.20 ms at 35 MB/sec
-;;  CL-STORE READ : 51.59 ms at 24 MB/sec
+;;  CL-STORE WRITE: 34.80 ms at 36 MB/sec
+;;  CL-STORE READ : 47.20 ms at 26 MB/sec
 (defun lots-of-symbols ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'cl-user)))
@@ -259,44 +259,44 @@
 ;; hyperluminal mem needs an extension for this so skipping it for now
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 1.79 MB
-;;  CL-STORE-FASTER WRITE: 56.11 ms at 32 MB/sec
-;;  CL-STORE-FASTER READ : 11.32 ms at 158 MB/sec
+;;  CL-STORE-FASTER WRITE: 49.00 ms at 37 MB/sec
+;;  CL-STORE-FASTER READ : 9.24 ms at 194 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 6.69MB
-;;  CL-STORE WRITE: 168.78 ms at 40 MB/sec
-;;  CL-STORE READ : 184.78 ms at 36 MB/sec
+;;  CL-STORE WRITE: 171.20 ms at 39 MB/sec
+;;  CL-STORE READ : 182.40 ms at 37 MB/sec
 (defun lots-of-structure-objects ()
   (loop for i below 100000
         collect (make-blarg :a (random 1d0) :b (format nil "~A" (random 100)))))
 
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 2.40 MB
-;;  HLMEM WRITE: 4.04 ms at 594 MB/sec
-;;  HLMEM READ : 2.80 ms at 857 MB/sec
+;;  HLMEM WRITE: 4.00 ms at 600 MB/sec
+;;  HLMEM READ : 2.48 ms at 968 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 0.99 MB
-;;  CL-STORE-FASTER WRITE: 2.68 ms at 369 MB/sec
-;;  CL-STORE-FASTER READ : 2.92 ms at 339 MB/sec
+;;  CL-STORE-FASTER WRITE: 2.12 ms at 466 MB/sec
+;;  CL-STORE-FASTER READ : 2.44 ms at 405 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 0.99MB
-;;  CL-STORE WRITE: 11.60 ms at 85 MB/sec
-;;  CL-STORE READ : 8.00 ms at 124 MB/sec
+;;  CL-STORE WRITE: 12.00 ms at 82 MB/sec
+;;  CL-STORE READ : 7.60 ms at 130 MB/sec
 (defun simple-base-strings ()
   (loop for i below 100000
         collect (coerce (format nil "~A" (random 1000000)) 'simple-base-string)))
 
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 2.40 MB
-;;  HLMEM WRITE: 4.56 ms at 526 MB/sec
+;;  HLMEM WRITE: 4.52 ms at 531 MB/sec
 ;;  HLMEM READ : 3.12 ms at 769 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 1.19 MB
-;;  CL-STORE-FASTER WRITE: 3.92 ms at 303 MB/sec
-;;  CL-STORE-FASTER READ : 9.08 ms at 131 MB/sec
+;;  CL-STORE-FASTER WRITE: 4.04 ms at 294 MB/sec
+;;  CL-STORE-FASTER READ : 8.68 ms at 137 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 2.08MB
-;;  CL-STORE WRITE: 20.00 ms at 104 MB/sec
-;;  CL-STORE READ : 12.00 ms at 173 MB/sec
+;;  CL-STORE WRITE: 23.20 ms at 90 MB/sec
+;;  CL-STORE READ : 11.60 ms at 179 MB/sec
 (defun simple-strings ()
   (loop for i below 100000
         collect (format nil "~A~A" (random 1000000) #\U+03b1)))
