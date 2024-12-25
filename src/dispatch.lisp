@@ -18,22 +18,23 @@
 	   (*slot-info* slot-info))
       (declare (dynamic-extent slot-info))
       (with-reference-tables (track-references)
-        (when track-references
-	  #+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
-          (labels ((store-object2 (obj)
-                     (let ((store-object #'store-object)
-                           (storage nil))
-                       (store-object/reference-phase obj)))
+	#+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
+        (labels ((store-object2 (obj)
+                   (let ((store-object #'store-object)
+                         (storage nil))
+                     (store-object/reference-phase obj)))
                    (store-object (obj)
                      (let ((store-object #'store-object2)
                            (storage nil))
                        (store-object/reference-phase obj))))
-            (declare (inline store-object2)) ;; inline one level deep
+          (declare (inline store-object2)) ;; inline one level deep
+          (when track-references
 	    (dolist (elt stuff)
-              (store-object elt)))
-          #+debug-csf (format t "Finished reference counting pass~%")
-          (let ((ref-id 0))
-            (declare (type fixnum ref-id))
+              (store-object elt))))
+        #+debug-csf (format t "Finished reference counting pass~%")
+        (let ((ref-id 0))
+          (declare (type fixnum ref-id))
+          (when track-references
             (map-reference-tables #'analyze-references-hash-table) ;; debugging only
             ;; Now clean up the references table: delete anyone who has no references
             #+debug-csf (format t "Generating real reference hash-table~%")
@@ -45,26 +46,25 @@
         	              (setf (gethash k table) (- (incf ref-id)))  ; signal it needs writing
                               (remhash k table)))
                         table)))
+            #+debug-csf
+            (map-reference-tables (lambda (table-name table)
+                                    (format t "~A: there are ~A actual references~%"
+                                            table-name
+                                            (hash-table-count table)))))
+          #+debug-csf (format t "Starting actual storage phase~%")
+          (labels ((store-object2 (obj) ;; inline one deep
+                     (let ((store-object #'store-object))
+                       (store-object/storage-phase obj)))
+                   (store-object (obj)
+                     (let ((store-object #'store-object2))
+                       (store-object/storage-phase obj))))
+            (declare (inline store-object2))
             (when (>= ref-id 2048) ;; if we would have to expand the references vector
               #+debug-csf (format t "Writing total reference count ~A to file~%" (1+ ref-id))
-              (write-reference-count (1+ ref-id) storage)))
-          #+debug-csf
-          (map-reference-tables (lambda (table-name table)
-                                  (format t "~A: there are ~A actual references~%"
-                                          table-name
-                                          (hash-table-count table)))))
-        #+debug-csf (format t "Starting actual storage phase~%")
-        (labels ((store-object2 (obj) ;; inline one deep
-                   (let ((store-object #'store-object))
-                     (store-object/storage-phase obj)))
-                 (store-object (obj)
-                   (let ((store-object #'store-object2))
-                     (store-object/storage-phase obj))))
-          (declare (inline store-object2))
-          (dolist (elt stuff)
-            (store-object elt)))
-      (flush-write-storage storage))))
-
+              (write-reference-count (1+ ref-id) #'store-object))
+            (dolist (elt stuff)
+              (store-object elt))))
+        (flush-write-storage storage))))
  
   (defun restore-objects (storage)
     "Returns all the elements in storage.  If a single element just

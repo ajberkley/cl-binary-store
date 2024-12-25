@@ -78,46 +78,46 @@
 
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 8.00 MB
-;;  HLMEM WRITE: 2.28 ms at 3509 MB/sec
-;;  HLMEM READ : 4.60 ms at 1739 MB/sec
+;;  HLMEM WRITE: 2.32 ms at 3448 MB/sec
+;;  HLMEM READ : 5.04 ms at 1587 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 3.00 MB
-;;  CL-STORE-FASTER WRITE: 5.60 ms at 536 MB/sec
-;;  CL-STORE-FASTER READ : 11.84 ms at 253 MB/sec
+;;  CL-STORE-FASTER WRITE: 3.60 ms at 833 MB/sec
+;;  CL-STORE-FASTER READ : 8.20 ms at 366 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 5.00MB
-;;  CL-STORE WRITE: 59.19 ms at 84 MB/sec
-;;  CL-STORE READ : 55.19 ms at 91 MB/sec
+;;  CL-STORE WRITE: 59.20 ms at 84 MB/sec
+;;  CL-STORE READ : 50.40 ms at 99 MB/sec
 (defun long-list-of-small-integers (&optional (n 1000000))
   (make-list n :initial-element (random 256)))
 
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 16.00 MB
-;;  HLMEM WRITE: 27.04 ms at 592 MB/sec
-;;  HLMEM READ : 17.72 ms at 903 MB/sec
+;;  HLMEM WRITE: 23.28 ms at 687 MB/sec
+;;  HLMEM READ : 15.68 ms at 1020 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 10.00 MB
-;;  CL-STORE-FASTER WRITE: 9.48 ms at 1055 MB/sec
-;;  CL-STORE-FASTER READ : 18.08 ms at 553 MB/sec
+;;  CL-STORE-FASTER WRITE: 13.44 ms at 744 MB/sec
+;;  CL-STORE-FASTER READ : 13.84 ms at 723 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 48.00MB
-;;  CL-STORE WRITE: 598.34 ms at 80 MB/sec
-;;  CL-STORE READ : 733.13 ms at 65 MB/sec
+;;  CL-STORE WRITE: 577.99 ms at 83 MB/sec
+;;  CL-STORE READ : 701.99 ms at 68 MB/sec
 (defun long-list-of-random-double-floats (&optional (n 1000000))
   (make-list n :initial-element (random 1d0)))
 
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 8.00 MB
-;;  HLMEM WRITE: 3.08 ms at 2598 MB/sec
-;;  HLMEM READ : 6.12 ms at 1307 MB/sec
+;;  HLMEM WRITE: 2.96 ms at 2703 MB/sec
+;;  HLMEM READ : 5.96 ms at 1342 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 6.00 MB
-;;  CL-STORE-FASTER WRITE: 8.64 ms at 695 MB/sec
-;;  CL-STORE-FASTER READ : 13.40 ms at 448 MB/sec
+;;  CL-STORE-FASTER WRITE: 6.84 ms at 877 MB/sec
+;;  CL-STORE-FASTER READ : 9.08 ms at 661 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 22.00MB
-;;  CL-STORE WRITE: 295.57 ms at 74 MB/sec
-;;  CL-STORE READ : 426.76 ms at 52 MB/sec
+;;  CL-STORE WRITE: 307.20 ms at 72 MB/sec
+;;  CL-STORE READ : 414.40 ms at 53 MB/sec
 (defun long-list-of-random-single-floats (&optional (n 1000000))
   (make-list n :initial-element (random 1f0)))
 
@@ -144,16 +144,16 @@
 
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 1.27 MB
-;;  HLMEM WRITE: 7.96 ms at 160 MB/sec
-;;  HLMEM READ : 14.48 ms at 88 MB/sec
+;;  HLMEM WRITE: 7.88 ms at 161 MB/sec
+;;  HLMEM READ : 14.24 ms at 89 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 1.26 MB
-;;  CL-STORE-FASTER WRITE: 0.12 ms at 10468 MB/sec
-;;  CL-STORE-FASTER READ : 0.16 ms at 7851 MB/sec
+;;  CL-STORE-FASTER WRITE: 0.12 ms at 10467 MB/sec
+;;  CL-STORE-FASTER READ : 0.12 ms at 10467 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 40.05MB
-;;  CL-STORE WRITE: 549.55 ms at 73 MB/sec
-;;  CL-STORE READ : 513.15 ms at 78 MB/sec
+;;  CL-STORE WRITE: 551.19 ms at 73 MB/sec
+;;  CL-STORE READ : 490.39 ms at 82 MB/sec
 (defun long-list-of-big-simple-bit-vectors ()
   (loop repeat 1000
 	collect
@@ -164,16 +164,16 @@
 
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 16.02 MB
-;;  HLMEM WRITE: 34.48 ms at 465 MB/sec
-;;  HLMEM READ : 13.96 ms at 1147 MB/sec
+;;  HLMEM WRITE: 34.68 ms at 462 MB/sec
+;;  HLMEM READ : 13.60 ms at 1178 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 8.01 MB
-;;  CL-STORE-FASTER WRITE: 0.76 ms at 10535 MB/sec
-;;  CL-STORE-FASTER READ : 2.00 ms at 4003 MB/sec
+;;  CL-STORE-FASTER WRITE: 0.84 ms at 9531 MB/sec
+;;  CL-STORE-FASTER READ : 1.60 ms at 5004 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 47.06MB
-;;  CL-STORE WRITE: 646.34 ms at 73 MB/sec
-;;  CL-STORE READ : 885.11 ms at 53 MB/sec
+;;  CL-STORE WRITE: 577.99 ms at 81 MB/sec
+;;  CL-STORE READ : 831.99 ms at 57 MB/sec
 (defun long-list-of-big-simple-double-float-vectors ()
   (loop repeat 1000
 	collect
@@ -183,26 +183,26 @@
          '(simple-array double-float (*)))))
 
 ;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 20.49 MB
-;;  HLMEM WRITE: 35.16 ms at 583 MB/sec
-;;  HLMEM READ : 30.16 ms at 680 MB/sec
+;;  OUTPUT SIZE: 20.48 MB
+;;  HLMEM WRITE: 34.12 ms at 600 MB/sec
+;;  HLMEM READ : 30.96 ms at 662 MB/sec
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 8.06 MB
-;;  CL-STORE-FASTER WRITE: 24.88 ms at 324 MB/sec
-;;  CL-STORE-FASTER READ : 91.19 ms at 88 MB/sec
+;;  CL-STORE-FASTER WRITE: 25.20 ms at 320 MB/sec
+;;  CL-STORE-FASTER READ : 43.76 ms at 184 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 27.78MB
-;;  CL-STORE WRITE: 392.76 ms at 71 MB/sec
-;;  CL-STORE READ : 417.56 ms at 67 MB/sec
+;;  CL-STORE WRITE: 448.79 ms at 62 MB/sec
+;;  CL-STORE READ : 408.40 ms at 68 MB/sec
 ;; and using referencing to deduplicate the double-floats
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 3.38 MB
-;;  CL-STORE-FASTER WRITE: 91.27 ms at 37 MB/sec
-;;  CL-STORE-FASTER READ : 16.92 ms at 200 MB/sec
+;;  CL-STORE-FASTER WRITE: 65.52 ms at 52 MB/sec
+;;  CL-STORE-FASTER READ : 12.32 ms at 274 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 4.88MB
-;;  CL-STORE WRITE: 107.59 ms at 45 MB/sec
-;;  CL-STORE READ : 112.79 ms at 43 MB/sec
+;;  CL-STORE WRITE: 129.60 ms at 38 MB/sec
+;;  CL-STORE READ : 110.40 ms at 44 MB/sec
 (defun long-complex-list ()
   (loop repeat 1000000 collect (if (> (random 1000) 500)
 				   3.1415d0
