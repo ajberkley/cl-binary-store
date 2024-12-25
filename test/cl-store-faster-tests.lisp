@@ -309,10 +309,9 @@
 	 (store nil "check"))))
   (is 'equalp
       "check"
-      (nth-value 1
-		 (restore
-		  (let ((*write-magic-number* t))
-		    (store nil "check"))))))
+      (restore
+       (let ((*write-magic-number* t))
+	 (store nil "check")))))
   
 #+sbcl(define-test test-condition-serialization
   ;; On sbcl a condition is neither a standard-object nor a structure-object

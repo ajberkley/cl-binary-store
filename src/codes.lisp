@@ -219,7 +219,7 @@
   (defrestore +fixnum-code+ (restore-fixnum storage))
   (defrestore +sb8-code+ (restore-sb8 storage))
   (defrestore +sb16-code+ (restore-sb16 storage))
-  (defrestore +sb32-code+ (restore-sb16 storage))
+  (defrestore +sb32-code+ (restore-sb32 storage))
 
   (defstore bignum (store-bignum obj storage num-eq-refs) :check-for-ref-in num-eq-refs)
   (defrestore +bignum-code+ (restore-bignum storage))
