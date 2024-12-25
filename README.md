@@ -72,6 +72,7 @@ large arrays).
 
 ## Examples
 git clone the repo into your local quicklisp directory (usually ~/quicklisp/local-packages)
+
     CL-USER> (quicklisp:quickload "cl-store-faster")
     CL-USER> (in-package :cl-store-faster)
     CL-STORE-FASTER> (store nil (list "abcd" 1234))
