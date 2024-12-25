@@ -7,8 +7,9 @@
   ;; We need to order these by subtypep, a simple sort won't work
   ;; because we have disjoint sets.  So first, we have to sort into
   ;; disjoint sets, then sort, then recombine.
-  (let* ((type-groups '(cons symbol integer ;; fixnum bignum
-			vector array number structure-object standard-object t))
+  (let* ((type-groups '(cons fixnum symbol float
+			vector array structure-object standard-object
+                        bignum t))
 	 (groups (make-array (length type-groups) :initial-element nil)))
     (loop for item in type-specs
 	  do (loop for count below (length type-groups)

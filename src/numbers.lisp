@@ -82,15 +82,14 @@
 	(loop repeat (the fixnum (abs count))
 	      collect (restore-ub32 storage))))))
 
-(defun store-bignum (bignum storage num-eq-refs)
-  (maybe-store-reference-instead (bignum storage num-eq-refs)
-    (with-write-storage (storage)
-      (storage-write-byte storage +bignum-code+)
-      (multiple-value-bind (ub32s count)
-	  (num->bits bignum)
-	(declare (type fixnum count))
-	(store-fixnum (if (minusp bignum) (- count) count) storage)
-	(dolist (ub32 ub32s) (store-ub32 ub32 storage))))))
+(defun store-bignum (bignum storage)
+  (with-write-storage (storage)
+    (storage-write-byte storage +bignum-code+)
+    (multiple-value-bind (ub32s count)
+	(num->bits bignum)
+      (declare (type fixnum count))
+      (store-fixnum (if (minusp bignum) (- count) count) storage)
+      (dolist (ub32 ub32s) (store-ub32 ub32 storage)))))
 
 (declaim (inline restore-single-float))
 (defun restore-single-float (storage)
@@ -149,7 +148,7 @@
            (copy-sap a 0 sap offset 8))
          (setf ,slot (aref a 0))))))
 
-(declaim (inline store-double-float))
+(declaim (notinline store-double-float))
 (defun store-double-float (double-float storage double-float-refs &optional (tag t))
   (declare (optimize speed safety) (type double-float double-float))
   ;; We de-duplicate double-floats as there is no visible way to

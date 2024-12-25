@@ -33,7 +33,8 @@
   (defmacro with-reference-tables ((track-references) &body body)
     (let ((let-bindings nil))
       (maphash (lambda (table-name ref-table)
-                 (push (list table-name (when track-references (ref-table-construction-code ref-table)))
+                 (push (list table-name `(when ,track-references
+                                           ,(ref-table-construction-code ref-table)))
                        let-bindings))
                *ref-tables*)
       `(let (,@let-bindings)
@@ -49,7 +50,9 @@
       `(progn ,@code)))
   
   (defmacro defstore
-      (type store-function-signature &key call-during-reference-phase check-for-ref-in write-phase-code)
+      (type store-function-signature
+       &key (call-during-reference-phase nil call-during-reference-phase-provided-p)
+         check-for-ref-in write-phase-code)
     (labels ((maybe-wrap-code-with-ref-check-for-store-phase (code)
                (if check-for-ref-in
                    `(unless (referenced-already obj storage ,check-for-ref-in)
@@ -68,7 +71,9 @@
                                    it must be one of OBJ, STORAGE, STORE-OBJECT or a reference table name from~%~
                                    REGISTER-REFERENCES" type param))))
       (let* ((write-phase-code store-function-signature)
-             (reference-phase-code (or call-during-reference-phase write-phase-code))
+             (reference-phase-code (if call-during-reference-phase-provided-p
+                                       call-during-reference-phase
+                                       write-phase-code))
              (si (make-store-info
                   :type type
                   :reference-phase-code (maybe-wrap-code-with-ref-check-for-ref-phase reference-phase-code)
@@ -211,7 +216,7 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute) ;; so the tables are available for debugging
   ;; NUMBERS
-  (defstore fixnum (store-fixnum obj storage))
+  (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
 
   (defrestore +ub8-code+ (restore-ub8 storage))
   (defrestore +ub16-code+ (restore-ub16 storage))
@@ -221,10 +226,11 @@
   (defrestore +sb16-code+ (restore-sb16 storage))
   (defrestore +sb32-code+ (restore-sb32 storage))
 
-  (defstore bignum (store-bignum obj storage num-eq-refs) :check-for-ref-in num-eq-refs)
+  (defstore bignum (store-bignum obj storage) :check-for-ref-in num-eq-refs
+    :call-during-reference-phase nil)
   (defrestore +bignum-code+ (restore-bignum storage))
 
-  (defstore single-float (store-single-float obj storage))
+  (defstore single-float (store-single-float obj storage) :call-during-reference-phase nil)
   (defrestore +single-float-code+ (restore-single-float storage))
 
   (defstore double-float (store-double-float obj storage double-float-refs))
@@ -249,9 +255,9 @@
 
 ;;; T and NIL (STORED DISJOINT FROM SYMBOLS)
 
-  (defstore null (store-nil storage))
+  (defstore null (store-nil storage) :call-during-reference-phase nil)
   (defrestore +nil-code+ (restore-nil))
-  (defstore (eql t) (store-t storage))
+  (defstore (eql t) (store-t storage) :call-during-reference-phase nil)
   (defrestore +t-code+ (restore-t))
 
 ;;; INTERNED SYMBOLS / KEYWORDS / UNINTERNED SYMBOLS
@@ -290,7 +296,7 @@
   ;; SIMPLE ARRAYS
   #+sbcl
   (defstore (and (simple-array * *) (not (simple-array t *)))
-      (store-simple-specialized-array obj storage) :check-for-ref-in eq-refs)
+      (store-simple-specialized-array obj storage) :check-for-ref-in eq-refs :call-during-reference-phase nil)
   (defrestore +simple-specialized-array-code+ (restore-simple-specialized-array storage))
 
   ;; COMPLEX VECTORS AND ARRAYS
@@ -315,10 +321,12 @@
   ;; STRINGS
   ;; I made a mess of internal dispatch around this so have to clean it up to take advantage of check-for-ref-in.
   ;; TODO clean this up
-  (defstore simple-base-string (store-simple-base-string obj storage) :check-for-ref-in eq-refs)
+  (defstore simple-base-string (store-simple-base-string obj storage) :check-for-ref-in eq-refs
+    :call-during-reference-phase nil)
   (defrestore +simple-base-string-code+ (restore-simple-base-string storage))
 
-  (defstore simple-string (store-simple-string obj storage) :check-for-ref-in eq-refs)
+  (defstore simple-string (store-simple-string obj storage) :check-for-ref-in eq-refs
+    :call-during-reference-phase nil)
   (defrestore +simple-string-code+ (restore-simple-string storage))
 
   (defstore action (store-action& obj storage store-object))

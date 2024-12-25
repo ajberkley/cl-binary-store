@@ -32,7 +32,8 @@
         (dotimes (x repeats) (hyperluminal-mem:mread (sb-sys:vector-sap a-store) 0 words))))))
 
 (defun test-cl-store-faster-on-data
-    (data &key (track-references t) (support-shared-list-structures nil) (repeats 100))
+    (data &key (track-references t) (support-shared-list-structures nil) (repeats 100)
+            (read t) (write t))
   (let* ((cl-store-faster:*support-shared-list-structures* support-shared-list-structures)
 	 (cl-store-faster:*track-references* track-references)
 	 (size (length (cl-store-faster:store nil data)))
@@ -40,14 +41,16 @@
          (store (make-array size :element-type '(unsigned-byte 8))))
     (format t "CL-STORE-FASTER~%")
     (format t " OUTPUT SIZE: ~,2f MB~%" output-size-MB)
-    (timed (" CL-STORE-FASTER WRITE:" repeats output-size-MB)
-      (dotimes (x repeats) (cl-store-faster:store store data)))
-    (timed (" CL-STORE-FASTER READ :" repeats output-size-MB)
-      (dotimes (x repeats) (cl-store-faster:restore store)))
+    (when write
+      (timed (" CL-STORE-FASTER WRITE:" repeats output-size-MB)
+        (dotimes (x repeats) (cl-store-faster:store store data))))
+    (when read
+      (timed (" CL-STORE-FASTER READ :" repeats output-size-MB)
+        (dotimes (x repeats) (cl-store-faster:restore store))))
     (values)))
 
 (defun test-cl-store-on-data
-    (data &key (check-for-circs nil) (repeats 10))
+    (data &key (check-for-circs nil) (repeats 10) (read t) (write t))
   ;; if you try and dump it to a flexi-streams sequence it's 4x slower than this!
   (let ((cl-store:*check-for-circs* check-for-circs))
     (format t "CL-STORE~%")
@@ -56,10 +59,12 @@
             (with-open-file (str "blarg.bin")
               (/ (file-length str) 1e6))))
       (format t " OUTPUT SIZE: ~,2fMB~%" output-size-MB)
-      (timed (" CL-STORE WRITE:" repeats output-size-MB)
-        (dotimes (x repeats) (cl-store:store data "blarg.bin")))
-      (timed (" CL-STORE READ :" repeats output-size-MB)
-        (dotimes (x repeats) (cl-store:restore "blarg.bin"))))))
+      (when write
+        (timed (" CL-STORE WRITE:" repeats output-size-MB)
+          (dotimes (x repeats) (cl-store:store data "blarg.bin"))))
+      (when read
+        (timed (" CL-STORE READ :" repeats output-size-MB)
+          (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
 (defun test-on-data (data &key (hlmem t) (cl-store t) (cl-store-faster t))
   (when hlmem

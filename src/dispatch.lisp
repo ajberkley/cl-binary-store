@@ -9,7 +9,7 @@
 	 ,(make-read-dispatch-table 'code))))
   
   (make-read-dispatch)
- 
+
   (declaim (notinline store-objects))
   (defun store-objects (storage &rest stuff)
     (declare (optimize speed safety) (type storage storage))
@@ -20,40 +20,49 @@
       (with-reference-tables (track-references)
         (when track-references
 	  #+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
-          (labels ((store-object (obj)
+          (labels ((store-object2 (obj)
                      (let ((store-object #'store-object)
                            (storage nil))
+                       (store-object/reference-phase obj)))
+                   (store-object (obj)
+                     (let ((store-object #'store-object2)
+                           (storage nil))
                        (store-object/reference-phase obj))))
+            (declare (inline store-object2)) ;; inline one level deep
 	    (dolist (elt stuff)
               (store-object elt)))
-	  #+debug-csf (format t "Finished reference counting pass~%")
-	  (let ((ref-id 0))
-	    (declare (type fixnum ref-id))
+          #+debug-csf (format t "Finished reference counting pass~%")
+          (let ((ref-id 0))
+            (declare (type fixnum ref-id))
             (map-reference-tables #'analyze-references-hash-table) ;; debugging only
-	    ;; Now clean up the references table: delete anyone who has no references
-	    #+debug-csf (format t "Generating real reference hash-table~%")
+            ;; Now clean up the references table: delete anyone who has no references
+            #+debug-csf (format t "Generating real reference hash-table~%")
             (map-reference-tables
              (lambda (table-name table)
                (declare (ignore table-name))
-	       (maphash (lambda (k v)
-		          (if (> (the fixnum v) 1)
-		              (setf (gethash k table) (- (incf ref-id)))  ; signal it needs writing
+               (maphash (lambda (k v)
+        	          (if (> (the fixnum v) 1)
+        	              (setf (gethash k table) (- (incf ref-id)))  ; signal it needs writing
                               (remhash k table)))
-	                table)))
-	    (when (>= ref-id 2048) ;; if we would have to expand the references vector
+                        table)))
+            (when (>= ref-id 2048) ;; if we would have to expand the references vector
               #+debug-csf (format t "Writing total reference count ~A to file~%" (1+ ref-id))
-	      (write-reference-count (1+ ref-id) storage)))
-	  #+debug-csf
+              (write-reference-count (1+ ref-id) storage)))
+          #+debug-csf
           (map-reference-tables (lambda (table-name table)
                                   (format t "~A: there are ~A actual references~%"
                                           table-name
                                           (hash-table-count table)))))
         #+debug-csf (format t "Starting actual storage phase~%")
-        (labels ((store-object (obj)
+        (labels ((store-object2 (obj) ;; inline one deep
                    (let ((store-object #'store-object))
+                     (store-object/storage-phase obj)))
+                 (store-object (obj)
+                   (let ((store-object #'store-object2))
                      (store-object/storage-phase obj))))
+          (declare (inline store-object2))
           (dolist (elt stuff)
-	    (store-object elt)))
+            (store-object elt)))
       (flush-write-storage storage))))
 
  
@@ -78,6 +87,7 @@
 	  (apply #'values objects)))))
 
   (defun analyze-references-hash-table (table-name references)
+    (declare (ignorable table-name references))
     ;;(defparameter *saved-refs* references)
     #+debug-csf(let ((types (make-hash-table :test 'equal))
                      (individual-reference-counts (make-hash-table :test 'equal))

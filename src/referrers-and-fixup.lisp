@@ -53,6 +53,7 @@
 ;; Nominally we could have multiple reference hash tables if we wanted
 ;; to parallelize the storage operation more by reducing contention.
 
+(declaim (inline check-reference))
 (defun check-reference (object references &optional (add-new-reference t))
   "Returns T if OBJECT has already been seen and updates its reference count.
  If OBJECT has not been seen, and ADD-NEW-REFERENCE is T, then adds it to
@@ -78,6 +79,7 @@
             (t nil)))
         (gethash object references))))
 
+(declaim (inline referenced-already))
 (defun referenced-already (object storage references)
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
  Otherwise returns NIL"
@@ -275,7 +277,7 @@
 	 (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)))
       (t
        (storage-write-byte storage +referrer-code+)
-       (store-tagged-unsigned-fixnum ref-index storage)))))
+       (store-unsigned-fixnum ref-index storage)))))
 
 (declaim (notinline store-reference-id-for-following-object))
 (defun store-reference-id-for-following-object (ref-index storage)

@@ -15,10 +15,11 @@
  out data with general list circularites.  Worst case we fill your disk,
  best case you end up with multiple copies of parts of the list.")
 
-(declaim (notinline store-cons))
+(declaim (inline store-cons))
 (defun store-cons (cons storage eq-refs store-object)
   "This is called during the actual storage output phase."
-  (declare (optimize (speed 3) (safety 3)) (type storage storage) (type function store-object))
+  (declare (optimize (speed 3) (safety 0) (debug 0))
+           (type storage storage) (type function store-object))
   (tagbody start
      (when (referenced-already cons storage eq-refs)
        (return-from store-cons (values)))
@@ -29,20 +30,24 @@
            (progn (setf cons cdr) (go start))
 	   (funcall store-object (the (not cons) cdr))))))
 
+(declaim (inline search-cons))
 (defun search-cons (cons references store-object
 		   &optional (write-new-references t)
 		     (support-shared-list-structures *support-shared-list-structures*))
   "This is called during the reference counting phase"
-  (declare (optimize (debug 3);; (speed 3) (safety 3)
-                     ) (type function store-object))
+  (declare (optimize (speed 3) (safety 0) (debug 0)) (type function store-object))
   ;; We always record the first cons at the head of a list
-  (when (check-reference cons references write-new-references)
-    (return-from search-cons (values)))
-  (funcall store-object (car cons))
-  (let ((cdr (cdr cons)))
-    (if (consp cdr)
-	(search-cons cdr references store-object support-shared-list-structures support-shared-list-structures)
-	(funcall store-object cdr))))
+  (tagbody start
+     (when (check-reference cons references write-new-references)
+       (return-from search-cons (values)))
+     (funcall store-object (car cons))
+     (let ((cdr (cdr cons)))
+       (if (consp cdr)
+           (progn
+             (setf cons cdr write-new-references support-shared-list-structures)
+             (go start))
+	   (funcall store-object cdr))))
+  (values))
 
 (declaim (notinline restore-cons))
 (defun restore-cons (storage restore-object)
