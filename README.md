@@ -91,7 +91,7 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
     #(39 0 2 206 177) ;; 4 bytes, 39 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
 
     CL-STORE-FASTER> (let* ((*print-circle* t)
-    		            (v (make-array 1)))
+                            (v (make-array 1)))
                         (setf (svref v 0) v)
                         (store "blarg.bin" 'a 'b 'c v)
                         (format nil "~A" (multiple-value-list (restore "blarg.bin"))))
