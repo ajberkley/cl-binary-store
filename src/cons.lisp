@@ -15,55 +15,43 @@
  out data with general list circularites.  Worst case we fill your disk,
  best case you end up with multiple copies of parts of the list.")
 
-(declaim (inline store-cons))
-(defun store-cons (cons storage references)
-  (if storage
-      (store-cons! cons storage references t *support-shared-list-structures*)
-      (search-cons cons references *track-references* *support-shared-list-structures*)))
-
 (declaim (notinline store-cons))
-(defun store-cons! (cons storage references
-		   &optional (write-new-references t)
-		     (support-shared-list-structures *support-shared-list-structures*))
+(defun store-cons (cons storage eq-refs store-object)
   "This is called during the actual storage output phase."
-  (declare (optimize (speed 3) (safety 0)) (type storage storage))
-  ;; We always record the first cons at the head of a list
-  (when (check/store-reference cons storage references write-new-references)
-    (return-from store-cons! (values)))
-  (storage-write-byte storage +cons-code+)
-  ;; (if (typep (car cons) 'fixnum)
-  ;;     (store-fixnum (car cons) storage)
-  (store-object/store-phase (car cons) storage references)
-  (let ((cdr (cdr cons)))
-    (if (consp cdr)
-	(store-cons! cdr storage references support-shared-list-structures
-		    support-shared-list-structures)
-	(store-object/store-phase (the (not cons) cdr) storage references))))
+  (declare (optimize (speed 3) (safety 3)) (type storage storage) (type function store-object))
+  (tagbody start
+     (when (referenced-already cons storage eq-refs)
+       (return-from store-cons (values)))
+     (storage-write-byte storage +cons-code+)
+     (funcall store-object (car cons))
+     (let ((cdr (cdr cons)))
+       (if (consp cdr)
+           (progn (setf cons cdr) (go start))
+	   (funcall store-object (the (not cons) cdr))))))
 
-(defun search-cons (cons references
+(defun search-cons (cons references store-object
 		   &optional (write-new-references t)
 		     (support-shared-list-structures *support-shared-list-structures*))
   "This is called during the reference counting phase"
-  (declare (optimize (speed 3) (safety 0)))
+  (declare (optimize (debug 3);; (speed 3) (safety 3)
+                     ) (type function store-object))
   ;; We always record the first cons at the head of a list
-  (when (check/store-reference cons nil references write-new-references)
+  (when (check-reference cons references write-new-references)
     (return-from search-cons (values)))
-  (store-object/ref-count-phase (car cons) references)
+  (funcall store-object (car cons))
   (let ((cdr (cdr cons)))
     (if (consp cdr)
-	(search-cons cdr references support-shared-list-structures
-		    support-shared-list-structures)
-	(store-object/ref-count-phase cdr references))))
+	(search-cons cdr references store-object support-shared-list-structures support-shared-list-structures)
+	(funcall store-object cdr))))
 
 (declaim (notinline restore-cons))
-(defun restore-cons (storage references)
-  (declare (optimize (speed 3) (safety 0) (debug 0))
-           (inline restore-object))
+(defun restore-cons (storage restore-object)
+  (declare (optimize (speed 3) (safety 0) (debug 3)))
   (let ((first-cons (cons nil nil)))
     (loop
       with cons = first-cons
       do
-	 (restore-object-to (car cons) storage references)
+	 (restore-object-to (car cons) restore-object)
 	 (let ((next (restore-ub8 storage)))
 	   (case next
 	     (#.+cons-code+
@@ -74,5 +62,5 @@
 	      (setf (cdr cons) nil)
 	      (return-from restore-cons first-cons))
 	     (t
-	      (restore-object-to (cdr cons) storage references next)
+	      (restore-object-to (cdr cons) restore-object next)
 	      (return-from restore-cons first-cons)))))))

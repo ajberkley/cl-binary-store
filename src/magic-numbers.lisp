@@ -21,7 +21,7 @@
 (defstruct (magic-number (:include action (code +magic-number-action-code+)))
   (number 2718281828 :type integer :read-only t))
 
-(defmethod action ((code (eql +magic-number-action-code+)) storage references)
+(defmethod action ((code (eql +magic-number-action-code+)) storage refrences restore-object)
   (let ((magic-number (restore-object storage nil)))
     (unless (member magic-number *supported-versions*)
       (error "Unsupported version #x~X, we support ~{#x~X~^ ~}"
@@ -29,6 +29,6 @@
     (setf *version-being-read* magic-number)
     (make-magic-number :number magic-number)))
 
-(defmethod store-action ((action magic-number) storage references)
+(defmethod store-action ((action magic-number) storage store-object)
   (store-fixnum (magic-number-number action) storage))
   

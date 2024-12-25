@@ -1,6 +1,6 @@
 (in-package :cl-store-faster)
 
-(declaim (#+-debug-csf inline #+debug-csf notinline maybe-restore-ub8))
+(declaim (#-debug-csf inline #+debug-csf notinline maybe-restore-ub8))
 (defun maybe-restore-ub8 (storage)
   "Maybe restore an (unsigned-byte 8) value from storage that has previously
  been stored by STORE-UB8.  If there is no more data available will return NIL."
@@ -10,7 +10,7 @@
 	 (setf (storage-offset storage) (1+ offset))
          (sap-ref-8 (storage-sap storage) offset))))
 
-(declaim (#+-debug-csf inline #+debug-csf notinline restore-ub8))
+(declaim (#-debug-csf inline #+debug-csf notinline restore-ub8))
 (defun restore-ub8 (storage)
   "Restore an (unsigned-byte 8) value from storage that has previously
  been stored by STORE-UB8."

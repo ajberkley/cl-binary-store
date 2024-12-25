@@ -158,7 +158,7 @@
          #+info-csf(last-read-time start-read-time))
     (lambda (storage)
       (let ((seq (storage-store storage)))
-        #+debug-csf(format t "We currently have ~A..~A valid data (~A bytes)~%"
+        #+dribble-csf(format t "We currently have ~A..~A valid data (~A bytes)~%"
 	                   (storage-offset storage) (storage-max storage)
 	                   (- (storage-max storage) (storage-offset storage)))
         (labels (#+info-csf
@@ -226,6 +226,7 @@
   #+sbcl
   (let ((g (gensym)))
     `(sb-kernel:with-array-data ((,g ,array) (start) (end))
+       (declare (ignore end))
        (assert (zerop start))
        (with-pinned-objects (,g)
          (vector-sap ,g))))
@@ -277,7 +278,7 @@
 (defun refill-read-storage (storage bytes return-nil-on-eof)
   (declare #+debug-csf (optimize (debug 3)) #-debug-csf (optimize speed safety)
            (type fixnum bytes))
-  #+debug-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A)~%"
+  #+dribble-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A)~%"
 		      bytes return-nil-on-eof)
   (maybe-shift-data-to-beginning-of-read-storage storage bytes)
   (let ((num-bytes-available (the fixnum (funcall (storage-flusher storage) storage))))
@@ -285,7 +286,7 @@
         (if return-nil-on-eof
 	    nil
             (progn
-	      #+debug-csf (format t "Valid data is from ~A to ~A (~A bytes, wanted ~A)~%"
+	      #+dribble-csf (format t "Valid data is from ~A to ~A (~A bytes, wanted ~A)~%"
 				  (storage-offset storage) (storage-max storage)
 				  (- (storage-max storage) (storage-offset storage))
 				  bytes)

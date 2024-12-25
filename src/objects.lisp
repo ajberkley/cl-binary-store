@@ -1,6 +1,8 @@
 (in-package :cl-store-faster)
 
 ;; Here we deal with STRUCTURE-OBJECT and STANDARD-OBJECT
+;;  NOTE that we do not de-duplicate double-floats stored in slots unless they are eq (not eql!) to others
+;;  NOTE that even if you specify 
 
 (defvar *store-class-slots* nil
   "If set / let to T, then slots in standard-objects with :class allocation
@@ -78,31 +80,31 @@
      :slot-names names
      :call-initialize-instance call-initialize-info)))
 
-(defun store-slot-info (slot-info storage references)
+(defun store-slot-info (slot-info storage eq-refs store-object)
   (declare (optimize speed safety) (type slot-info slot-info))
-  (maybe-store-reference-instead (slot-info storage references)
+  (maybe-store-reference-instead (slot-info storage eq-refs)
     (let ((slot-names (slot-info-slot-names slot-info)))
       (when storage
 	(store-ub8 +slot-info-code+ storage nil)
 	(store-tagged-unsigned-fixnum (length slot-names) storage)
         (store-boolean (slot-info-call-initialize-instance slot-info) storage))
-      (store-symbol (slot-info-type slot-info) storage references)
+      (store-symbol (slot-info-type slot-info) storage eq-refs store-object)
       (loop for name across slot-names
-	    do (store-symbol name storage references)))))
+	    do (store-symbol name storage eq-refs store-object)))))
 
-(defun restore-slot-info (storage references)
-  (declare (optimize speed safety))
+(defun restore-slot-info (storage restore-object)
+  (declare (optimize speed safety) (type function restore-object))
   (let* ((num-slots (restore-tagged-unsigned-fixnum storage))
-         (call-initialize-instance (restore-object storage nil))
+         (call-initialize-instance (restore-boolean storage))
          (slot-name-vector (make-array num-slots))
          (si (make-slot-info :call-initialize-instance call-initialize-instance
                              :slot-names slot-name-vector))
-         (type (restore-object storage references)))
+         (type (funcall restore-object)))
     (setf (slot-info-type si) type)
     (setf (slot-info-class si) (find-class type))
+    ;; No circularity possible below
     (loop for idx fixnum from 0 below num-slots
-	  do (setf (svref slot-name-vector idx)
-                   (restore-object storage references)))
+	  do (setf (svref slot-name-vector idx) (funcall restore-object)))
     si))
 	
 (defun get-slot-info (object)
@@ -111,24 +113,25 @@
 	(setf (gethash type *slot-info*)
 	      (serializable-slot-info object type)))))
 
-(defun store-struct (struct storage references)
-  (declare (optimize speed safety) (type structure-object struct))
-  (maybe-store-reference-instead (struct storage references)
+(defun store-struct (struct storage eq-refs store-object)
+  (declare (optimize speed safety) (type structure-object struct) (type function store-object))
+  (maybe-store-reference-instead (struct storage eq-refs)
     (when storage
       (store-ub8 +structure-object-code+ storage nil))
     (let ((slot-info (get-slot-info struct)))
-      (store-slot-info slot-info storage references)
+      (store-slot-info slot-info storage eq-refs store-object)
       (loop for name across (slot-info-slot-names slot-info)
-	    do (store-object (slot-value struct name) storage references)))))
+	    do (funcall store-object (slot-value struct name))))))
 
-(defun restore-struct (storage references)
-  (let* ((slot-info (restore-object storage references))
+(defun restore-struct (storage restore-object)
+  (declare (type function restore-object))
+  (let* ((slot-info (funcall restore-object storage))
          (class (slot-info-class slot-info))
 	 (struct (if (slot-info-call-initialize-instance slot-info)
                      (make-instance class)
 		     (allocate-instance class))))
     (loop for name across (slot-info-slot-names slot-info)
-	  do (restore-object-to (slot-value struct name) storage references))
+	  do (restore-object-to (slot-value struct name) restore-object))
     struct))
 
 ;; We use the same methods as structure-objects, but must deal with unbound slots
@@ -138,20 +141,19 @@
   (store-ub8 +unbound-code+ storage nil))
 
 (declaim (inline restore-unbound))
-(defun restore-unbound (storage)
-  (declare (ignore storage))
+(defun restore-unbound ()
   'unbound-slot)
 
-(defun store-standard-object (obj storage references)
+(defun store-standard-object (obj storage eq-refs store-object)
   (declare (optimize speed safety) (type (or standard-object condition) obj))
-  (maybe-store-reference-instead (obj storage references)
+  (maybe-store-reference-instead (obj storage eq-refs)
     (when storage
       (store-ub8 +standard-object-code+ storage nil))
     (let ((slot-info (get-slot-info obj)))
-      (store-slot-info slot-info storage references)
+      (store-slot-info slot-info storage eq-refs store-object)
       (loop for name across (slot-info-slot-names slot-info)
 	    do (if (slot-boundp obj name)
-		   (store-object (slot-value obj name) storage references)
+		   (funcall (the function store-object) (slot-value obj name))
 		   (when storage (store-unbound storage)))))))
 
 (defun (setf slot-value*) (value object name)
@@ -160,14 +162,14 @@
       (slot-makunbound object name)
       (setf (slot-value object name) value)))
 
-(defun restore-standard-object (storage references)
-  (declare (optimize speed safety))
-  (let* ((slot-info (restore-object storage references))
+(defun restore-standard-object (restore-object)
+  (declare (optimize speed safety) (type function restore-object))
+  (let* ((slot-info (funcall restore-object))
          (class (slot-info-class slot-info))
 	 (obj (if (slot-info-call-initialize-instance slot-info)
                      (make-instance class)
 		     (allocate-instance class))))
     (map nil (lambda (name)
-	       (restore-object-to (slot-value* obj name) storage references))
+	       (restore-object-to (slot-value* obj name) restore-object))
 	 (slot-info-slot-names slot-info))
     obj))

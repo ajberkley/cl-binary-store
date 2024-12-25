@@ -13,10 +13,10 @@
 (defun write-reference-count (number-of-references storage)
   (store-object (make-write-reference-count :reference-count number-of-references) storage nil))
 
-(defmethod store-action ((action write-reference-count) storage references)
+(defmethod store-action ((action write-reference-count) storage store-object)
   (store-tagged-unsigned-fixnum (write-reference-count-reference-count action) storage))
 
-(defmethod action ((code (eql +set-reference-action-code+)) storage references)
+(defmethod action ((code (eql +set-reference-action-code+)) storage references restore-object)
   (let ((num-refs (restore-object storage nil)))
     #+info-csf(format t "This file has ~A references~%" num-refs)
     (setf (references-vector references) (make-array num-refs))))

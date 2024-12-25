@@ -1,6 +1,24 @@
 ;; This has to be the most hideous code I've written in awhile,
 (in-package :cl-store-faster)
 
+(defun strict-subtype-ordering (type-specs &key (key #'identity))
+  ;; This sort of works, but some weird issues I haven't debugged yet
+  ;; with the type hierarchy.
+  ;; We need to order these by subtypep, a simple sort won't work
+  ;; because we have disjoint sets.  So first, we have to sort into
+  ;; disjoint sets, then sort, then recombine.
+  (let* ((type-groups '(cons symbol integer ;; fixnum bignum
+			vector array number structure-object standard-object t))
+	 (groups (make-array (length type-groups) :initial-element nil)))
+    (loop for item in type-specs
+	  do (loop for count below (length type-groups)
+		   for type-group in type-groups
+		   until (subtypep (funcall key item) type-group)
+		   finally
+		      (push item (svref groups count))))
+    (loop for g across groups
+	  appending (stable-sort (reverse g) #'subtypep :key key))))
+
 (defun binned-disjoint-types (type-specifiers)
   "Returns an alist with keys being a type and values being sub-types of the values.
  CL-USER> (binned-disjoint-types '(fixnum (unsigned-byte 8) standard-object)) ->
@@ -147,58 +165,3 @@
 				  function-calls)
 		     collect type into failed-types)))
       (print-it results t))))
-
-(defun build-store-dispatch (code-info value storage references)
-  "code-info is a `code-info', information about types and functions for
- serialization/deserialization.  This function builds etypecase dispatch
- code"
-  (let ((dispatch-tree
-	  (build-discriminator-tree
-	   (print 
-	    (loop
-	      for key being the hash-keys of *code-info*
-	      when (not (numberp key)) collect key)))))
-    (print dispatch-tree)
-    (labels ((get-code-info (type)
-	       (gethash type code-info))
-	     (walk (tree parent)
-	       (loop for (type . sub-types) in tree
-		     for code-info = (print (get-code-info type))
-		     collect `(,type
-			       ,@(if code-info
-				     `((,(code-info-store-func-name code-info)
-					,value
-					,storage
-					,@(when (code-info-store-references code-info)
-					    `(,references))))
-				     (list
-				      `(declare (type (and ,parent 
-							   ,@(loop for fail in failed-types
-								   collect `(not ,fail))))
-						,value)
-				      `(etypecase ,value
-					 ,(walk sub-types type)))))
-		     collect type into failed-types)))
-  `(etypecase ,value
-     ,(walk dispatch-tree t)))))
-     
-;; Let's compare this to sbcl generated code
-
-(defun trust-sbcl (x)
-  (declare (optimize (speed 3) (safety 0) (debug 0)
-		     ;; (sb-c::jump-table 3)
-		     ))
-  (typecase x
-    ((unsigned-byte 8) 0)
-    ((unsigned-byte 16) 1)
-    ((unsigned-byte 32) 2)
-    ((unsigned-byte 64) 3)
-    (fixnum 4)
-    (blarg 5)
-    (includes-blarg 6)
-    ((simple-array double-float (*)) 7)
-    (simple-array 8)
-    (vector 9)
-    (array 10)
-    (ratio 11)
-    (complex 12)))

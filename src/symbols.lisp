@@ -12,47 +12,38 @@
 (defun store-boolean (boolean storage)
   (if boolean (store-t storage) (store-nil storage)))
 
-(declaim (inline constantly-nil))
-(defun restore-nil (storage)
-  (declare (ignorable storage))
+(declaim (inline restore-boolean))
+(defun restore-boolean (storage)
+  (= (restore-ub8 storage) +t-code+))
+
+(declaim (inline restore-nil))
+(defun restore-nil ()
   nil)
 
-(declaim (inline constantly-t))
-(defun restore-t (storage)
-  (declare (ignorable storage))
+(declaim (inline restore-t))
+(defun restore-t ()
   t)
 
 (declaim (notinline store-symbol))
-(defun store-symbol (symbol storage references)
+(defun store-symbol (symbol storage eq-refs store-object)
   (declare (notinline store-simple-specialized-vector))
   (let ((symbol-package (symbol-package symbol)))
     (cond
       (symbol-package
-       (maybe-store-reference-instead (symbol storage references)
+       (maybe-store-reference-instead (symbol storage eq-refs)
 	 #+debug-csf
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
 	 (when storage
 	   (storage-write-byte storage +symbol-code+)
 	   (store-string/no-refs (symbol-name symbol) storage))
-	 (store-object (package-name symbol-package) storage references)))
-      (t ;; symbols without a package, (symbol-package (gensym)) -> nil
+         ;; Nominally we can use the eq-refs table but we don't
+	 (funcall (the function store-object) (package-name symbol-package))))
+      (t ;; uninterned symbols.  We don't bother de-duplicating the string representations
        #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
-       ;;these can never be the same string
        (when storage
-	 (storage-write-byte storage +gensym-code+)
+	 (storage-write-byte storage +uninterned-symbol-code+)
 	 (store-string/no-refs (symbol-name symbol) storage))))))
-
-(declaim (notinline store-keyword))
-(defun store-keyword (keyword storage references)
-  (maybe-store-reference-instead (keyword storage references)
-    (when storage
-      (storage-write-byte storage +keyword-code+)
-      (store-string/no-refs (symbol-name keyword) storage))))
-
-(declaim (inline restore-keyword))
-(defun restore-keyword (storage)
-  (intern (restore-string storage) :keyword))
 
 (define-condition missing-package (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
@@ -69,15 +60,15 @@
 			      :package-string package-string)))
 
 (declaim (inline restore-symbol))
-(defun restore-symbol (storage references)
+(defun restore-symbol (storage restore-object)
   "Do not call me directly because if you called store-symbol you may have
  ended up writing a reference to the symbol object instead of the symbol object."
   (let* ((symbol-string (restore-string storage))
-	 (package-string (restore-object storage references)))
+	 (package-string (funcall (the function restore-object)))) ;; might be a reference
       (if (find-package package-string)
 	  (intern symbol-string package-string)
 	  (signal-missing-package symbol-string package-string))))
 
-(defun restore-gensym (storage)
+(defun restore-uninterned-symbol (storage)
   "You can call this directly since we never store references"
   (make-symbol (restore-string storage)))

@@ -53,13 +53,60 @@
 ;; Nominally we could have multiple reference hash tables if we wanted
 ;; to parallelize the storage operation more by reducing contention.
 
+(defun check-reference (object references &optional (add-new-reference t))
+  "Returns T if OBJECT has already been seen and updates its reference count.
+ If OBJECT has not been seen, and ADD-NEW-REFERENCE is T, then adds it to
+ references and returns NIL.  If ADD-NEW-REFERENCE is NIL, just returns NIL
+ and returns NIL"
+  (when references
+    (if add-new-reference
+        (let ((number-of-times-referenced (gethash object references 0)))
+          (declare (type fixnum number-of-times-referenced))
+          ;; We store the number of times an object is referenced as 1 or 2, where 2 means anything
+          ;; more than 1 (except if debug-csf is in *features* then we keep track of the exact
+          ;; number). The logic below is unnecessarily complex, clean this up with clear brain
+          (cond
+            ((zerop number-of-times-referenced)
+             (setf (gethash object references) 1)
+             nil)
+            (#+debug-csf (>= number-of-times-referenced 1)
+             #-debug-csf (= number-of-times-referenced 1)
+             #+debug-csf (the fixnum (incf (the fixnum (gethash object references))))
+             #-debug-csf(setf (gethash object references) 2)
+             t)
+            #-debug-csf((= number-of-times-referenced 2) t)
+            (t nil)))
+        (gethash object references))))
+
+(defun referenced-already (object storage references)
+  "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
+ Otherwise returns NIL"
+  (declare (type storage storage))
+  (when references
+    (let ((ref-idx (gethash object references)))
+      ;; When ref-idx is positive, it's a note that we have already written out the
+      ;; actual value, so we can just store the reference id. If it is negative,
+      ;; it means we must write out the ref-idx and the object as this is the first time
+      ;; it has appeared in the output.
+      (when ref-idx
+        (locally
+            (declare (type fixnum ref-idx))
+	  (cond
+	    ((>= ref-idx 0)
+	     #+dribble-csf (format t "Storing a reference (#~A) which is to a ~A~%"
+				   ref-idx (type-of object))
+	     (store-reference ref-idx storage)
+	     t)
+	    (t
+	     #+dribble-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
+				   (- ref-idx) (type-of object))
+	     (setf ref-idx (- ref-idx))
+	     (store-reference-id-for-following-object ref-idx storage)
+	     (setf (gethash object references) ref-idx)
+	     nil)))))))
+
 (declaim (inline check/store-reference))
 (defun check/store-reference (object storage references &optional (add-new-reference t))
-  (when references
-    (check/store-reference& object storage references add-new-reference)))
-
-(declaim (notinline check/store-reference&))
-(defun check/store-reference& (object storage references &optional (add-new-reference t))
   "Used during the storage phase both during the reference counting
  step and the serialization step.  This function returns T if this
  object has already been written out, in which case the caller should
@@ -72,42 +119,8 @@
  do during cons serialization."
   (declare (optimize speed safety))
   (if storage	     ; we are in the storage phase, writing things out
-      (let ((ref-idx (gethash object references)))
-	(declare (type (or null fixnum) ref-idx))
-	;; When ref-idx is positive, it's a note that we have already written out the
-	;; actual value, so we can just store the reference id. If it is negative,
-	;; it means we must write out the ref-idx and the object as this is the first time
-	;; it has appeared in the output.
-	(if ref-idx
-	    (cond
-	      ((>= ref-idx 0)
-	       #+dribble-csf (format t "Storing a reference (#~A) which is to a ~A~%"
-				   ref-idx (type-of object))
-	       (store-reference ref-idx storage)
-	       t)
-	      (t
-	       #+dribble-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
-				   (- ref-idx) (type-of object))
-	       (setf ref-idx (- ref-idx))
-	       (store-reference-id-for-following-object ref-idx storage)
-	       (setf (gethash object references) ref-idx)
-	       nil))))
-      (let ((number-of-times-referenced (gethash object references 0)))
-	(declare (type fixnum number-of-times-referenced))
-	;; This is the reference collection pass.  We store the number of times
-	;; an object is referenced as 1 or 2, where 2 means anything more than 1.
-	;; The logic below is unnecessarily complex, speed this up.
-	(cond
-	  ((and (zerop number-of-times-referenced) add-new-reference)
-	   (setf (gethash object references) 1)
-	   nil)
-	  (#+debug-csf (>= number-of-times-referenced 1)
-           #-debug-csf (= number-of-times-referenced 1)
-           #+debug-csf (the fixnum (incf (the fixnum (gethash object references))))
-	   #-debug-csf(setf (gethash object references) 2)
-	   t)
-	  #-debug-csf((= number-of-times-referenced 2) t)
-	  (t nil)))))
+      (referenced-already object storage references)
+      (check-reference object references add-new-reference)))
 
 ;; RESTORE PHASE
 
@@ -152,7 +165,7 @@
 
 (declaim (inline restore-referrer))
 (defun restore-referrer (storage references)
-  (get-reference (restore-object storage references) references))
+  (get-reference (restore-fixnum storage) references))
 
 (declaim (inline restore-referrer-ub8))
 (defun restore-referrer-ub8 (storage references)
@@ -202,10 +215,9 @@
 	    (,fixup (make-fixup :ref-id ,num)))
        (declare (dynamic-extent ,fixup))
        (update-reference ,num ,fixup ,references)
-       #+debug-csf(format t "Created a fixup: ~A~%" ,fixup)
        (fixup ,fixup (progn ,@body) references))))
 
-(defmacro restore-object-to (place storage references &optional tag)
+(defmacro restore-object-to (place restore-object &optional tag)
   "If you are deserializing an object which contains slots (for
  example an array, a list, hash-table, or structure-object or a
  standard-object) which may point to other lisp objects which have yet
@@ -218,7 +230,7 @@
 	 (new-object (gensym))
 	 (variables-to-capture (cdr place))
 	 (names (loop repeat (length variables-to-capture) collect (gensym))))
-    `(let ((,restored (restore-object ,storage ,references ,@(when tag (list tag)))))
+    `(let ((,restored (funcall (the function ,restore-object) ,@(when tag (list tag)))))
        (if (fixup-p ,restored)
 	   (push
 	    (let (,@(mapcar #'list names variables-to-capture))
@@ -288,27 +300,27 @@
        (setf (storage-offset storage) (+ 4 offset))))
     (t
      (storage-write-byte storage +record-reference-code+)
-     (store-tagged-unsigned-fixnum ref-index storage))))
+     (store-only-fixnum ref-index storage nil))))
 
 (declaim (notinline restore-reference-id-for-following-object))
-(defun restore-reference-id-for-following-object (ref-id storage references)
+(defun restore-reference-id-for-following-object (ref-id references restore-object)
   "Object may not reified before other objects refer to it"
   (with-delayed-reference/fixup (ref-id references)
-    (restore-object storage references)))
+    (funcall (the function restore-object))))
 
-(defun restore-reference-id-ub8 (storage references)
-  (restore-reference-id-for-following-object (restore-ub8 storage) storage references))
+(defun restore-reference-id-ub8 (storage references restore-object)
+  (restore-reference-id-for-following-object (restore-ub8 storage) references restore-object))
 
-(defun restore-reference-id-ub16 (storage references)
+(defun restore-reference-id-ub16 (storage references restore-object)
   (let ((ref-id (restore-ub16 storage)))
     #+debug-csf(format t "Restoring reference id ~A~%" ref-id)
-    (restore-reference-id-for-following-object ref-id storage references)))
+    (restore-reference-id-for-following-object ref-id references restore-object)))
 
-(defun restore-reference-id-ub32 (storage references)
+(defun restore-reference-id-ub32 (storage references restore-object)
   (let ((ref-id (restore-ub32 storage)))
     #+debug-csf(format t "Restoring reference id ~A~%" ref-id)
-    (restore-reference-id-for-following-object ref-id storage references)))
+    (restore-reference-id-for-following-object ref-id references restore-object)))
 
-(defun restore-reference-id (storage references)
-  (restore-reference-id-for-following-object (restore-object storage references)
-					     storage references))
+(defun restore-reference-id (storage references restore-object)
+  (restore-reference-id-for-following-object
+   (restore-fixnum storage) references (funcall restore-object)))

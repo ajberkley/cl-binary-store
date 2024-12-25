@@ -193,39 +193,21 @@
       (#.+simple-base-string-code+ (restore-simple-base-string storage))
       (#.+simple-string-code+ (restore-simple-string storage)))))
 
-(declaim (notinline restore-string/maybe-reference))
-(defun restore-string/maybe-reference (storage references)
-  "Can only be used if you are sure that the strings are not references,
- so that means they must have been stored with store-string/no-refs"
-  (declare (optimize speed safety))
-  (let ((code (restore-ub8 storage)))
-    (case code
-      (#.+simple-base-string-code+ (restore-simple-base-string storage))
-      (#.+simple-string-code+ (restore-simple-string storage))
-      (otherwise (read-dispatch code storage references)))))
-
 (declaim (notinline store-simple-specialized-vector))
-(defun store-simple-specialized-vector (sv storage &optional references)
+(defun store-simple-specialized-vector (sv storage)
   (declare (optimize speed safety) (type (simple-array * (*)) sv))
-  (labels ((write-it ()
-	     (with-write-storage (storage)
-	       (storage-write-byte storage +simple-specialized-vector+)
-	       (let ((sv-length (length sv)))
-		 (store-tagged-unsigned-fixnum sv-length storage)
-		 (multiple-value-bind (bytes-to-write encoded-element-type)
-		     (sbcl-specialized-array-element-size/bits sv)
-		   #+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
-				       (type-of sv) bytes-to-write encoded-element-type)
-		   (storage-write-byte storage encoded-element-type)
-		   (sb-sys:with-pinned-objects (sv)
-		     (write-sap-data-to-storage
-		      (sb-sys:vector-sap sv) bytes-to-write storage)))))))
-
-    (declare (inline write-it))
-    (if references
-	(maybe-store-reference-instead (sv storage references)
-	  (write-it))
-	(write-it))))
+  (with-write-storage (storage)
+    (storage-write-byte storage +simple-specialized-vector+)
+    (let ((sv-length (length sv)))
+      (store-tagged-unsigned-fixnum sv-length storage)
+      (multiple-value-bind (bytes-to-write encoded-element-type)
+	  (sbcl-specialized-array-element-size/bits sv)
+	#+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
+			    (type-of sv) bytes-to-write encoded-element-type)
+	(storage-write-byte storage encoded-element-type)
+	(sb-sys:with-pinned-objects (sv)
+	  (write-sap-data-to-storage
+	   (sb-sys:vector-sap sv) bytes-to-write storage))))))
 
 (declaim (notinline read-chunked))
 (defun read-chunked (target-sap storage num-bytes-remaining)
@@ -236,7 +218,8 @@
     with num-bytes-read fixnum = 0
     while (> num-bytes-remaining 0)
     for bytes-to-read fixnum = (if (/= (storage-offset storage) (storage-max storage))
-                                   (min (- (storage-max storage) (storage-offset storage)) num-bytes-remaining)
+                                   (min (the fixnum (- (storage-max storage) (storage-offset storage)))
+                                        num-bytes-remaining)
                                    (min storage-size num-bytes-remaining))
     do
        #+debug-csf(format t "At storage offset ~A and storage-max ~A, asking for ~A bytes to read, ~A bytes remaining~%"
@@ -248,9 +231,13 @@
          (decf num-bytes-remaining bytes-to-read)
 	 (setf (storage-offset storage) (+ bytes-to-read offset)))))
 
+#-sbcl
+(defun restore-simple-specialized-vector (storage)
+  (error "write me"))
+#+sbcl
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize speed safety))
-  (let ((num-elts (restore-object storage nil)))
+  (let ((num-elts (restore-tagged-unsigned-fixnum storage)))
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
 	  (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
@@ -260,35 +247,35 @@
           (read-chunked (vector-sap sv) storage num-bytes))
         sv))))
 
-(defun store-simple-specialized-array (sa storage references)
+(defun store-simple-specialized-array (sa storage)
   (declare (optimize speed safety)
 	   (type (simple-array * *) sa))
-  (maybe-store-reference-instead (sa storage references)
-    (with-write-storage (storage)
-      (storage-write-byte storage +simple-specialized-array+)
-      (let ((array-dimensions (array-dimensions sa))
-	    (num-elts (array-total-size sa)))
-	(storage-write-byte storage (length array-dimensions))
-	(dolist (a array-dimensions)
-	  (store-tagged-unsigned-fixnum (the fixnum a) storage))
-	(multiple-value-bind (bytes-to-write encoded-element-type)
-	    (sbcl-specialized-array-element-size/bits sa num-elts)
-	  (storage-write-byte storage encoded-element-type)
-	  #+debug-csf (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
-	 		      (type-of sa) bytes-to-write encoded-element-type)
-	  (sb-kernel:with-array-data ((backing-array sa) (start) (end))
-	    (assert (zerop start))
-	    (sb-sys:with-pinned-objects (backing-array)
-	      (write-sap-data-to-storage (sb-sys:vector-sap backing-array) bytes-to-write
-					 storage)))
-	  (values))))))
+  (with-write-storage (storage)
+    (storage-write-byte storage +simple-specialized-array+)
+    (let* ((array-dimensions (array-dimensions sa))
+	   (num-elts (array-total-size sa)))
+      (storage-write-byte storage (length array-dimensions))
+      (dolist (a array-dimensions)
+	(store-tagged-unsigned-fixnum (the fixnum a) storage))
+      (multiple-value-bind (bytes-to-write encoded-element-type)
+	  (sbcl-specialized-array-element-size/bits sa num-elts)
+	(storage-write-byte storage encoded-element-type)
+	#+debug-csf (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
+	 		    (type-of sa) bytes-to-write encoded-element-type)
+	(sb-kernel:with-array-data ((backing-array sa) (start) (end))
+          (assert (= end num-elts))
+	  (assert (zerop start))
+	  (sb-sys:with-pinned-objects (backing-array)
+	    (write-sap-data-to-storage (sb-sys:vector-sap backing-array) bytes-to-write
+				       storage)))
+	(values)))))
 
 (defun restore-simple-specialized-array (storage)
   (declare (optimize speed safety))
   ;; sbcl gets confused with restore-ub8 because of the error path
   (let* ((num-array-dimensions (the (unsigned-byte 8) (restore-ub8 storage)))
 	 (array-dimensions (loop repeat num-array-dimensions
-				 collect (restore-object storage nil)))
+				 collect (restore-tagged-unsigned-fixnum storage)))
 	 (encoded-element-info (restore-ub8 storage)))
     (multiple-value-bind (sa num-bytes)
 	(sbcl-make-simple-array-from-encoded-element-type

@@ -15,24 +15,24 @@
 (defconstant +magic-number-action-code+ 0)
 (defconstant +set-reference-action-code+ 1)
 
-(defgeneric action (command storage references)
+(defgeneric action (command storage references restore-object)
   (:documentation "If we hit an +action-code+ during restore,
  we will call this which should specialize on command (a ub8).
  You can read anything from the file here to as arguments to
  the action."))
 
-(defgeneric store-action (action storage references)
+(defgeneric store-action (action storage store-object)
   (:documentation "Call during the serialization phase.  You can
  write whatever you want to the file from here.  Specialize on
  the structure-object you made that inherits from `action'"))
 
-(defun restore-action& (storage references)
+(defun restore-action& (storage references restore-object)
   (let ((command (restore-ub8 storage)))
-    (action command storage references))
+    (action command storage references restore-object))
   (values nil t))
 
-(defun store-action& (action storage references)
+(defun store-action& (action storage store-object)
   (with-write-storage (storage)
     (store-ub8 +action-code+ storage nil)
     (store-ub8 (action-code action) storage nil))
-  (store-action action storage references))
+  (store-action action storage store-object))

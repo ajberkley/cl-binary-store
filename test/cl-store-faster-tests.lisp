@@ -5,7 +5,7 @@
 
 (define-test test-very-basic-list-cdr-circularity
   (let ((a (list 123 456))
-	(*support-shared-list-structures* nil))
+	(*support-shared-list-structures* t))
     (setf (cddr a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
       ;; (let ((*print-circle* t))
