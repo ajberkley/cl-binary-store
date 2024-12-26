@@ -55,6 +55,7 @@
    #:restore-simple-specialized-vector
 
    #:store-string
+   #:store-string/no-refs
    #:restore-string
    
    #:store-simple-vector
@@ -116,6 +117,18 @@
    #:*write-magic-number*
 
    #:out-of-space-current-offset
-   #:out-of-space-wanted-bytes))
+   #:out-of-space-wanted-bytes
+
+   ;; Change slot serialization
+   #:serializable-slot-info
+
+   ;; Adding a new type
+   #:defstore
+   #:defrestore
+   #:storage
+   #:obj
+   #:store-object
+   #:restore-object
+   #:rebuild-dispatch))
 
 (in-package :cl-binary-store)
