@@ -1,5 +1,5 @@
 (defpackage #:cl-binary-store-tests
-  (:use #:common-lisp #:parachute #:cl-binary-store #:cl-binary-store-extensions))
+  (:use #:common-lisp #:parachute #:cl-binary-store))
 
 (in-package #:cl-binary-store-tests)
 
