@@ -1,8 +1,8 @@
 (in-package :cl-binary-store)
 
-(defparameter *ref-tables* (make-hash-table :test 'eql) "Maps name -> ref-table")
-(defparameter *store-info* (make-hash-table :test 'equal) "Maps type -> `store-info'")
-(defparameter *restore-info* (make-hash-table :test 'eql) "Maps code -> `restore-info'")
+(defvar *ref-tables* (make-hash-table :test 'eql) "Maps name -> ref-table")
+(defvar *store-info* (make-hash-table :test 'equal) "Maps type -> `store-info'")
+(defvar *restore-info* (make-hash-table :test 'eql) "Maps code -> `restore-info'")
 
 (defstruct restore-info
   (restore-function-code nil))
@@ -107,11 +107,10 @@
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (update-restore-info ,code ',restore-function-signature)))
 
-(defmacro store-object/phase (obj store-info-accessor)
+(defun store-object/phase (obj store-info-accessor)
   ;; This assumes that the caller has defined OBJ, STORAGE, STORE-OBJECT, and the various
   ;; tables in *ref-tables*.  I don't have the energy to make this all hygenic.
-  (assert (string= (symbol-name obj) "OBJ"))
-  `(etypecase obj
+  `(etypecase ,obj
      ,@(strict-subtype-ordering
 	(let ((type-dispatch-table nil))
 	  (maphash (lambda (type store-info)
@@ -123,10 +122,14 @@
 	:key #'first)))
   
 (defmacro store-object/storage-phase (obj)
-  `(store-object/phase ,obj store-info-storage-phase-code))
+  (declare (ignorable obj))
+  (assert (string= (symbol-name obj) "OBJ"))
+  (store-object/phase obj 'store-info-storage-phase-code))
 
 (defmacro store-object/reference-phase (obj)
-  `(store-object/phase ,obj store-info-reference-phase-code))
+  (declare (ignorable obj))
+  (assert (string= (symbol-name obj) "OBJ"))
+  (store-object/phase obj 'store-info-reference-phase-code))
 
 (defun make-read-dispatch-table (code-to-dispatch-on)
   ;; Assumes this is in a context where STORAGE, REFERENCES, and RESTORE-OBJECT are defined

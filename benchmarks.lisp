@@ -2,6 +2,8 @@
 (quicklisp:quickload "hyperluminal-mem")
 (require 'sb-sprof)
 
+(in-package :cl-binary-store)
+
 (defmacro timed ((annotation &optional (repeats 1) output-size-MB) &body body)
   (let ((start (gensym))
         (end (gensym)))
@@ -88,6 +90,7 @@
 ;;  OUTPUT SIZE: 5.00MB
 ;;  CL-STORE WRITE: 59.20 ms at 84 MB/sec
 ;;  CL-STORE READ : 50.40 ms at 99 MB/sec
+;; If we reverse the *preferred-dispatch-order* this takes twice as long.
 (defun long-list-of-small-integers (&optional (n 1000000))
   (make-list n :initial-element (random 256)))
 

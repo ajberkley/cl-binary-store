@@ -1,16 +1,20 @@
-;; This has to be the most hideous code I've written in awhile,
 (in-package :cl-binary-store)
 
-(defun strict-subtype-ordering (type-specs &key (key #'identity))
+(defvar *preferred-dispatch-order*
+  '(cons fixnum symbol single-float double-float vector array structure-object
+    standard-object bignum t)
+  "To change this, setf it and call (rebuild-dispatch).
+ In benchmarking you will see factors of two speed differences by tweaking this
+ (test-cl-binary-store-on-data (long-list-of-small-integers) :track-references nil)")
+
+(defun strict-subtype-ordering (type-specs &key (key #'identity)
+					     (type-groups *preferred-dispatch-order*))
   ;; This sort of works, but some weird issues I haven't debugged yet
   ;; with the type hierarchy.
   ;; We need to order these by subtypep, a simple sort won't work
   ;; because we have disjoint sets.  So first, we have to sort into
   ;; disjoint sets, then sort, then recombine.
-  (let* ((type-groups '(cons fixnum symbol float
-			vector array structure-object standard-object
-                        bignum t))
-	 (groups (make-array (length type-groups) :initial-element nil)))
+  (let* ((groups (make-array (length type-groups) :initial-element nil)))
     (loop for item in type-specs
 	  do (loop for count below (length type-groups)
 		   for type-group in type-groups
@@ -19,6 +23,9 @@
 		      (push item (svref groups count))))
     (loop for g across groups
 	  appending (stable-sort (reverse g) #'subtypep :key key))))
+
+
+;; This has to be the most hideous code I've written in awhile,
 
 (defun binned-disjoint-types (type-specifiers)
   "Returns an alist with keys being a type and values being sub-types of the values.

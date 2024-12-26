@@ -1,4 +1,4 @@
-# Serialization speed
+# Serialization speed and type dispatching
 
 So, this whole thing works reasonably well for the use case I have and
 deserialization of complex objects is blazingly fast.  But
@@ -266,3 +266,15 @@ way smarter.
     ; 7BA:       E9E2FEFFFF       JMP L0
     ; 7BF: L15:  BA02000000       MOV EDX, 2
     ; 7C4:       E9D8FEFFFF       JMP L0
+
+## Conclusions
+
+So with some synthetic tests, you can see big differences here.  In benchmarking.lisp,
+if you change the \*preferred-dispatch-order\* you can see on a long list of small integers
+that putting fixnum last in the dispatch slows things down from 550 million objects a second
+to about 300 million objects a second.  Not a surprise, but nice to see.
+
+# Deserialization speed
+
+Here sbcl generates a nice jumptable for the case statement and I've ordered things more or
+less in a reasonable order by hand.
