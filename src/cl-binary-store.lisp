@@ -133,6 +133,12 @@
    #:restore-object
    #:rebuild-dispatch
    #:make-end-marker
-   ))
+   #:with-write-storage
+   #:storage-write-byte
+   #:storage-write-byte!
+   #:copy-sap
+   #:ensure-enough-data
+   #:copy-n-bytes
+   #:storage-sap))
 
 (in-package :cl-binary-store)
