@@ -139,6 +139,9 @@
    #:copy-sap
    #:ensure-enough-data
    #:copy-n-bytes
-   #:storage-sap))
+   #:storage-sap
+   #:eq-refs
+   #:double-float-refs
+   #:num-eq-refs))
 
 (in-package :cl-binary-store)
