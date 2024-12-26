@@ -109,6 +109,8 @@
    #:*support-shared-list-structures*
    ;; Do any sort of reference tracking
    #:*track-references*
+   ;; Write an end marker
+   #:*write-end-marker*
 
    ;; Versioning
    #:*supported-versions*
@@ -129,6 +131,8 @@
    #:obj
    #:store-object
    #:restore-object
-   #:rebuild-dispatch))
+   #:rebuild-dispatch
+   #:make-end-marker
+   ))
 
 (in-package :cl-binary-store)

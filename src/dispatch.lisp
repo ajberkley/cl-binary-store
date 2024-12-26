@@ -58,7 +58,8 @@
 	       #+debug-cbs (format t "Writing total reference count ~A to file~%" (1+ ref-id))
 	       (write-reference-count (1+ ref-id) #'store-object))
              (dolist (elt stuff)
-	       (store-object elt))))
+	       (store-object elt))
+	     (when *write-end-marker* (store-object (make-end-marker)))))
          (flush-write-storage storage)))))
 
 (defun build-restore-objects ()
@@ -72,13 +73,15 @@
        (labels ((restore-object (&optional (tag (restore-ub8 storage)))
                   (read-dispatch tag storage references #'restore-object)))
          (let ((objects
-                 (loop for code = (maybe-restore-ub8 storage)
+                 (loop
+		       with object and ignore/eof
+		       for code = (maybe-restore-ub8 storage)
 		       while code
-		       with object and ignore
 		       do #+debug-cbs (format t "Read code ~A (offset ~A max ~A)~%" code
 					      (storage-offset storage) (storage-max storage))
-                          (setf (values object ignore) (restore-object code))
-		       unless ignore
+                          (setf (values object ignore/eof) (restore-object code))
+		       until (eq ignore/eof :end)
+		       unless (eq ignore/eof :ignore)
                          collect object)))
 	   (apply #'values objects))))))
 

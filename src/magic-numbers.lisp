@@ -17,7 +17,6 @@
   "During restore this is bound to any magic number found previous to
  this in the file.")
 
-(declaim (inline make-magic-number))
 (defstruct (magic-number (:include action (code +magic-number-action-code+)))
   (number 2718281828 :type integer :read-only t))
 
@@ -27,7 +26,7 @@
       (error "Unsupported version #x~X, we support ~{#x~X~^ ~}"
 	     magic-number *supported-versions*))
     (setf *version-being-read* magic-number)
-    (make-magic-number :number magic-number)))
+    (values (make-magic-number :number magic-number) :ignore)))
 
 (defmethod store-action ((action magic-number) storage store-object)
   (store-fixnum (magic-number-number action) storage))

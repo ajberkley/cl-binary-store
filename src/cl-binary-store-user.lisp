@@ -56,6 +56,8 @@
    #:*support-shared-list-structures*
    ;; Do any sort of reference tracking
    #:*track-references*
+   ;; Write an end marker
+   #:*write-end-marker*
 
    ;; Versioning
    #:*supported-versions*

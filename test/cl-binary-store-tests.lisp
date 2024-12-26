@@ -358,3 +358,17 @@
         (restore (store "blarg-test-cl-store.bin" data1 data2))
       (is 'equalp data1 d1)
       (is 'equalp data2 d2))))
+
+(define-test test-end-marker
+  (is 'equal (multiple-value-list
+	      (restore (concatenate 'vector
+				    (let ((*write-end-marker* t))
+				      (store nil 1 2))
+				    (store nil 3))))
+      '(1 2))
+  (is 'equal (multiple-value-list
+	      (restore (concatenate 'vector
+				    (let ((*write-end-marker* nil))
+				      (store nil 1 2))
+				    (store nil 3))))
+      '(1 2 3)))
