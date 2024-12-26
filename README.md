@@ -13,6 +13,7 @@ hard to make work with other systems, just not top of mind right now. (see TODO)
 - Speed and compactness
 - Extensibility for specialized data
 - Should work out of the box without any effort with an easy programmer / user interface
+- Serialization deserialization on the same architecture --- I don't do endianess conversion.
 
 ## General features
 
