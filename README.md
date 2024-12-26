@@ -1,4 +1,4 @@
-# cl-store-faster
+# cl-binary-store
 
 A fast and reasonably customizable serializer/deserializer of Common Lisp
 objects to a binary format.
