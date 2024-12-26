@@ -1,5 +1,7 @@
 (defpackage :example-extension
-  (:use :common-lisp :cl-binary-store))
+  (:use :common-lisp :cl-binary-store)
+  (:export #:test-special-serializer/deserializer
+	   #:test-serializable-slot-info))
 
 (in-package :example-extension)
 
@@ -23,7 +25,8 @@
 	 (b-restored (restore (store nil b))))
     (assert (string= (funcall (slot-value b-restored 'a-not-serializable))
 		     "I was initialized!"))
-    (assert (string= (slot-value b-restored 'b-serializable) "asdf"))))
+    (assert (string= (slot-value b-restored 'b-serializable) "asdf"))
+    (format t "Success!~%")))
 
 ;; Here is another way to do this
 
@@ -45,5 +48,5 @@
   (format t (funcall restore-object))
   (format t (funcall restore-object)))
 
-(defun test-it ()
+(defun test-special-serializer/deserializer ()
   (restore (store nil (make-instance 'something-else))))

@@ -228,6 +228,18 @@ storing simple arrays though, you want to use this package instead.
 - [ ] Sort reference-ids by use amount if we have more than 255 or 65535 of them to shrink file?  An approximate radix sort might work quickly enough, but the cost of an extra puthash to keep an exact count is probably not worth it.
 - [ ] Add an end/stop marker so user can read objects one by one from raw memory or vectors or files?  Or more easily from sap vectors.
 
+## Adding extensions
+
+See the file src/example-extension.lisp and src/example-extension-2.lisp.
+    CL-USER> (quicklisp:quickload "example-extension")
+    CL-USER> (example-extension:test-serializable-slot-info)
+    Success!
+    CL-USER> (example-extension:test-special-serializer/deserializer)
+    12345
+    "Hi, I decided to write this instead of a 'something-else"
+    "But actually, it told me to tell you:"
+    "Hi"
+
 ## Benchmarking
 
 To make something fast you have to measure it!  In src/benchmarks.lisp you'll see comparisons
