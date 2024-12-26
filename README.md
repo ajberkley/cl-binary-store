@@ -29,14 +29,13 @@ structure-objects and standard-objects have good default serialize/deserializers
 
 symbols, hash-tables, and pathnames are supported.
 
-Multiply referenced objects are stored as references so equality is preserved across serialization / deserialization and circularity is supported.  If you disable reference tracking serialization is quite
-fast.
+Multiply referenced objects are stored as references so equality is preserved across serialization / deserialization and circularity is supported.  If you disable reference tracking serialization is quite fast.
 
 Large simple-arrays have dedicated (at least on sbcl) serializers / deserializers which should be close to disk/network/memory bandwidth limited.
 
 Support for writing and reading from files, vectors, streams, and raw memory without having to jump through hoops.
 
-A very very simple versioning scheme is implemented.
+A sketch of a versioning scheme is implemented.
 
 ## User interface
 ### (store place &rest data)
@@ -57,7 +56,7 @@ A very very simple versioning scheme is implemented.
 git clone the repo into your local quicklisp directory (usually ~/quicklisp/local-packages)
 
     CL-USER> (quicklisp:quickload "cl-binary-store")
-    CL-USER> (in-package :cl-binary-store-user) ;  or (use-package :cl-binary-store-use)
+    CL-USER> (in-package :cl-binary-store-user) ;  or (use-package :cl-binary-store-user)
     CL-BINARY-STORE-USER> (store nil (list "abcd" 1234))
     #(4 39 0 4 97 98 99 100 4 1 210 4 5)
     ;; 4 = cons, 39 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 4 = cons
@@ -71,7 +70,7 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
     CL-BINARY-STORE-USER> (restore "blarg.bin")
     HI
     CL-BINARY-STORE-USER> (store nil (make-string 1 :initial-element #\U+03b1))
-    #(39 0 2 206 177) ;; 4 bytes, 39 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
+    #(39 0 2 206 177) ;; 4 bytes, 39 = utf-8 string, 0 2 is encoded length = 2, 206 117 = α
 
     CL-BINARY-STORE-USER> (let* ((*print-circle* t)
                                  (v (make-array 1)))
