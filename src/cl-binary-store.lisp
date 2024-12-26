@@ -113,7 +113,9 @@
    #:*supported-versions*
    #:*write-version*
    #:*version-being-read*
+   #:*write-magic-number*
 
-   ))
+   #:out-of-space-current-offset
+   #:out-of-space-wanted-bytes))
 
 (in-package :cl-binary-store)

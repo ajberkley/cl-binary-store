@@ -120,11 +120,11 @@
 
 (define-test test-symbols
   (let ((symbols (list (intern "HI" "CL-BINARY-STORE-TESTS")
-		       (intern "TEST-SYMBOL-HI" "CL-BINARY-STORE-TESTS"))))
+		       (intern "TEST-SYMBOL-HI" "CL-BINARY-STORE"))))
     (true (equalp
 	   (restore-from-vector (store-to-vector symbols))
 	   symbols))
-    (let ((vec (store-to-vector symbols)))
+    (let ((vec (print (store-to-vector symbols))))
       (unintern (find-symbol "HI"))
       (unintern (find-symbol "TEST-SYMBOL-HI" "CL-BINARY-STORE"))
       (restore-from-vector vec)
