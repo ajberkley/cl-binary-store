@@ -206,13 +206,11 @@ storing simple arrays though, you want to use this package instead.
 
 ## TODO
 
-- [ ] Make it easy for extensions to trigger a rebuild of dispatch code after adding new codes / extensions
 - [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
 - [ ] Parallel store and restore ... restore is easy but store is near impossible
 - [ ] Provide non-sbcl specific serializers
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)
 - [ ] Sort reference-ids by use amount if we have more than 255 or 65535 of them to shrink file?  An approximate radix sort might work quickly enough, but the cost of an extra puthash to keep an exact count is probably not worth it.
-- [ ] Add an end/stop marker so user can read objects one by one from raw memory or vectors or files?  Or more easily from sap vectors.
 
 ## Adding extensions
 
@@ -252,6 +250,13 @@ See the file src/example-extension.lisp and src/example-extension-2.lisp.
     "Hi, I decided to write this instead of a 'something-else"
     "But actually, it told me to tell you:"
     "Hi"
+
+## Compressed output
+
+I suggest just piping the output through gzip.  Otherwise you can use
+[deoxybyte-gzip](https://github.com/keithj/deoxybyte-gzip) but warning it
+has a small bug in read-sequence, so use the version
+[here](https://github.com/ajberkley/deoxybyte-gzip).
 
 ## Benchmarking
 
