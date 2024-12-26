@@ -1,19 +1,26 @@
 # cl-store-faster
 
 A fast and reasonably customizable serializer/deserializer of Common Lisp
-objects to compact binary format.
+objects to a binary format.
 
-Currently has a bunch of sbcl specific code though it shouldn't be too
-hard to make work with other systems, just not top of mind right now. (see TODO).
+Currently this is sbcl specific, but I'd like to fix this up to work on other
+implementations, but it isn't my goal since every other implementation (except
+the commercial ones) are just too slow for me.
+
+This project works, has some test coverage, but is not finished yet.  I expect it to be polished and
+released mid-January 2025.
+
+> :warning: This is a work in progress, do not rely on it yet!
 
 ## Focus
 - Data that has multiple references to the same object as well as circular references
   - This dominates serialization time (but you can disable this feature to get crazy speeds)
   - Complex list circularity and references (other than to the head of lists, separately disableable as well))
 - Speed and compactness
-- Extensibility for specialized data
+- Extensibility for specialized data and objects
 - Should work out of the box without any effort with an easy programmer / user interface
-- Serialization deserialization on the same architecture --- I don't do endianess conversion.
+- Serialization deserialization on the same architecture
+- 64-bit only currently (and it'll stay that way unless someone else cares).
 
 ## General features
 
