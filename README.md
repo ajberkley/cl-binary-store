@@ -11,7 +11,7 @@ This project works, has some test coverage, but is not finished yet.  I expect i
 > :warning: This is a work in progress, do not rely on it yet!
 
 ## Focus
-- Data that has multiple references to the same object as well as circular references
+- Data that has multiple and circular references within it
   - This dominates serialization time (but you can disable this feature to get crazy speeds)
   - Complex list circularity and references (other than to the head of lists, separately disableable as well)
 - Speed and compactness
