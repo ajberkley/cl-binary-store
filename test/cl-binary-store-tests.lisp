@@ -175,10 +175,13 @@
   (g t :type (or simple-vector integer (eql t))))
 
 (define-test test-struct-simple
-  (let ((s (list (make-blarg :a 1234 :b 1d0 :d (make-array 5 :initial-element "hi"))
-		 (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo")))))
+  (let* ((one (make-blarg :a 1234 :b 1d0 :d (make-array 5 :initial-element "hi")))
+	 (two (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo")))
+	 (s (list one two one two)))
     (let ((result (restore-from-vector (store-to-vector s))))
-      (is 'equalp result s))))
+      (is 'equalp result s)
+      (is 'eql (first result) (third result))
+      (is 'eql (second result) (fourth result)))))
 
 (define-test test-struct-circular
   (let ((s (list (make-blarg :a 1234 :b 1d0 :d (make-array 5 :initial-element "hi"))
@@ -211,9 +214,9 @@
   ((d :initform "hihi" :initarg :d)))
 
 (define-test test-standard-objects
-  (let ((b (list (make-instance 'b-class)
-		 (make-instance 'b-class :a 1 :b 2 :c 3 :d 4)
-		 (make-instance 'a-class))))
+  (let* ((b (list (make-instance 'b-class)
+		  (make-instance 'b-class :a 1 :b 2 :c 3 :d 4)
+		  (make-instance 'a-class))))
     ;; circularity tests
     (setf (slot-value (first b) 'b) (first b))
     (setf (slot-value (third b) 'c) (second b))
@@ -231,7 +234,11 @@
       
       (false (slot-boundp z 'a))
       (is 'eql (slot-value z 'b) 1d0)
-      (is 'eq (slot-value z 'c) y))))
+      (is 'eq (slot-value z 'c) y))
+    ;; Reference tests
+    (let* ((b0 (make-instance 'b-class))
+	   (result (restore-from-vector (store-to-vector (list b0 b0)))))
+      (is 'eql (first result) (second result)))))
 
 (define-test test-pathname
   (let ((a (make-pathname :directory "tmp" :name "blarg")))
