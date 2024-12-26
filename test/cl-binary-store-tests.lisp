@@ -34,6 +34,13 @@
       (is '= (cadr result) 456)
       (is 'eq (cddr result) (cdr result)))))
 
+(define-test cars-are-stored-in-reference-tables
+  (let* ((a (make-list 3 :initial-element (list 1 2 3)))
+	 (restored-a (restore (store-to-vector a))))
+    (is 'equal (first a) (first restored-a))
+    (loop for elt in restored-a
+	  do (is 'eql elt (first restored-a)))))
+
 (define-test test-simple-displaced-array-circularity
   (let* ((a (make-array 1))
 	 (b (make-array 1 :displaced-to a))
@@ -113,10 +120,18 @@
 		 (true (= (length result) size))))))
   
 (define-test test-strings
-  (dolist (string (list (make-string 10 :element-type 'base-char :initial-element #\a)
-			"asdffdsa"
-			(make-string 10 :element-type 'character :initial-element #\b)))
-    (is 'equalp (restore-from-vector (store-to-vector string)) string)))
+  (let ((a-string "asdffdsa")
+	(b-string "somethin"))
+    (dolist (string (list (make-string 10 :element-type 'base-char :initial-element #\a)
+			  a-string
+			  (make-string 10 :element-type 'character :initial-element #\b)))
+      (is 'equalp (restore (store nil string)) string))
+    ;; Check that references work
+    (true (apply #'eql (restore (store nil (list a-string a-string)))))
+    (is 'equalp (restore (store nil (list a-string a-string b-string)))
+	(list a-string a-string b-string))
+    (true (< (length (store nil a-string a-string))
+	     (length (store nil a-string b-string))))))
 
 (define-test test-symbols
   (let ((symbols (list (intern "HI" "CL-BINARY-STORE-TESTS")
