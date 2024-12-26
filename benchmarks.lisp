@@ -92,6 +92,21 @@
   (make-list n :initial-element (random 256)))
 
 ;; HYPERLUMINAL-MEM
+;;  OUTPUT SIZE: 8.00 MB ;; bit tagging, not byte tagging
+;;  HLMEM WRITE: 2.24 ms at 3571 MB/sec
+;;  HLMEM READ : 5.04 ms at 1587 MB/sec
+;; CL-STORE-FASTER
+;;  OUTPUT SIZE: 10.00 MB
+;;  CL-STORE-FASTER WRITE: 3.84 ms at 2604 MB/sec
+;;  CL-STORE-FASTER READ : 9.48 ms at 1055 MB/sec
+;; CL-STORE
+;;  OUTPUT SIZE: 38.00MB
+;;  CL-STORE WRITE: 422.39 ms at 90 MB/sec
+;;  CL-STORE READ : 293.20 ms at 130 MB/sec
+(defun long-list-of-random-fixnums (&optional (n 1000000))
+  (make-list n :initial-element (random (- (expt 2 61) (expt 2 60)))))
+
+;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 16.00 MB
 ;;  HLMEM WRITE: 23.28 ms at 687 MB/sec
 ;;  HLMEM READ : 15.68 ms at 1020 MB/sec
@@ -194,7 +209,7 @@
 ;;  OUTPUT SIZE: 27.78MB
 ;;  CL-STORE WRITE: 448.79 ms at 62 MB/sec
 ;;  CL-STORE READ : 408.40 ms at 68 MB/sec
-;; and using referencing to deduplicate the double-floats
+;; and using referencing to deduplicate the double-floats and strings
 ;; CL-STORE-FASTER
 ;;  OUTPUT SIZE: 3.38 MB
 ;;  CL-STORE-FASTER WRITE: 65.52 ms at 52 MB/sec
@@ -218,7 +233,7 @@
 					       ;; (random 1f0) slows cl-store crazily
 					       #()))))))
 
-;; With reference counting on everyone
+;; With reference tracking on everyone
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 3.20 MB
 ;;  HLMEM WRITE: 18.52 ms at 173 MB/sec
