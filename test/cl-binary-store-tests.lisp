@@ -41,6 +41,15 @@
     (loop for elt in restored-a
 	  do (is 'eql elt (first restored-a)))))
 
+(define-test up-to-ub32-references-work
+  ;; Break even is 5 bytes for references if they are mainly ub16s
+  (let* ((elts (loop for i fixnum from 0 below 100000
+		     collect (format nil "Longish header: ~A" i)))
+	 (double-elts (append elts elts)))
+    (is 'equal double-elts (restore-from-vector (store-to-vector double-elts)))
+    (true (< (length (store-to-vector double-elts))
+	     (length (store-to-vector (append elts (map 'list #'copy-seq elts))))))))
+
 (define-test test-simple-displaced-array-circularity
   (let* ((a (make-array 1))
 	 (b (make-array 1 :displaced-to a))
