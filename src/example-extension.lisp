@@ -32,13 +32,6 @@
 (defclass something-else ()
   ((information :initform "Hi" :accessor information)))
 
-;; Make sure when this package gets loaded that we recompile the dispatch mechanism
-(defstore something-else (store-something-else obj storage store-object))
-(defrestore +test-code+ (restore-something-else restore-object))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (rebuild-dispatch))
-
 (defun store-something-else (obj storage store-object)
   (store-ub8 +test-code+ storage)
   (store-ub16 12345 storage)
@@ -54,4 +47,3 @@
 
 (defun test-it ()
   (restore (store nil (make-instance 'something-else))))
-
