@@ -1,6 +1,6 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
-(defparameter *support-shared-list-structures* t
+(defvar *support-shared-list-structures* t
   "If this is T, then circular lists of all types and structures that
  share list parts will be serialized correctly.  This is very
  expensive.  When this is NIL, only the heads of lists may be multiply

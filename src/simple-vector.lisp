@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (defun store-simple-vector (sv storage store-object)
   (declare (optimize speed safety) (type simple-vector sv) (type function store-object))

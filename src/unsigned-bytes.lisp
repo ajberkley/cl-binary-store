@@ -1,20 +1,20 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
-(declaim (#-debug-csf inline #+debug-csf notinline maybe-restore-ub8))
+(declaim (#-debug-cbs inline #+debug-cbs notinline maybe-restore-ub8))
 (defun maybe-restore-ub8 (storage)
   "Maybe restore an (unsigned-byte 8) value from storage that has previously
  been stored by STORE-UB8.  If there is no more data available will return NIL."
-  (declare #-debug-csf(optimize (speed 3) (safety 0) (debug 0))) ;; this is called all the time!
+  (declare #-debug-cbs(optimize (speed 3) (safety 0) (debug 0))) ;; this is called all the time!
   (and (ensure-enough-data storage 1 t)
        (let ((offset (storage-offset storage)))
 	 (setf (storage-offset storage) (1+ offset))
          (sap-ref-8 (storage-sap storage) offset))))
 
-(declaim (#-debug-csf inline #+debug-csf notinline restore-ub8))
+(declaim (#-debug-cbs inline #+debug-cbs notinline restore-ub8))
 (defun restore-ub8 (storage)
   "Restore an (unsigned-byte 8) value from storage that has previously
  been stored by STORE-UB8."
-  (declare #-debug-csf(optimize (speed 3) (safety 0) (debug 0))) ;; called all the time!
+  (declare #-debug-cbs(optimize (speed 3) (safety 0) (debug 0))) ;; called all the time!
   (ensure-enough-data storage 1)
   (let ((offset (storage-offset storage)))
     (prog1

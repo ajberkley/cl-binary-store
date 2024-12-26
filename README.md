@@ -7,8 +7,8 @@ Currently this is sbcl specific, but I'd like to fix this up to work on other
 implementations, but it isn't my goal since every other implementation (except
 the commercial ones) are just too slow for me.
 
-This project works, has some test coverage, but is not finished yet.  I expect it to be polished and
-released mid-January 2025.
+This project works, has some test coverage, but is not finished yet.
+I expect it to be polished and released mid-January 2025.
 
 > :warning: This is a work in progress, do not rely on it yet!
 
@@ -74,36 +74,43 @@ large arrays).
 
  For storing to one, you don't need to know the size in advance as we throw
  a restartable error allow you to allocate more system memory and continue
- on.  See tests/cl-store-faster-tests.lisp test-sap-write/read for a silly
+ on.  See tests/cl-binary-store-tests.lisp test-sap-write/read for a silly
  example of how to use this.  Nominally you'll be updating mmap regions of
  files or something.
 
 ## Examples
 git clone the repo into your local quicklisp directory (usually ~/quicklisp/local-packages)
 
-    CL-USER> (quicklisp:quickload "cl-store-faster")
-    CL-USER> (in-package :cl-store-faster)
-    CL-STORE-FASTER> (store nil (list "abcd" 1234))
+    CL-USER> (quicklisp:quickload "cl-binary-store")
+    CL-USER> (in-package :cl-binary-store-user) ;  or (use-package :cl-binary-store-use)
+    CL-BINARY-STORE-USER> (store nil (list "abcd" 1234))
     #(4 39 0 4 97 98 99 100 4 1 210 4 5)
     ;; 4 = cons, 39 = simple-string, 0 4 = length 4, 97 98 99 100 = abcd, 4 = cons
     ;; 1 210 4 = 16 bit integer 1234, 5 = nil
     
-    CL-STORE-FASTER> (restore (store nil (list "abcd" 1234)))
+    CL-BINARY-STORE-USER> (restore (store nil (list "abcd" 1234)))
     ("abcd" 1234)
 
-    CL-STORE-FASTER> (store "blarg.bin" 'hi)
+    CL-BINARY-STORE-USER> (store "blarg.bin" 'hi)
     "blarg.bin"
-    CL-STORE-FASTER> (restore "blarg.bin")
+    CL-BINARY-STORE-USER> (restore "blarg.bin")
     HI
-    CL-STORE-FASTER> (store nil (make-string 1 :initial-element #\U+03b1))
+    CL-BINARY-STORE-USER> (store nil (make-string 1 :initial-element #\U+03b1))
     #(39 0 2 206 177) ;; 4 bytes, 39 = utf-8 string, 0 2 is encoded length = 2, 206 117 = alpha
 
-    CL-STORE-FASTER> (let* ((*print-circle* t)
-                            (v (make-array 1)))
-                        (setf (svref v 0) v)
-                        (store "blarg.bin" 'a 'b 'c v)
-                        (format nil "~A" (multiple-value-list (restore "blarg.bin"))))
+    CL-BINARY-STORE-USER> (let* ((*print-circle* t)
+                                 (v (make-array 1)))
+                             (setf (svref v 0) v)
+                             (store "blarg.bin" 'a 'b 'c v)
+                             (format nil "~A" (multiple-value-list (restore "blarg.bin"))))
     "(A B C #1=#(#1#))"
+
+To run tests you want to do
+    CL-USER> (quicklisp:quickload "cl-store-binary-tests")
+    CL-USER> (parachute:test 'cl-store-binary-tests)
+
+The package :cl-binary-store-user exports all the user facing interfaces above.  The package
+:cl-binary-store (will eventually) exports all the symbols needed to add your own extensions.
 
 ### Configurable options
 
@@ -231,10 +238,10 @@ between CL-STORE, HYPERLUMINAL-MEM, and this package.  For example:
     ;;  OUTPUT SIZE: 8.00 MB
     ;;  HLMEM WRITE: 2.32 ms at 3448 MB/sec
     ;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-    ;; CL-STORE-FASTER
+    ;; CL-BINARY-STORE
     ;;  OUTPUT SIZE: 3.00 MB
-    ;;  CL-STORE-FASTER WRITE: 3.60 ms at 833 MB/sec ;; (/ 2e6 3.6e-3) = 550Mobjs/second
-    ;;  CL-STORE-FASTER READ : 8.20 ms at 366 MB/sec
+    ;;  CL-BINARY-STORE WRITE: 3.60 ms at 833 MB/sec ;; (/ 2e6 3.6e-3) = 550Mobjs/second
+    ;;  CL-BINARY-STORE READ : 8.20 ms at 366 MB/sec
     ;; CL-STORE
     ;;  OUTPUT SIZE: 5.00MB
     ;;  CL-STORE WRITE: 59.20 ms at 84 MB/sec
@@ -242,7 +249,7 @@ between CL-STORE, HYPERLUMINAL-MEM, and this package.  For example:
     (defun long-list-of-small-integers (&optional (n 1000000))
       (make-list n :initial-element (random 256)))
 
-This is the most synthetic of all the tests.  It runs cl-store-faster without reference
+This is the most synthetic of all the tests.  It runs cl-binary-store without reference
 tracking which matches the behavior of cl-store and hyperluminal-mem for this single list
 case.  First thing to note is that the output file is small, because very small integers
 get written at 2 bytes per, one for a tag and one for the value.  For numbers less than
@@ -264,10 +271,10 @@ this package.
     ;;  OUTPUT SIZE: 8.00 MB ;; bit tagging, not byte tagging
     ;;  HLMEM WRITE: 2.24 ms at 3571 MB/sec
     ;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-    ;; CL-STORE-FASTER
+    ;; CL-BINARY-STORE
     ;;  OUTPUT SIZE: 10.00 MB
-    ;;  CL-STORE-FASTER WRITE: 3.84 ms at 2604 MB/sec
-    ;;  CL-STORE-FASTER READ : 9.48 ms at 1055 MB/sec
+    ;;  CL-BINARY-STORE WRITE: 3.84 ms at 2604 MB/sec
+    ;;  CL-BINARY-STORE READ : 9.48 ms at 1055 MB/sec
     ;; CL-STORE
     ;;  OUTPUT SIZE: 38.00MB
     ;;  CL-STORE WRITE: 422.39 ms at 90 MB/sec
@@ -287,10 +294,10 @@ with stuff.  Here we have reference tracking on all three systems
     ;;  OUTPUT SIZE: 3.20 MB
     ;;  HLMEM WRITE: 18.52 ms at 173 MB/sec
     ;;  HLMEM READ : 33.32 ms at 96 MB/sec
-    ;; CL-STORE-FASTER
+    ;; CL-BINARY-STORE
     ;;  OUTPUT SIZE: 1.15 MB
-    ;;  CL-STORE-FASTER WRITE: 28.56 ms at 40 MB/sec
-    ;;  CL-STORE-FASTER READ : 29.36 ms at 39 MB/sec
+    ;;  CL-BINARY-STORE WRITE: 28.56 ms at 40 MB/sec
+    ;;  CL-BINARY-STORE READ : 29.36 ms at 39 MB/sec
     ;; CL-STORE
     ;;  OUTPUT SIZE: 1.24MB
     ;;  CL-STORE WRITE: 52.80 ms at 24 MB/sec
@@ -307,10 +314,10 @@ I didn't check hyperluminal-mem on this because you have to write a couple lines
 code to make it work for user structs.
 
     ;; hyperluminal mem needs an extension for this so skipping it for now
-    ;; CL-STORE-FASTER
+    ;; CL-BINARY-STORE
     ;;  OUTPUT SIZE: 1.79 MB
-    ;;  CL-STORE-FASTER WRITE: 49.00 ms at 37 MB/sec
-    ;;  CL-STORE-FASTER READ : 9.24 ms at 194 MB/sec
+    ;;  CL-BINARY-STORE WRITE: 49.00 ms at 37 MB/sec
+    ;;  CL-BINARY-STORE READ : 9.24 ms at 194 MB/sec
     ;; CL-STORE
     ;;  OUTPUT SIZE: 6.69MB
     ;;  CL-STORE WRITE: 171.20 ms at 39 MB/sec
@@ -331,10 +338,10 @@ encode / decode currently.
     ;;  OUTPUT SIZE: 2.40 MB
     ;;  HLMEM WRITE: 4.52 ms at 531 MB/sec
     ;;  HLMEM READ : 3.12 ms at 769 MB/sec
-    ;; CL-STORE-FASTER
+    ;; CL-BINARY-STORE
     ;;  OUTPUT SIZE: 1.19 MB
-    ;;  CL-STORE-FASTER WRITE: 4.04 ms at 294 MB/sec
-    ;;  CL-STORE-FASTER READ : 8.68 ms at 137 MB/sec
+    ;;  CL-BINARY-STORE WRITE: 4.04 ms at 294 MB/sec
+    ;;  CL-BINARY-STORE READ : 8.68 ms at 137 MB/sec
     ;; CL-STORE
     ;;  OUTPUT SIZE: 2.08MB
     ;;  CL-STORE WRITE: 23.20 ms at 90 MB/sec
@@ -360,19 +367,19 @@ referencing scheme speeding up restore quite a lot.
     ;;  OUTPUT SIZE: 20.48 MB
     ;;  HLMEM WRITE: 34.12 ms at 600 MB/sec
     ;;  HLMEM READ : 30.96 ms at 662 MB/sec
-    ;; CL-STORE-FASTER
+    ;; CL-BINARY-STORE
     ;;  OUTPUT SIZE: 8.06 MB
-    ;;  CL-STORE-FASTER WRITE: 25.20 ms at 320 MB/sec
-    ;;  CL-STORE-FASTER READ : 43.76 ms at 184 MB/sec
+    ;;  CL-BINARY-STORE WRITE: 25.20 ms at 320 MB/sec
+    ;;  CL-BINARY-STORE READ : 43.76 ms at 184 MB/sec
     ;; CL-STORE
     ;;  OUTPUT SIZE: 27.78MB
     ;;  CL-STORE WRITE: 448.79 ms at 62 MB/sec
     ;;  CL-STORE READ : 408.40 ms at 68 MB/sec
     ;; and using referencing to deduplicate the double-floats and strings
-    ;; CL-STORE-FASTER
+    ;; CL-BINARY-STORE
     ;;  OUTPUT SIZE: 3.38 MB
-    ;;  CL-STORE-FASTER WRITE: 65.52 ms at 52 MB/sec
-    ;;  CL-STORE-FASTER READ : 12.32 ms at 274 MB/sec
+    ;;  CL-BINARY-STORE WRITE: 65.52 ms at 52 MB/sec
+    ;;  CL-BINARY-STORE READ : 12.32 ms at 274 MB/sec
     ;; CL-STORE
     ;;  OUTPUT SIZE: 4.88MB
     ;;  CL-STORE WRITE: 129.60 ms at 38 MB/sec

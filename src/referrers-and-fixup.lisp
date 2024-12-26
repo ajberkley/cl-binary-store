@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 ;; References are used to handle circularity (in lists, non-specialized
 ;; vectors, structure-classes and standard-classes).  References are
@@ -64,18 +64,18 @@
         (let ((number-of-times-referenced (gethash object references 0)))
           (declare (type fixnum number-of-times-referenced))
           ;; We store the number of times an object is referenced as 1 or 2, where 2 means anything
-          ;; more than 1 (except if debug-csf is in *features* then we keep track of the exact
+          ;; more than 1 (except if debug-cbs is in *features* then we keep track of the exact
           ;; number). The logic below is unnecessarily complex, clean this up with clear brain
           (cond
             ((zerop number-of-times-referenced)
              (setf (gethash object references) 1)
              nil)
-            (#+debug-csf (>= number-of-times-referenced 1)
-             #-debug-csf (= number-of-times-referenced 1)
-             #+debug-csf (the fixnum (incf (the fixnum (gethash object references))))
-             #-debug-csf(setf (gethash object references) 2)
+            (#+debug-cbs (>= number-of-times-referenced 1)
+             #-debug-cbs (= number-of-times-referenced 1)
+             #+debug-cbs (the fixnum (incf (the fixnum (gethash object references))))
+             #-debug-cbs(setf (gethash object references) 2)
              t)
-            #-debug-csf((= number-of-times-referenced 2) t)
+            #-debug-cbs((= number-of-times-referenced 2) t)
             (t nil)))
         (gethash object references))))
 
@@ -95,12 +95,12 @@
             (declare (type fixnum ref-idx))
 	  (cond
 	    ((>= ref-idx 0)
-	     #+dribble-csf (format t "Storing a reference (#~A) which is to a ~A~%"
+	     #+dribble-cbs (format t "Storing a reference (#~A) which is to a ~A~%"
 				   ref-idx (type-of object))
 	     (store-reference ref-idx storage)
 	     t)
 	    (t
-	     #+dribble-csf (format t "Storing reference definition (#~A) for next object: ~A~%"
+	     #+dribble-cbs (format t "Storing reference definition (#~A) for next object: ~A~%"
 				   (- ref-idx) (type-of object))
 	     (setf ref-idx (- ref-idx))
 	     (store-reference-id-for-following-object ref-idx storage)
@@ -147,7 +147,7 @@
 (defun update-reference (ref-id value references)
   "Used during RESTORE"
   (declare (optimize speed safety) (type fixnum ref-id))
-  #+debug-csf
+  #+debug-cbs
   (let ((*print-circle* t))
     (format t "Updating reference id ~A to ~S~%" ref-id value))
   (let ((vec (ensure-references-vector references ref-id)))
@@ -161,7 +161,7 @@
 (defun get-reference (ref-id references)
   (declare (optimize speed safety))
   (let ((actual-object (svref (references-vector references) ref-id)))
-  #+debug-csf (format t "Resolving reference ~A to a ~A~%"
+  #+debug-cbs (format t "Resolving reference ~A to a ~A~%"
 		      ref-id (if actual-object (type-of actual-object) 'invalid-object))
     (or actual-object (invalid-referrer ref-id))))
 
@@ -195,7 +195,7 @@
 (defun fixup (fixup new-value references)
   (declare (optimize speed safety))
   "Resolve a delayed object construction.  Returns new-value."
-  #+debug-csf (format t "Executing ~A fixups for reference id ~A of type ~A~%"
+  #+debug-cbs (format t "Executing ~A fixups for reference id ~A of type ~A~%"
 		      (length (fixup-list fixup)) (fixup-ref-id fixup)
 		      (type-of new-value))
   (mapc (lambda (func)
@@ -261,7 +261,7 @@
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
   (when storage
-    #+dribble-csf (format t "Writing reference ~A~%" ref-index)
+    #+dribble-cbs (format t "Writing reference ~A~%" ref-index)
     (typecase ref-index
       ((unsigned-byte 8)
        (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
@@ -283,7 +283,7 @@
 (defun store-reference-id-for-following-object (ref-index storage)
   (declare (type (and (integer 0) fixnum) ref-index)
 	   (type (not null) storage))
-  #+dribble-csf (format t "Writing reference follows ~A~%" ref-index)
+  #+dribble-cbs (format t "Writing reference follows ~A~%" ref-index)
   (typecase ref-index
     ((unsigned-byte 8)
      (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
@@ -315,12 +315,12 @@
 
 (defun restore-reference-id-ub16 (storage references restore-object)
   (let ((ref-id (restore-ub16 storage)))
-    #+debug-csf(format t "Restoring reference id ~A~%" ref-id)
+    #+debug-cbs(format t "Restoring reference id ~A~%" ref-id)
     (restore-reference-id-for-following-object ref-id references restore-object)))
 
 (defun restore-reference-id-ub32 (storage references restore-object)
   (let ((ref-id (restore-ub32 storage)))
-    #+debug-csf(format t "Restoring reference id ~A~%" ref-id)
+    #+debug-cbs(format t "Restoring reference id ~A~%" ref-id)
     (restore-reference-id-for-following-object ref-id references restore-object)))
 
 (defun restore-reference-id (storage references restore-object)

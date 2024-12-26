@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (declaim (ftype (function (t &optional (unsigned-byte 58))
 			  (values (unsigned-byte 50) (unsigned-byte 8) &optional))
@@ -202,7 +202,7 @@
       (store-unsigned-fixnum sv-length storage)
       (multiple-value-bind (bytes-to-write encoded-element-type)
 	  (sbcl-specialized-array-element-size/bits sv)
-	#+debug-csf (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
+	#+debug-cbs (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
 			    (type-of sv) bytes-to-write encoded-element-type)
 	(storage-write-byte storage encoded-element-type)
 	(sb-sys:with-pinned-objects (sv)
@@ -222,7 +222,7 @@
                                         num-bytes-remaining)
                                    (min storage-size num-bytes-remaining))
     do
-       #+debug-csf(format t "At storage offset ~A and storage-max ~A, asking for ~A bytes to read, ~A bytes remaining~%"
+       #+debug-cbs(format t "At storage offset ~A and storage-max ~A, asking for ~A bytes to read, ~A bytes remaining~%"
                (storage-offset storage) (storage-max storage) bytes-to-read num-bytes-remaining)
        (ensure-enough-data storage bytes-to-read)
        (let ((offset (storage-offset storage)))
@@ -241,7 +241,7 @@
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
 	  (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
-	#+debug-csf (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
+	#+debug-cbs (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
 			    (type-of sv) num-bytes num-elts encoded-element-info)
         (with-pinned-objects (sv)
           (read-chunked (vector-sap sv) storage num-bytes))
@@ -260,7 +260,7 @@
       (multiple-value-bind (bytes-to-write encoded-element-type)
 	  (sbcl-specialized-array-element-size/bits sa num-elts)
 	(storage-write-byte storage encoded-element-type)
-	#+debug-csf (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
+	#+debug-cbs (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
 	 		    (type-of sa) bytes-to-write encoded-element-type)
 	(sb-kernel:with-array-data ((backing-array sa) (start) (end))
           (assert (= end num-elts))
@@ -280,7 +280,7 @@
     (multiple-value-bind (sa num-bytes)
 	(sbcl-make-simple-array-from-encoded-element-type
 	 encoded-element-info (reduce #'* array-dimensions) array-dimensions)
-      #+debug-csf (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
+      #+debug-cbs (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
 	                  (type-of sa) num-bytes array-dimensions encoded-element-info)
       (with-pinned-objects (sa)
         (read-chunked (array-sap sa) storage num-bytes))

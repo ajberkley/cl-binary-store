@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 ;; Pathname code is pretty much identical to cl-store
 

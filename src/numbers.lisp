@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 ;; See also unsigned-bytes.lisp for smaller unsigned numbers
 
@@ -46,7 +46,7 @@
 
 (declaim (inline store-only-fixnum))
 (defun store-only-fixnum (fixnum storage &optional (tag +fixnum-code+))
-  (declare #-debug-csf (optimize (speed 3) (safety 0)) (type fixnum fixnum)
+  (declare #-debug-cbs (optimize (speed 3) (safety 0)) (type fixnum fixnum)
 	   (type (or null storage) storage))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
     (when tag

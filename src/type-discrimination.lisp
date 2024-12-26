@@ -1,5 +1,5 @@
 ;; This has to be the most hideous code I've written in awhile,
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (defun strict-subtype-ordering (type-specs &key (key #'identity))
   ;; This sort of works, but some weird issues I haven't debugged yet

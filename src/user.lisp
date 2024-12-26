@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 ;; User facing interface is generally just `restore' and `store' except
 ;; for SAPs which would be `restore-from-sap' `store-to-sap' and `replace-store-sap-buffer'
@@ -28,8 +28,6 @@
       (flush-write-storage storage)
       output-vector)))
 
-(define-condition out-of-space-in-fixed-vector (simple-error) ())
-
 (defun store-to-extant-vector (vector &rest data)
   (declare (optimize speed safety))
   (let* ((offset 0)
@@ -51,8 +49,9 @@
 		 (assert (> (- vector-len offset)
 			    (storage-offset storage))
 			 nil
-			 'out-of-space-in-fixed-vector
-			 :format-control "Out of space in provided output vector")
+			 'out-of-space
+			 :current-offset offset
+			 :wanted-bytes (storage-offset storage))
 		 (replace vector (storage-store storage)
 			  :start1 offset :start2 0
 			  :end2 (storage-offset storage))
@@ -69,7 +68,7 @@
 
 (defun restore-from-vector (vector)
   (declare (optimize speed safety))
-  #+debug-csf(format t "Restoring from a vector with ~A bytes in it~%" (length vector))
+  #+debug-cbs(format t "Restoring from a vector with ~A bytes in it~%" (length vector))
   (if (typep vector '(simple-array (unsigned-byte 8) (*)))
       (with-storage (storage
 		     :flusher
@@ -88,7 +87,7 @@
   (invoke-restart 'replace-storage sap sap-size sap-offset))
 
 (defun store-to-sap (sap size &rest data)
-  "This may error with 'out-of-space (which contains
+  "This may error with `out-of-space' (which contains
  out-of-space-current-offset and out-of-space-wanted-bytes).  The
  out-of-space-current-offset is the amount of data that has been
  written so far.  out-of-space-wanted-bytes is not useful unless you
@@ -143,7 +142,7 @@
   "(restore #(14 39 37 0 2 72 73 15)) -> (values :hi))
  (store filename (list :hi :bye) :something)
  (restore filename/stream/place) -> (values (list :hi :bye) :something)
- (cl-store-faster:restore-from-vector (cl-store-faster:store nil :hi :bye)) -> (values :hi :bye)
+ (restore-from-vector (store nil :hi :bye)) -> (values :hi :bye)
 
  Note that if you specified *write-magic-number* then a `magic-number' will be the first value
  returned.  It will be asserted against *supported-versions*"
@@ -157,7 +156,7 @@
 
 (defun store (place &rest data)
   "When place is NIL, returns a (vector (unsigned-byte 8) (*)) with fill-pointer
- ex: (cl-store-faster:store nil :hi) -> #(39 37 0 2 72 73)
+ ex: (store nil :hi) -> #(39 37 0 2 72 73)
 
  When place is a filename/string/pathname writes data to the respective file.
 

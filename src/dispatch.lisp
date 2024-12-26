@@ -1,11 +1,11 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defmacro make-read-dispatch ()
     `(progn
        (declaim (sb-ext:maybe-inline read-dispatch))
        (defun read-dispatch (code storage references restore-object)
-	 #-debug-csf(declare (optimize (speed 3) safety))
+	 #-debug-cbs(declare (optimize (speed 3) safety))
 	 ,(make-read-dispatch-table 'code))))
   
   (make-read-dispatch)
@@ -18,7 +18,7 @@
 	   (*slot-info* slot-info))
       (declare (dynamic-extent slot-info))
       (with-reference-tables (track-references)
-	#+debug-csf (format t "Starting reference counting pass on ~A objects~%" (length stuff))
+	#+debug-cbs (format t "Starting reference counting pass on ~A objects~%" (length stuff))
         (labels ((store-object2 (obj)
                    (let ((store-object #'store-object)
                          (storage nil))
@@ -31,13 +31,13 @@
           (when track-references
 	    (dolist (elt stuff)
               (store-object elt))))
-        #+debug-csf (format t "Finished reference counting pass~%")
+        #+debug-cbs (format t "Finished reference counting pass~%")
         (let ((ref-id 0))
           (declare (type fixnum ref-id))
           (when track-references
             (map-reference-tables #'analyze-references-hash-table) ;; debugging only
             ;; Now clean up the references table: delete anyone who has no references
-            #+debug-csf (format t "Generating real reference hash-table~%")
+            #+debug-cbs (format t "Generating real reference hash-table~%")
             (map-reference-tables
              (lambda (table-name table)
                (declare (ignore table-name))
@@ -46,12 +46,12 @@
         	              (setf (gethash k table) (- (incf ref-id)))  ; signal it needs writing
                               (remhash k table)))
                         table)))
-            #+debug-csf
+            #+debug-cbs
             (map-reference-tables (lambda (table-name table)
                                     (format t "~A: there are ~A actual references~%"
                                             table-name
                                             (hash-table-count table)))))
-          #+debug-csf (format t "Starting actual storage phase~%")
+          #+debug-cbs (format t "Starting actual storage phase~%")
           (labels ((store-object2 (obj) ;; inline one deep
                      (let ((store-object #'store-object))
                        (store-object/storage-phase obj)))
@@ -60,7 +60,7 @@
                        (store-object/storage-phase obj))))
             (declare (inline store-object2))
             (when (>= ref-id 2048) ;; if we would have to expand the references vector
-              #+debug-csf (format t "Writing total reference count ~A to file~%" (1+ ref-id))
+              #+debug-cbs (format t "Writing total reference count ~A to file~%" (1+ ref-id))
               (write-reference-count (1+ ref-id) #'store-object))
             (dolist (elt stuff)
               (store-object elt))))
@@ -79,7 +79,7 @@
                 (loop for code = (maybe-restore-ub8 storage)
 		      while code
                       with object and ignore
-		      do #+debug-csf (format t "Read code ~A (offset ~A max ~A)~%" code
+		      do #+debug-cbs (format t "Read code ~A (offset ~A max ~A)~%" code
                                              (storage-offset storage) (storage-max storage))
                          (setf (values object ignore) (restore-object code))
                       unless ignore
@@ -88,8 +88,7 @@
 
   (defun analyze-references-hash-table (table-name references)
     (declare (ignorable table-name references))
-    ;;(defparameter *saved-refs* references)
-    #+debug-csf(let ((types (make-hash-table :test 'equal))
+    #+debug-clb(let ((types (make-hash-table :test 'equal))
                      (individual-reference-counts (make-hash-table :test 'equal))
                      (max-refed (make-hash-table :test 'equal))
                      (total-references-used 0)

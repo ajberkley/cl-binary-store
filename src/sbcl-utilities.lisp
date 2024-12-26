@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (sb-alien:define-alien-routine "memcpy" sb-alien:void
   (dest sb-alien:system-area-pointer :in)

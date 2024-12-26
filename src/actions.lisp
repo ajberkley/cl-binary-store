@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 ;; An action is a sub-dispatch mechanism for codes in the file.
 ;; It's currently used for magic-numbers (versioning) and for

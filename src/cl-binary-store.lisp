@@ -1,8 +1,13 @@
-(defpackage :cl-store-faster-extensions
-  (:use :common-lisp :cl-store-faster)
-  (:documentation "A package that exports tools used inside cl-store-faster for use by
- someone writing their own specialized serialization or deserialization routine.
- TODO: this isn't right yet :)")
+(defpackage :cl-binary-store
+  (:use :common-lisp
+	#+sbcl #:sb-mop
+	#+allegro #:mop
+	#+abcl #:mop
+	#+lispworks #:clos
+	#+clasp #:clos
+	#+ecl #:clos)
+  (:documentation "A package that exports tools used inside cl-binary-store for use by
+ someone writing their own specialized serialization or deserialization routine.")
   (:export
    #:register-code
 
@@ -76,7 +81,39 @@
    #:action
    #:action-code
 
-   #:replace-storage
+   #:with-pinned-objects
+   #:vector-sap
+
+      ;; General user interface
+   #:store
+   #:restore
+   ;; Serializing to / from sbcl specific raw memory SAP
+   #:store-to-sap
+   #:restore-from-sap
+   #:replace-store-sap-buffer
+   #:out-of-space
+   ;; Streams
+   #:restore-from-stream
+   #:store-to-stream
+   ;; In memory ub8 vectors
+   #:restore-from-vector
+   #:store-to-vector
+   #:store-to-extant-vector
+   #:out-of-space-in-fixed-vector
+
+   #:out-of-data
+   #:store-to-file
+   #:restore-from-file
+   ;; Support complex circular lists
+   #:*support-shared-list-structures*
+   ;; Do any sort of reference tracking
+   #:*track-references*
+
+   ;; Versioning
+   #:*supported-versions*
+   #:*write-version*
+   #:*version-being-read*
+
    ))
 
-(in-package :cl-store-faster-extensions)
+(in-package :cl-binary-store)

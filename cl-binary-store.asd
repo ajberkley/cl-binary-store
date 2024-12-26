@@ -1,16 +1,16 @@
-(defsystem #:cl-store-faster
-  :version "0.0.1"
+(defsystem #:cl-binary-store
+  :version "0.0.2"
   :description "Fast serialization / deserialization library"
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :long-name "Fast serialization / deserialization library"
   :pathname "src/"
   :depends-on (#:flexi-streams #:babel #:cl-ppcre)
   :components ((:file "features")
-	       (:file "cl-store-faster")
-	       (:file "cl-store-faster-extensions")
+	       (:file "cl-binary-store")
+	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))
 	       (:file "type-discrimination")
-	       (:file "storage" :depends-on ("features"))
-	       (:file "unsigned-bytes" :depends-on ("storage" "features"))
+	       (:file "storage" :depends-on ("features" "cl-binary-store"))
+	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"))
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"))
                (:file "codes" :depends-on ("referrers-and-fixup"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
@@ -41,13 +41,13 @@
 						      "reference-count" "type-discrimination"))
 	       (:file "user" :depends-on ("dispatch" "storage" "features" "magic-numbers")))
   :license :BSD-3
-  :in-order-to ((asdf:test-op (asdf:test-op :cl-store-faster-tests))))
+  :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))
 
-(defsystem #:cl-store-faster-tests
-  :description "Unit tests for CL-STORE-FASTER"
+(defsystem #:cl-binary-store-tests
+  :description "Unit tests for CL-BINARY-STORE"
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :license :BSD-3
   :depends-on (#:parachute)
   :pathname "test/"
-  :components ((:file "cl-store-faster-tests"))
-  :perform (test-op (o c) (uiop:symbol-call :parachute :test :cl-store-faster-tests)))
+  :components ((:file "cl-binary-store-tests"))
+  :perform (test-op (o c) (uiop:symbol-call :parachute :test :cl-binary-store-tests)))

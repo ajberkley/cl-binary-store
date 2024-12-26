@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (defun store-hash-table (ht storage store-object)
   (declare (optimize speed safety) (type hash-table ht) (type function store-object))

@@ -5,7 +5,7 @@
 ;; against the numbers in *supported-version* and *version-being-read*
 ;; (which is locally bound in restore-objects) is bound to it.
 
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (defvar *supported-versions* '(2718281828))
 

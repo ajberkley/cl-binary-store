@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (declaim (inline store-nil))
 (defun store-nil (storage)
@@ -31,7 +31,7 @@
     (cond
       (symbol-package
        (maybe-store-reference-instead (symbol storage eq-refs)
-	 #+debug-csf
+	 #+debug-cbs
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
 	 (when storage
@@ -40,7 +40,7 @@
          ;; Nominally we can use the eq-refs table but we don't
 	 (funcall (the function store-object) (package-name symbol-package))))
       (t ;; uninterned symbols.  We don't bother de-duplicating the string representations
-       #+debug-csf (format t "Storing symbol without a package ~S~%" symbol)
+       #+debug-cbs (format t "Storing symbol without a package ~S~%" symbol)
        (when storage
 	 (storage-write-byte storage +uninterned-symbol-code+)
 	 (store-string/no-refs (symbol-name symbol) storage))))))

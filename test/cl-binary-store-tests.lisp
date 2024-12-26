@@ -1,7 +1,7 @@
-(defpackage #:cl-store-faster-tests
-  (:use #:common-lisp #:parachute #:cl-store-faster #:cl-store-faster-extensions))
+(defpackage #:cl-binary-store-tests
+  (:use #:common-lisp #:parachute #:cl-binary-store #:cl-binary-store-extensions))
 
-(in-package #:cl-store-faster-tests)
+(in-package #:cl-binary-store-tests)
 
 (define-test test-very-basic-list-cdr-circularity
   (let ((a (list 123 456))
@@ -119,17 +119,17 @@
     (is 'equalp (restore-from-vector (store-to-vector string)) string)))
 
 (define-test test-symbols
-  (let ((symbols (list (intern "HI" "CL-STORE-FASTER-TESTS")
-		       (intern "TEST-SYMBOL-HI" "CL-STORE-FASTER"))))
+  (let ((symbols (list (intern "HI" "CL-BINARY-STORE-TESTS")
+		       (intern "TEST-SYMBOL-HI" "CL-BINARY-STORE-TESTS"))))
     (true (equalp
 	   (restore-from-vector (store-to-vector symbols))
 	   symbols))
     (let ((vec (store-to-vector symbols)))
       (unintern (find-symbol "HI"))
-      (unintern (find-symbol "TEST-SYMBOL-HI" "CL-STORE-FASTER"))
+      (unintern (find-symbol "TEST-SYMBOL-HI" "CL-BINARY-STORE"))
       (restore-from-vector vec)
       (true (find-symbol "HI"))
-      (true (find-symbol "TEST-SYMBOL-HI" "CL-STORE-FASTER")))
+      (true (find-symbol "TEST-SYMBOL-HI" "CL-BINARY-STORE")))
     (let ((g (gensym)))
       (let ((new-g (restore-from-vector (store-to-vector g))))
 	(is 'equalp (symbol-name g) (symbol-name new-g))
@@ -173,7 +173,7 @@
       (is 'equalp result s))))
 
 (define-test test-struct-info
-  (let ((b (cl-store-faster::compute-slot-info (make-instance 'blarg))))
+  (let ((b (compute-slot-info (make-instance 'blarg))))
     (is 'equalp
 	(restore-from-vector (store-to-vector b))
 	b)))
@@ -327,25 +327,25 @@
         (let ((a (make-array 24 :element-type '(unsigned-byte 8) :initial-element 0))
               (input (list 1 2)))
           (is 'equal
-              (cl-store-faster::with-pinned-objects (a)
-                (let ((len (store-to-sap (cl-store-faster::vector-sap a) (length a) input)))
-                  (restore-from-sap (cl-store-faster::vector-sap a) len)))
+              (with-pinned-objects (a)
+                (let ((len (store-to-sap (vector-sap a) (length a) input)))
+                  (restore-from-sap (vector-sap a) len)))
               input))
         ;; Not enough space
         (let ((a (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0))
               (input (list 1 2)))
-              (cl-store-faster::with-pinned-objects (a)
-                (fail (store-to-sap (cl-store-faster::vector-sap a) (length a) input))))
+              (with-pinned-objects (a)
+                (fail (store-to-sap (vector-sap a) (length a) input))))
         ;; Dynamic sap replacement for mmap'ed files
         (let ((a (make-array 24 :element-type '(unsigned-byte 8) :initial-element 0))
               (data (list 1d0 2 3)))
           ;; Here we don't actually reallocate, we just lie and say we did
-          (cl-store-faster::with-pinned-objects (a)
+          (with-pinned-objects (a)
             (let* ((len
                      (handler-bind ((out-of-space
                                       (lambda (e)
                                         (replace-store-sap-buffer
-                                         (cl-store-faster::vector-sap a)
+                                         (vector-sap a)
                                          :sap-offset (out-of-space-current-offset e)
                                          :sap-size (length a)))))
                        (store-to-sap (sb-sys:vector-sap a) 1 data))))

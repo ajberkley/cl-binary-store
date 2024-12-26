@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defvar *ref-tables* (make-hash-table :test 'eql) "Maps name -> ref-table")

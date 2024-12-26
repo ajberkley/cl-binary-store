@@ -31,22 +31,22 @@
       (timed (" HLMEM READ :" repeats output-size)
         (dotimes (x repeats) (hyperluminal-mem:mread (sb-sys:vector-sap a-store) 0 words))))))
 
-(defun test-cl-store-faster-on-data
+(defun test-cl-binary-store-on-data
     (data &key (track-references t) (support-shared-list-structures nil) (repeats 100)
             (read t) (write t))
-  (let* ((cl-store-faster:*support-shared-list-structures* support-shared-list-structures)
-	 (cl-store-faster:*track-references* track-references)
-	 (size (length (cl-store-faster:store nil data)))
+  (let* ((cl-binary-store:*support-shared-list-structures* support-shared-list-structures)
+	 (cl-binary-store:*track-references* track-references)
+	 (size (length (cl-binary-store:store nil data)))
          (output-size-MB (/ size 1e6))
          (store (make-array size :element-type '(unsigned-byte 8))))
-    (format t "CL-STORE-FASTER~%")
+    (format t "CL-BINARY-STORE~%")
     (format t " OUTPUT SIZE: ~,2f MB~%" output-size-MB)
     (when write
-      (timed (" CL-STORE-FASTER WRITE:" repeats output-size-MB)
-        (dotimes (x repeats) (cl-store-faster:store store data))))
+      (timed (" CL-BINARY-STORE WRITE:" repeats output-size-MB)
+        (dotimes (x repeats) (cl-binary-store:store store data))))
     (when read
-      (timed (" CL-STORE-FASTER READ :" repeats output-size-MB)
-        (dotimes (x repeats) (cl-store-faster:restore store))))
+      (timed (" CL-BINARY-STORE READ :" repeats output-size-MB)
+        (dotimes (x repeats) (cl-binary-store:restore store))))
     (values)))
 
 (defun test-cl-store-on-data
@@ -66,11 +66,11 @@
         (timed (" CL-STORE READ :" repeats output-size-MB)
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
-(defun test-on-data (data &key (hlmem t) (cl-store t) (cl-store-faster t))
+(defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t))
   (when hlmem
     (test-hlmem-on-data data))
-  (when cl-store-faster
-    (test-cl-store-faster-on-data data :track-references (not hlmem)
+  (when cl-binary-store
+    (test-cl-binary-store-on-data data :track-references (not hlmem)
                                        :support-shared-list-structures (and (not hlmem)
                                                                             (not cl-store))))
   (when cl-store
@@ -80,10 +80,10 @@
 ;;  OUTPUT SIZE: 8.00 MB
 ;;  HLMEM WRITE: 2.32 ms at 3448 MB/sec
 ;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 3.00 MB
-;;  CL-STORE-FASTER WRITE: 3.60 ms at 833 MB/sec ;; (/ 2e6 3.6e-3) = 550Mobjs/second
-;;  CL-STORE-FASTER READ : 8.20 ms at 366 MB/sec
+;;  CL-BINARY-STORE WRITE: 3.60 ms at 833 MB/sec ;; (/ 2e6 3.6e-3) = 550Mobjs/second
+;;  CL-BINARY-STORE READ : 8.20 ms at 366 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 5.00MB
 ;;  CL-STORE WRITE: 59.20 ms at 84 MB/sec
@@ -95,10 +95,10 @@
 ;;  OUTPUT SIZE: 8.00 MB ;; bit tagging, not byte tagging
 ;;  HLMEM WRITE: 2.24 ms at 3571 MB/sec
 ;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 10.00 MB
-;;  CL-STORE-FASTER WRITE: 3.84 ms at 2604 MB/sec
-;;  CL-STORE-FASTER READ : 9.48 ms at 1055 MB/sec
+;;  CL-BINARY-STORE WRITE: 3.84 ms at 2604 MB/sec
+;;  CL-BINARY-STORE READ : 9.48 ms at 1055 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 38.00MB
 ;;  CL-STORE WRITE: 422.39 ms at 90 MB/sec
@@ -110,10 +110,10 @@
 ;;  OUTPUT SIZE: 16.00 MB
 ;;  HLMEM WRITE: 23.28 ms at 687 MB/sec
 ;;  HLMEM READ : 15.68 ms at 1020 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 10.00 MB
-;;  CL-STORE-FASTER WRITE: 13.44 ms at 744 MB/sec
-;;  CL-STORE-FASTER READ : 13.84 ms at 723 MB/sec
+;;  CL-BINARY-STORE WRITE: 13.44 ms at 744 MB/sec
+;;  CL-BINARY-STORE READ : 13.84 ms at 723 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 48.00MB
 ;;  CL-STORE WRITE: 577.99 ms at 83 MB/sec
@@ -125,10 +125,10 @@
 ;;  OUTPUT SIZE: 8.00 MB
 ;;  HLMEM WRITE: 2.96 ms at 2703 MB/sec
 ;;  HLMEM READ : 5.96 ms at 1342 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 6.00 MB
-;;  CL-STORE-FASTER WRITE: 6.84 ms at 877 MB/sec
-;;  CL-STORE-FASTER READ : 9.08 ms at 661 MB/sec
+;;  CL-BINARY-STORE WRITE: 6.84 ms at 877 MB/sec
+;;  CL-BINARY-STORE READ : 9.08 ms at 661 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 22.00MB
 ;;  CL-STORE WRITE: 307.20 ms at 72 MB/sec
@@ -140,10 +140,10 @@
 ;;  OUTPUT SIZE: 80.02 MB
 ;;  HLMEM WRITE: 31.60 ms at 2532 MB/sec
 ;;  HLMEM READ : 40.08 ms at 1997 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 10.01 MB
-;;  CL-STORE-FASTER WRITE: 1.20 ms at 8339 MB/sec
-;;  CL-STORE-FASTER READ : 2.60 ms at 3849 MB/sec
+;;  CL-BINARY-STORE WRITE: 1.20 ms at 8339 MB/sec
+;;  CL-BINARY-STORE READ : 2.60 ms at 3849 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 10.01MB
 ;;  CL-STORE WRITE: 80.79 ms at 124 MB/sec
@@ -161,10 +161,10 @@
 ;;  OUTPUT SIZE: 1.27 MB
 ;;  HLMEM WRITE: 7.88 ms at 161 MB/sec
 ;;  HLMEM READ : 14.24 ms at 89 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 1.26 MB
-;;  CL-STORE-FASTER WRITE: 0.12 ms at 10467 MB/sec
-;;  CL-STORE-FASTER READ : 0.12 ms at 10467 MB/sec
+;;  CL-BINARY-STORE WRITE: 0.12 ms at 10467 MB/sec
+;;  CL-BINARY-STORE READ : 0.12 ms at 10467 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 40.05MB
 ;;  CL-STORE WRITE: 551.19 ms at 73 MB/sec
@@ -181,10 +181,10 @@
 ;;  OUTPUT SIZE: 16.02 MB
 ;;  HLMEM WRITE: 34.68 ms at 462 MB/sec
 ;;  HLMEM READ : 13.60 ms at 1178 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 8.01 MB
-;;  CL-STORE-FASTER WRITE: 0.84 ms at 9531 MB/sec
-;;  CL-STORE-FASTER READ : 1.60 ms at 5004 MB/sec
+;;  CL-BINARY-STORE WRITE: 0.84 ms at 9531 MB/sec
+;;  CL-BINARY-STORE READ : 1.60 ms at 5004 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 47.06MB
 ;;  CL-STORE WRITE: 577.99 ms at 81 MB/sec
@@ -201,19 +201,19 @@
 ;;  OUTPUT SIZE: 20.48 MB
 ;;  HLMEM WRITE: 34.12 ms at 600 MB/sec
 ;;  HLMEM READ : 30.96 ms at 662 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 8.06 MB
-;;  CL-STORE-FASTER WRITE: 25.20 ms at 320 MB/sec
-;;  CL-STORE-FASTER READ : 43.76 ms at 184 MB/sec
+;;  CL-BINARY-STORE WRITE: 25.20 ms at 320 MB/sec
+;;  CL-BINARY-STORE READ : 43.76 ms at 184 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 27.78MB
 ;;  CL-STORE WRITE: 448.79 ms at 62 MB/sec
 ;;  CL-STORE READ : 408.40 ms at 68 MB/sec
 ;; and using referencing to deduplicate the double-floats and strings
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 3.38 MB
-;;  CL-STORE-FASTER WRITE: 65.52 ms at 52 MB/sec
-;;  CL-STORE-FASTER READ : 12.32 ms at 274 MB/sec
+;;  CL-BINARY-STORE WRITE: 65.52 ms at 52 MB/sec
+;;  CL-BINARY-STORE READ : 12.32 ms at 274 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 4.88MB
 ;;  CL-STORE WRITE: 129.60 ms at 38 MB/sec
@@ -238,10 +238,10 @@
 ;;  OUTPUT SIZE: 3.20 MB
 ;;  HLMEM WRITE: 18.52 ms at 173 MB/sec
 ;;  HLMEM READ : 33.32 ms at 96 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 1.15 MB
-;;  CL-STORE-FASTER WRITE: 28.56 ms at 40 MB/sec
-;;  CL-STORE-FASTER READ : 29.36 ms at 39 MB/sec
+;;  CL-BINARY-STORE WRITE: 28.56 ms at 40 MB/sec
+;;  CL-BINARY-STORE READ : 29.36 ms at 39 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 1.24MB
 ;;  CL-STORE WRITE: 52.80 ms at 24 MB/sec
@@ -255,10 +255,10 @@
 ;;  OUTPUT SIZE: 3.20 MB
 ;;  HLMEM WRITE: 8.56 ms at 374 MB/sec
 ;;  HLMEM READ : 18.92 ms at 169 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 1.15 MB
-;;  CL-STORE-FASTER WRITE: 31.88 ms at 36 MB/sec
-;;  CL-STORE-FASTER READ : 32.12 ms at 36 MB/sec
+;;  CL-BINARY-STORE WRITE: 31.88 ms at 36 MB/sec
+;;  CL-BINARY-STORE READ : 32.12 ms at 36 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 1.24MB
 ;;  CL-STORE WRITE: 56.00 ms at 22 MB/sec
@@ -272,10 +272,10 @@
   b)
 
 ;; hyperluminal mem needs an extension for this so skipping it for now
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 1.79 MB
-;;  CL-STORE-FASTER WRITE: 49.00 ms at 37 MB/sec
-;;  CL-STORE-FASTER READ : 9.24 ms at 194 MB/sec
+;;  CL-BINARY-STORE WRITE: 49.00 ms at 37 MB/sec
+;;  CL-BINARY-STORE READ : 9.24 ms at 194 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 6.69MB
 ;;  CL-STORE WRITE: 171.20 ms at 39 MB/sec
@@ -288,10 +288,10 @@
 ;;  OUTPUT SIZE: 2.40 MB
 ;;  HLMEM WRITE: 4.00 ms at 600 MB/sec
 ;;  HLMEM READ : 2.48 ms at 968 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 0.99 MB
-;;  CL-STORE-FASTER WRITE: 2.12 ms at 466 MB/sec
-;;  CL-STORE-FASTER READ : 2.44 ms at 405 MB/sec
+;;  CL-BINARY-STORE WRITE: 2.12 ms at 466 MB/sec
+;;  CL-BINARY-STORE READ : 2.44 ms at 405 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 0.99MB
 ;;  CL-STORE WRITE: 12.00 ms at 82 MB/sec
@@ -304,10 +304,10 @@
 ;;  OUTPUT SIZE: 2.40 MB
 ;;  HLMEM WRITE: 4.52 ms at 531 MB/sec
 ;;  HLMEM READ : 3.12 ms at 769 MB/sec
-;; CL-STORE-FASTER
+;; CL-BINARY-STORE
 ;;  OUTPUT SIZE: 1.19 MB
-;;  CL-STORE-FASTER WRITE: 4.04 ms at 294 MB/sec
-;;  CL-STORE-FASTER READ : 8.68 ms at 137 MB/sec
+;;  CL-BINARY-STORE WRITE: 4.04 ms at 294 MB/sec
+;;  CL-BINARY-STORE READ : 8.68 ms at 137 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 2.08MB
 ;;  CL-STORE WRITE: 23.20 ms at 90 MB/sec

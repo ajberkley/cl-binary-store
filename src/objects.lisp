@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 ;; Here we deal with STRUCTURE-OBJECT and STANDARD-OBJECT
 ;;  NOTE that we do not de-duplicate double-floats stored in slots unless they are eq (not eql!) to others
@@ -50,7 +50,7 @@
 ;; standard-object We generate and store this once for each object type
 ;; into *class-info* and also into the output stream.
 
-(defparameter *slot-info* nil
+(defvar *slot-info* nil
   "An eql hash table which maps from structure-object or standard-class type name
  to a `slot-info' structure")
 

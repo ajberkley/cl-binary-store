@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (declaim (inline make-storage storage-offset storage-max storage-store storage-sap
 		 storage-flusher storage-underlying-stream storage-size))
@@ -153,15 +153,15 @@
             (storage-sap s))))
 
 (defun make-read-into-storage/stream (stream)
-  (let* (#+info-csf(total-read 0)
-         #+info-csf(start-read-time (get-universal-time))
-         #+info-csf(last-read-time start-read-time))
+  (let* (#+info-cbs(total-read 0)
+         #+info-cbs(start-read-time (get-universal-time))
+         #+info-cbs(last-read-time start-read-time))
     (lambda (storage)
       (let ((seq (storage-store storage)))
-        #+dribble-csf(format t "We currently have ~A..~A valid data (~A bytes)~%"
+        #+dribble-cbs(format t "We currently have ~A..~A valid data (~A bytes)~%"
 	                   (storage-offset storage) (storage-max storage)
 	                   (- (storage-max storage) (storage-offset storage)))
-        (labels (#+info-csf
+        (labels (#+info-cbs
 		 (print-update (now &optional (leader "Read " leader-provided-p))
                    (when (or leader-provided-p (> now (+ 10 last-read-time)))
                      (setf last-read-time now)
@@ -171,10 +171,10 @@
                                (/ total-read 1d6) (- last-read-time start-read-time)
 			       (/ total-read 1d6 (- last-read-time start-read-time)))))))
           (let ((new-bytes-end-at (read-sequence seq stream :start (storage-max storage)))
-                #+info-csf(now (get-universal-time)))
-            #+info-csf(incf total-read (- new-bytes-end-at (storage-max storage)))
+                #+info-cbs(now (get-universal-time)))
+            #+info-cbs(incf total-read (- new-bytes-end-at (storage-max storage)))
 	    (setf (storage-max storage) new-bytes-end-at)
-            #+info-csf
+            #+info-cbs
 	    (if (= new-bytes-end-at (storage-offset storage))
                 (print-update now "Finished reading ")
                 (print-update now))
@@ -185,7 +185,7 @@
   (lambda (storage)
     (declare (optimize speed safety))
     (let ((seq (storage-store storage)))
-      #+debug-csf (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
+      #+debug-cbs (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
       (write-sequence seq stream :end (storage-offset storage))
       (setf (storage-offset storage) 0))))
 
@@ -267,18 +267,19 @@
 	(valid-data-ends-at (storage-max read-storage)))
     (when (and (> bytes (- vector-length valid-data-ends-at)) ;; we don't have room
                (<= bytes vector-length))
-      #+debug-csf(format t "Shifting data to beginning~%")
+      #+debug-cbs(format t "Shifting data to beginning~%")
       (shift-data-to-beginning read-storage)
-      #+debug-csf(format t "Now storage offset is ~A and storage max is ~A~%" (storage-offset read-storage)
+      #+debug-cbs(format t "Now storage offset is ~A and storage max is ~A~%" (storage-offset read-storage)
               (storage-max read-storage)))))
 
-(define-condition end-of-data (simple-error)
-  ())
+(define-condition out-of-data (simple-error)
+  ()
+  (:documentation "Ran out of data while expecting more while reading /deserializing"))
 
 (defun refill-read-storage (storage bytes return-nil-on-eof)
-  (declare #+debug-csf (optimize (debug 3)) #-debug-csf (optimize speed safety)
+  (declare #+debug-cbs (optimize (debug 3)) #-debug-cbs (optimize speed safety)
            (type fixnum bytes))
-  #+dribble-csf (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A)~%"
+  #+dribble-cbs (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A)~%"
 		      bytes return-nil-on-eof)
   (maybe-shift-data-to-beginning-of-read-storage storage bytes)
   (let ((num-bytes-available (the fixnum (funcall (storage-flusher storage) storage))))
@@ -286,20 +287,20 @@
         (if return-nil-on-eof
 	    nil
             (progn
-	      #+dribble-csf (format t "Valid data is from ~A to ~A (~A bytes, wanted ~A)~%"
+	      #+dribble-cbs (format t "Valid data is from ~A to ~A (~A bytes, wanted ~A)~%"
 				  (storage-offset storage) (storage-max storage)
 				  (- (storage-max storage) (storage-offset storage))
 				  bytes)
-	      (error 'end-of-data :format-control "Out of data")))
+	      (error 'out-of-data :format-control "Out of data")))
         t)))
 
-(declaim (#-debug-csf inline #+debug-csf notinline ensure-enough-data))
+(declaim (#-debug-cbs inline #+debug-cbs notinline ensure-enough-data))
 (defun ensure-enough-data (storage bytes &optional (return-nil-on-eof nil))
   "For RESTORE operation.
- Ensure that we have at least BYTES of data in STORAGE.  May signal `end-of-data'
+ Ensure that we have at least BYTES of data in STORAGE.  May signal `out-of-data'
  unless return-nil-on-eof is t.  Do not ask for more than (storage-size storage),
  which is guaranteed to be >8192 bytes."
-  (declare #-debug-csf (optimize (speed 3) (safety 0) (debug 0))
+  (declare #-debug-cbs (optimize (speed 3) (safety 0) (debug 0))
            (type (and fixnum (integer 0)) bytes))
   (or (<= (sb-ext:truly-the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
       (refill-read-storage storage bytes return-nil-on-eof)))
@@ -310,7 +311,8 @@
 
 (define-condition out-of-space (error)
   ((current-offset :initarg :current-offset :reader out-of-space-current-offset)
-   (wanted-bytes :initarg :wanted-bytes :reader out-of-space-wanted-bytes)))
+   (wanted-bytes :initarg :wanted-bytes :reader out-of-space-wanted-bytes))
+  (:documentation "Ran out of space while writing data"))
 
 (defun flush-write-storage (storage &optional (bytes 0))
   "Make sure everything is written out of storage to whatever backing store

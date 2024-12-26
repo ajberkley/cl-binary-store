@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 (defun restore-array (storage restore-object)
   ;; This is somewhat complex because we cannot build the array
@@ -30,7 +30,7 @@
 (defun store-array (array storage eq-refs store-object)
   (declare (optimize speed safety) (type array array) (type function store-object))
   (maybe-store-reference-instead (array storage eq-refs)
-    #+debug-csf(format t "~A array of type ~A~%"
+    #+debug-cbs(format t "~A array of type ~A~%"
 		       (if storage "Storing" "Analyzing")
 		       (type-of array))
     (when storage

@@ -1,4 +1,4 @@
-(in-package :cl-store-faster)
+(in-package :cl-binary-store)
 
 ;; During restore we use a vector of references.  It nominally auto-grows as
 ;; we see references during restore.  Since we know the number of references
