@@ -70,12 +70,12 @@
             ((zerop number-of-times-referenced)
              (setf (gethash object references) 1)
              nil)
-            (#+debug-cbs (>= number-of-times-referenced 1)
-             #-debug-cbs (= number-of-times-referenced 1)
-             #+debug-cbs (the fixnum (incf (the fixnum (gethash object references))))
-             #-debug-cbs(setf (gethash object references) 2)
+            (#+info-cbs (>= number-of-times-referenced 1) ;; do actual reference counting
+             #-info-cbs (= number-of-times-referenced 1)
+             #+info-cbs (the fixnum (incf (the fixnum (gethash object references))))
+             #-info-cbs(setf (gethash object references) 2)
              t)
-            #-debug-cbs((= number-of-times-referenced 2) t)
+            #-info-cbs((= number-of-times-referenced 2) t)
             (t nil)))
         (gethash object references))))
 

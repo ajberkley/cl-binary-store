@@ -26,7 +26,7 @@ the rest of the world!).
 So, you'll find in the file src/type-discrimation.lisp my very crude
 cut at determining how fast I'd expect a not-so-smart compiler to be
 able to determine types of objects.  Remember, I am currently just
-using a flat typecase sorted by subtype for cl-store-faster.  Anyway,
+using a flat typecase sorted by subtype for cl-binary-store.  Anyway,
 here my model is a bunch of nested, auto-generated, typecases that
 mirror the Common Lisp type hierarchy.  Now, nominally there are
 tricks that are smarter than this based on tag hashing and jump tables

@@ -87,7 +87,7 @@
 
 (defun analyze-references-hash-table (table-name references)
   (declare (ignorable table-name references))
-  #+debug-clb(let ((types (make-hash-table :test 'equal))
+  #+info-cbs(let ((types (make-hash-table :test 'equal))
                    (individual-reference-counts (make-hash-table :test 'equal))
                    (max-refed (make-hash-table :test 'equal))
                    (total-references-used 0)
