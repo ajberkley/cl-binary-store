@@ -79,7 +79,7 @@
                 :storage-phase-code (maybe-wrap-code-with-ref-check-for-store-phase write-phase-code))))
       (unless (or (null (gethash type *store-info*))
                   (equalp (gethash type *store-info*) si))
-        (cerror "REPLACE IT" (format nil "Replacing already existing store code for type ~A" 123)))
+        (cerror "REPLACE IT" (format nil "Replacing already existing store code for type ~A" type)))
       (setf (gethash type *store-info*) si))))
 
 (defmacro defstore (type store-function-signature &key (call-during-reference-phase nil call-during-reference-phase-provided-p)
@@ -100,7 +100,7 @@
     (let ((ri (make-restore-info :restore-function-code restore-function-signature)))
       (unless (or (null (gethash code *restore-info*))
                   (equalp (gethash code *restore-info*) ri))
-        (cerror "REPLACE IT" (format nil "Replacing already existing restore code for code ~A" 123)))
+        (cerror "REPLACE IT" (format nil "Replacing already existing restore code for code ~A" code)))
       (setf (gethash code *restore-info*) ri))))
 
 (defmacro defrestore (code restore-function-signature)
