@@ -26,7 +26,7 @@
   (values))
   
 (defmacro register-references (table-name construction-code)
-  `(eval-when (:load-toplevel :execute)
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
      (register-references& ',table-name ',construction-code)))
 
 (defmacro with-reference-tables ((track-references) &body body)
