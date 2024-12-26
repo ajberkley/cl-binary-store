@@ -12,7 +12,9 @@
 	       (:file "storage" :depends-on ("features" "cl-binary-store"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"))
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"))
-               (:file "codes" :depends-on ("referrers-and-fixup"))
+	       (:file "defstore" :depends-on ("features"))
+	       (:file "reference-tables" :depends-on ("defstore"))
+               (:file "codes" :depends-on ("defstore" "reference-tables"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 							      "features"))
                (:file "actions" :depends-on ("unsigned-bytes" "storage"))
@@ -39,6 +41,7 @@
 						      "referrers-and-fixup" "numbers" "pathname"
 						      "unsigned-bytes" "objects" "storage"
 						      "reference-count" "type-discrimination"))
+	       (:file "update-dispatch" :depends-on ("codes" "dispatch"))
 	       (:file "user" :depends-on ("dispatch" "storage" "features" "magic-numbers")))
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))

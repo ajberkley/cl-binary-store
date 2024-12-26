@@ -128,14 +128,11 @@
                                                 (format nil "~%")))))))
 			data)))))
 
-(defmacro rebuild-dispatch ()
-  `(progn
-     (format t "CL-BINARY-STORE: recompiling dispatch mechanisms~%")
-     ,(build-read-dispatch)
-     ,(build-store-objects)
-     ,(build-restore-objects)
-     (format t "CL-BINARY-STORE: done~%")
-     (values)))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (rebuild-dispatch))
+  (defmacro rebuild-dispatch ()
+    `(progn
+       (format t "~&CL-BINARY-STORE: recompiling dispatch mechanisms~%")
+       ,(build-read-dispatch)
+       ,(build-store-objects)
+       ,(build-restore-objects)
+       (format t "~&CL-BINARY-STORE: done~%")
+       (values)))
