@@ -20,6 +20,7 @@
                (:file "actions" :depends-on ("unsigned-bytes" "storage"))
 	       (:file "reference-count" :depends-on ("actions" "numbers"))
                (:file "magic-numbers" :depends-on ("actions" "numbers"))
+	       (:file "end-action" :depends-on ("actions"))
 	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"
 								"features"))
 	       (:file "sbcl-utilities" :if-feature :sbcl :depends-on ("features"))
