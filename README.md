@@ -135,25 +135,11 @@ slots will be stored if this is T.
 number and the \*write-version\* to the output, which will then be
 validated against \*supported-versions\* when read back in.
 
-### Extension points
-
-Each object is stored with a 8-bit type tag.  You can define new
-type tags and write specialized storage and restore methods.  See
-codes.lisp for examples.  If you do this, you probably want to change
-the \*write-version\* and \*supported-versions\*.  Currently there isn't
-an easy way to trigger rebuilding of the dispatch code --- I've just been
-recompiling the dispatch.lisp and codes.lisp file.  It's on my TODO
-list.
-
-For serializing objects, the default behavior is probably good enough
-for 95% of users.  We provide a simple extension point with a generic
-function serializable-slot-info which you can change the behavior of,
-for example to enable calling initialize-instance instead of
-allocate-instance, or to not save certain slots or transform them
-before saving.  See comments in src/objects.lisp for an example.
-
-If that is not enough, I suggest adding a new store / restore method
-on your object type or class.
+\*write-end-marker*\* default is NIL.  If T we will write an end marker
+at the end of every call to STORE.  This helps for use when sending
+data across the network or reading from raw memory to avoid tracking
+lengths around.  It also means you can write multiple chunks of objects
+to a stream and have restore-objects return between each chunk.
 
 ## Why?
 
@@ -229,6 +215,33 @@ storing simple arrays though, you want to use this package instead.
 - [ ] Add an end/stop marker so user can read objects one by one from raw memory or vectors or files?  Or more easily from sap vectors.
 
 ## Adding extensions
+
+The current backend stores each object with a 8-bit type tag.  You can
+define new type tags and write specialized storage and restore
+methods.  See codes.lisp for examples.  If you do this, you probably
+want to change the \*write-version\* and \*supported-versions\*.  To
+rebuild the dispatch mechanism if you have defined new defstore and
+defrestore things, you want to either load src/rebuild-dispatch.lisp,
+or call (rebuild-dispatch).  At that point all your object types have to
+be real, so typically this is done in a second file that is loaded after
+the first (see example-extension-2.lisp which both defines new dispatch
+mechanisms and calls (rebuild-dispatch)).
+
+For serializing objects, the default behavior is probably good enough
+for 95% of users.  We provide a simple extension point with a generic
+function serializable-slot-info which you can change the behavior of,
+for example to enable calling initialize-instance instead of
+allocate-instance, or to not save certain slots or transform them
+before saving.  See comments in src/objects.lisp for an example.
+
+Further there is an extension point in actions, which are things that
+can be stored during store and can do things during restore --- this
+is how the versioning check is implemented (src/magic-numbers.lisp),
+how we hint to the reference vector size during restore, and how we
+write an end marker.
+
+If that is not enough, I suggest adding a new store / restore method
+on your object type or class.
 
 See the file src/example-extension.lisp and src/example-extension-2.lisp.
     CL-USER> (quicklisp:quickload "example-extension")

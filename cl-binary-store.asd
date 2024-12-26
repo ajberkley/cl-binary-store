@@ -41,7 +41,7 @@
 						      "referrers-and-fixup" "numbers" "pathname"
 						      "unsigned-bytes" "objects" "storage"
 						      "reference-count" "type-discrimination"))
-	       (:file "update-dispatch" :depends-on ("codes" "dispatch"))
+	       (:file "rebuild-dispatch" :depends-on ("codes" "dispatch"))
 	       (:file "user" :depends-on ("dispatch" "storage" "features" "magic-numbers")))
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))
