@@ -372,3 +372,17 @@
 				      (store nil 1 2))
 				    (store nil 3))))
       '(1 2 3)))
+
+(define-test test-double-float-references
+  ;; Have to use globals so the compiler doesn't make our double floats eq
+  (defparameter *a* 1d0)
+  (defparameter *b* 4d0)
+  (defparameter *c* 5d0)
+  (let ((len-just-a (length (store nil *a*))) ;; 9 bytes
+	(len-two-as (length (store nil *a* *a*))) ;; 13 bytes
+	(len-a-and-b/4 (length (store nil *a* (/ *b* 4d0)))) ;; 13 bytes
+	(len-a-and-c (length (store nil *a* *c*)))) ;; 18 bytes
+    (true (> len-two-as len-just-a))
+    (true (= len-two-as len-a-and-b/4))
+    (true (= len-a-and-b/4 len-two-as))
+    (true (> len-a-and-c len-a-and-b/4))))
