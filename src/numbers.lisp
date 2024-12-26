@@ -182,7 +182,7 @@
     (labels ((store-integer (integer)
                (if (typep integer 'fixnum)
                    (store-fixnum integer storage)
-                   (store-bignum integer storage num-eq-refs))))
+                   (store-bignum integer storage))))
       (store-integer (numerator ratio))
       (store-integer (denominator ratio)))))
 
@@ -260,13 +260,13 @@
                     (store-only-fixnum fixnum storage)))))))
 
 (declaim (inline store-tagged-unsigned-integer))
-(defun store-tagged-unsigned-integer (integer storage references)
+(defun store-tagged-unsigned-integer (integer storage)
   "Because this is stored tagged, you can restore it using
  RESTORE-OBJECT."
-  (when storage
-    (if (typep integer 'fixnum)
-	(store-fixnum integer storage)
-	(store-bignum integer storage references))))
+  (if (typep integer 'fixnum)
+      (when storage
+	(store-unsigned-fixnum integer storage))
+      (store-bignum integer storage)))
 
 (declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
 (defun restore-tagged-unsigned-fixnum (storage)

@@ -5,3 +5,4 @@
 (register-references num-eq-refs (make-hash-table :test #'eq))
 (register-references double-float-refs (make-hash-table :test #'double-float-=))
 (register-references eq-refs (make-hash-table :test #'eq))
+;;(register-references string-refs (make-hash-table :test #'string-and-type-=))

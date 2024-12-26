@@ -20,7 +20,7 @@
 (defstruct (magic-number (:include action (code +magic-number-action-code+)))
   (number 2718281828 :type integer :read-only t))
 
-(defmethod action ((code (eql +magic-number-action-code+)) storage refrences restore-object)
+(defmethod action ((code (eql +magic-number-action-code+)) storage references restore-object)
   (let ((magic-number (funcall restore-object)))
     (unless (member magic-number *supported-versions*)
       (error "Unsupported version #x~X, we support ~{#x~X~^ ~}"
