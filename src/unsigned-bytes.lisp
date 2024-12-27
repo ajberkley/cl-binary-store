@@ -45,9 +45,9 @@
 
 (declaim (inline store-ub8))
 (defun store-ub8 (ub8 storage &optional (tag +ub8-code+))
-  "Store an (unsigned-byte 8) value UB8 to STORAGE.  If TAG is true,
- then will store a tag +UB8-CODE+ to storage first.  Omit TAG if your
- deserializer will know this is a UB8 value."
+  "Store an (unsigned-byte 8) value UB8 to STORAGE.  If TAG is nil then
+ we will skip writing a tag byte; use if your deserializer will know that
+ the next byte is a UB8"
   (declare (optimize speed safety) (type (unsigned-byte 8) ub8)
 	   (type (or null (unsigned-byte 8)) tag)
 	   (type (or null storage) storage))

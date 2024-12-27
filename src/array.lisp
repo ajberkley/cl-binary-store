@@ -38,14 +38,14 @@
       (cond
 	((array-has-fill-pointer-p array)
 	 (store-t storage)
-	 (store-unsigned-fixnum (fill-pointer array) storage))
+	 (store-tagged-unsigned-fixnum (fill-pointer array) storage))
 	(t
 	 (store-nil storage)))
       (store-boolean (adjustable-array-p array) storage)
       (let ((array-dimensions (array-dimensions array)))
 	(store-ub8 (length array-dimensions) storage nil) ;; sbcl limits to 128
 	(dolist (a array-dimensions)
-	  (store-unsigned-fixnum (the fixnum a) storage))))
+	  (store-tagged-unsigned-fixnum (the fixnum a) storage))))
     (multiple-value-bind (next-array offset)
 	(array-displacement array)
       (when storage (store-boolean next-array storage))
@@ -62,7 +62,7 @@
       (cond
 	(next-array
 	 (when storage
-	   (store-unsigned-fixnum offset storage))
+	   (store-tagged-unsigned-fixnum offset storage))
 	 (store-array next-array storage eq-refs store-object))
 	(t
 	 ;; We have to store the array elements even past the fill pointer

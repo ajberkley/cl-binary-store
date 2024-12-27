@@ -277,7 +277,7 @@
 	 (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)))
       (t
        (storage-write-byte storage +referrer-code+)
-       (store-unsigned-fixnum ref-index storage)))))
+       (store-tagged-unsigned-fixnum ref-index storage)))))
 
 (declaim (notinline store-reference-id-for-following-object))
 (defun store-reference-id-for-following-object (ref-index storage)

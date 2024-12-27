@@ -116,7 +116,9 @@
     (setf (signed-sap-ref-64 sap offset) sb64)
     (unless offset-provided-p (setf (storage-offset storage) (+ 8 offset)))))
 
+(declaim (inline storage-read-sb64))
 (defun storage-read-sb64 (storage)
+  (ensure-enough-data storage 8)
   (let ((offset (storage-offset storage)))
     (prog1
 	(signed-sap-ref-64 (storage-sap storage) offset)

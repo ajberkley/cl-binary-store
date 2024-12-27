@@ -4,7 +4,7 @@
   (declare (optimize speed safety) (type simple-vector sv) (type function store-object))
   (when storage
     (store-ub8 +simple-vector-code+ storage nil)
-    (store-unsigned-fixnum (length sv) storage))
+    (store-tagged-unsigned-fixnum (length sv) storage))
   (map nil store-object sv))
 
 (defun restore-simple-vector (storage restore-object)

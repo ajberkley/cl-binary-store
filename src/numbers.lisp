@@ -4,19 +4,19 @@
 
 (declaim (inline store-sb8))
 (defun store-sb8 (sb8 storage &optional (tag +sb8-code+))
-  "Store an (integer -255 0) value SB8 to STORAGE.  If TAG is true,
- then will store a tag +SB8-CODE+ to storage first.  Omit TAG if your
- deserializer will know this is a SB8 value.  It's a bit odd to have these,
- but the dispatch cost is negligible... we use the tag bit as the sign bit."
+  "Store an (integer -255 0) value SB8 to STORAGE.  Set TAG to NIL if your
+ deserializer will know this is a SB8 value and the value will be written
+ without a tag byte.  It's a bit odd to have (integer -255 0) but the dispatch
+ cost is negligible.... the tag byte is the sign bit."
   (declare (optimize speed safety) (type (integer -255 0) sb8))
   (store-ub8 (- sb8) storage tag))
 
-(declaim (inline store-sb16))
+(declaim (notinline store-sb16))
 (defun store-sb16 (sb16 storage &optional (tag +sb16-code+))
   (declare (optimize speed safety) (type (integer -65535 0) sb16))
   (store-ub16 (- sb16) storage tag))
 
-(declaim (inline store-sb32))
+(declaim (notinline store-sb32))
 (defun store-sb32 (sb32 storage &optional (tag +sb32-code+))
   (declare (optimize speed safety) (type (integer -4294967295 0) sb32))
   (store-ub32 (- sb32) storage tag))
@@ -27,21 +27,21 @@
  that has previously been stored by STORE-SB8"
   (- (restore-ub8 storage)))
 
-(declaim (inline restore-sb16))
+(declaim (notinline restore-sb16))
 (defun restore-sb16 (storage)
   "Restore an (integer -65535 0) value from storage that has previously
  been stored by STORE-SB16."
   (- (restore-ub16 storage)))
 
-(declaim (inline restore-sb32))
+(declaim (notinline restore-sb32))
 (defun restore-sb32 (storage)
   "Restore an (integer -4294967295 0) value from storage that has previously
  been stored by STORE-UB32."
   (- (restore-ub32 storage)))
 
-(declaim (inline restore-fixnum))
+(declaim (notinline restore-fixnum))
 (defun restore-fixnum (storage)
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 0)))
   (the (values fixnum &optional) (storage-read-sb64 storage)))
 
 (declaim (inline store-only-fixnum))
@@ -233,8 +233,10 @@
   (store-single-float (realpart complex-single-float) storage nil)
   (store-single-float (imagpart complex-single-float) storage nil))
 
-(declaim (inline store-unsigned-fixnum))
-(defun store-unsigned-fixnum (fixnum storage)
+(declaim (inline store-tagged-unsigned-fixnum))
+(defun store-tagged-unsigned-fixnum (fixnum storage)
+  "Store and tag a number from 0 to max-positive-fixnum.
+ You can call `restore-tagged-unsigned-fixnum' to restore it (or restore-object)"
   (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
   (when storage
     (if (< fixnum 256)
@@ -244,13 +246,24 @@
 	    (if (< fixnum #.(expt 2 32))
 	        (store-ub32 fixnum storage)
 	        (store-only-fixnum fixnum storage))))))
-  
+
+(declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
+(defun restore-tagged-unsigned-fixnum (storage)
+  "Read back a number written by `store-tagged-unsigned-fixnum'."
+  (let ((tag (restore-ub8 storage)))
+    (ecase tag
+      (#.+ub8-code+ (restore-ub8 storage))
+      (#.+ub16-code+ (restore-ub16 storage))
+      (#.+ub32-code+ (restore-ub32 storage))
+      (#.+fixnum-code+ (restore-fixnum storage)))))
+
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage)
+  "Store and tag a fixnum; "
   (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
   (when storage
     (if (> fixnum 0)
-        (store-unsigned-fixnum fixnum storage)
+        (store-tagged-unsigned-fixnum fixnum storage)
         (if (> fixnum -256)
             (store-sb8 fixnum storage)
             (if (> fixnum -65536)
@@ -261,18 +274,9 @@
 
 (declaim (inline store-tagged-unsigned-integer))
 (defun store-tagged-unsigned-integer (integer storage)
-  "Because this is stored tagged, you can restore it using
- RESTORE-OBJECT."
+  "Store and tag any integer.  For restoring this, call restore-object as this may
+ be a bignum."
   (if (typep integer 'fixnum)
       (when storage
-	(store-unsigned-fixnum integer storage))
+	(store-tagged-unsigned-fixnum integer storage))
       (store-bignum integer storage)))
-
-(declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
-(defun restore-tagged-unsigned-fixnum (storage)
-  (let ((tag (restore-ub8 storage)))
-    (ecase tag
-      (#.+ub8-code+ (restore-ub8 storage))
-      (#.+ub16-code+ (restore-ub16 storage))
-      (#.+ub32-code+ (restore-ub32 storage))
-      (#.+fixnum-code+ (restore-fixnum storage)))))

@@ -14,7 +14,7 @@
   (funcall store-object (make-write-reference-count :reference-count number-of-references)))
 
 (defmethod store-action ((action write-reference-count) storage store-object)
-  (store-unsigned-fixnum (write-reference-count-reference-count action) storage))
+  (store-tagged-unsigned-fixnum (write-reference-count-reference-count action) storage))
 
 (defmethod action ((code (eql +set-reference-action-code+)) storage references restore-object)
   (let ((num-refs (funcall restore-object)))
