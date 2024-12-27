@@ -26,7 +26,7 @@ I have not cut a first release tag even though the system works well currently b
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 
 ## In progress / planned soon
-- [ ] Pluggable versioned coding schemes:
+- [X] Pluggable versioned coding schemes
   - [ ] optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes)
   - [ ] optimized for non-referential data (tag bits used for immediate small numbers, small vectors / lists, for example)
   - [ ] messagepack (for example)
@@ -129,6 +129,46 @@ If T we will write out a magic number and the \*write-version\* to the output, w
 
 If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.  It also means you can write multiple chunks of objects to a stream and have restore-objects return between each chunk.
 
+## Extensions
+
+### Changing object slot serialization
+
+For serializing objects, the default behavior is probably good enough for 95% of users.  We provide a simple extension point with a generic function serializable-slot-info which you can change the behavior of, for example to enable calling initialize-instance instead of allocate-instance, or to not save certain slots or transform them before saving.  See comments in [objects.lisp](src/objects.lisp) and the example extension [example-extension.lisp](src/example-extension.lisp) for an example.
+
+### Adding code points to the codespace
+
+The storage mechanism dispatches on types and the dispatch mechanism on deserialization is byte based --- we read a byte, called a *tag* and dispatch to an appropriate reader based on it.
+
+The notion we have for extension and versioning is a "codespace", that is a set of types and storage functions for them and a set of bytes and restore functions for them.  We start reading data with whatever the default codespace is (specified by \*read-version\*).  If we hit a magic number (+action-code+ then +magic-number-code+ followed by a coded number) we then try and load the specified codespace version, erroring if we do not support it.  Here we are versioning by codespace.  You can easily extend the actions to do whatever further versioning you want of the file.  See [magic-numbers.lisp](src/magic-numbers.lisp) and [actions.lisp](src/actions.lisp).  During writing you would specify what codespace you want with \*write-version\*.
+
+For an example, look at [example-extension.lisp](src/example-extension.lisp) and [example-extension-codespace.lisp](src/example-extension-codespace.lisp) which I reproduce here:
+
+    (define-codespace ("extension-codespace" +extension-codespace+ :inherits-from +basic-codespace+)
+      (defstore something-else (store-something-else obj storage store-object))
+      (defrestore +test-code+ (restore-something-else restore-object)))
+
+Note that you can also define local reference tracking hash-tables with register-references.
+
+Here we are definining how to store an object of type SOMETHING-ELSE (which is defined in [example-extension.lisp](src/example-extension.lisp)).  We define our type *tag* +test-code+ and we write it out in #'store-something-else along with whatever else we feel like.  Then on restore we call (restore-something-else restore-object) when we see +test-code+.  restore-object is a function we can call to restore further objects from the data stream.  See [basic-codespace.lisp](src/basic-codespace.lisp) for lots of examples.
+
+Anyhow, here is the result of running the code
+
+    CL-USER> (quicklisp:quickload "example-extension")
+    CL-USER> (example-extension:test-serializable-slot-info)
+    Success!
+    CL-USER> (example-extension:test-special-serializer/deserializer)
+    Example of writing something completely different for a 'something-else object:
+    First example writing a version number into the stream to switch codespaces
+    Switching codespace from basic codespace to #x9999 (extension-codespace)
+    Hi, I decided to write this instead of a 'something-else
+    But actually, it told me to tell you:
+    Hi from slot information!
+    Second example forcing the right codespace
+    Hi, I decided to write this instead of a 'something-else
+    But actually, it told me to tell you:
+    Hi from slot information!
+    "And here is a bonus thing returned to you"
+
 ## Why?
 
 I've been using [cl-store](https://cl-store.common-lisp.dev/) forever and it works well and meets most needs once you tweak how it serializes a bunch of things for speed.  I am usually serializing / deserializing > 1GB of data and in the end all the tweaks I've done don't make it fast enough.  The original cl-store hits about 1-2MB/sec for store and restore on the data set I use which just is too slow. It also doesn't support complex list circularity in a reasonable way (the correct-list-store you can turn on blows the stack).
@@ -137,6 +177,8 @@ I've been using [cl-store](https://cl-store.common-lisp.dev/) forever and it wor
 - The file format uses implicit referencing which makes it hard to deserialize quickly as each object must be tracked.  There was no easy way to to turn on and off what objects we should track references for (and it must match during store and restore).  It also tracks references for single floats which triggers a severe performance issue, at least on sbcl, related to eql hash tables which I have not tracked down..
 
 I have also used [hyperluminal-mem](https://github.com/cosmos72/hyperluminal-mem), which is really fast if you meet the restrictions it has.  It does not support delayed object construction or references really, nor a nice default for structures and classes (though you can extend it with manual referencing on a per type basis and with serializers for each structure or class you want).
+
+They are extensible, but not enough --- you cannot completely change the coding mechanism.
 
 ## What is different here?
 
@@ -153,28 +195,9 @@ Performance during serialization is dominated by the reference hash table buildi
 If your data does not contain multiple references or repeated objects (in particular, repeated symbols will be stored repeatedly!), then you can let \*track-references\* to NIL and you can hit hundreds of MB/sec depending on your data (unicode strings are currently a bit slow as we
 are not using a fast utf-8 encoder) and 500M cons+integer objects per second.  It's about 10-30x faster than cl-store in this mode.  This package is between 3x faster and 3x slower than hyperluminal-mem depending on data patterns both on store and restore.  If you are storing simple arrays / matrices, you want to use cl-binary-store.
 
-## Adding extensions
+### Easily versionable and extensible
 
-This is how it is currently done, which is janky --- pluggable coding schemes dispatched by magic-number / version are coming soon.
-
-The current backend stores each object with a 8-bit type tag (with some reserved bits very soon).  You can define new type tags and write specialized storage and restore methods.  See codes.lisp for examples.  If you do this, you probably want to change the \*write-version\* and \*supported-versions\*.  To rebuild the dispatch mechanism if you have defined new defstore and defrestore things, you want to either load src/rebuild-dispatch.lisp, or call (rebuild-dispatch).  At that point all your object types have to be real, so typically this is done in a second file that is loaded after the first (see example-extension-2.lisp which both defines new dispatch mechanisms and calls (rebuild-dispatch)).
-
-For serializing objects, the default behavior is probably good enough for 95% of users.  We provide a simple extension point with a generic function serializable-slot-info which you can change the behavior of, for example to enable calling initialize-instance instead of allocate-instance, or to not save certain slots or transform them before saving.  See comments in [objects.lisp](src/objects.lisp) and the example extension [example-extension.lisp](src/example-extension.lisp) for an example.
-
-Further there is an extension point in [actions.lisp](src/actions.lisp), which are things that can be stored during store and can do things during restore --- this is how the versioning check is implemented (src/magic-numbers.lisp), how we hint to the reference vector size during restore, and how we write an end marker.
-
-If that is not enough, I suggest adding a new store / restore method on your object type or class.
-
-See the file src/example-extension.lisp and src/example-extension-2.lisp for examples of both these methods:
-
-    CL-USER> (quicklisp:quickload "example-extension")
-    CL-USER> (example-extension:test-serializable-slot-info)
-    Success!
-    CL-USER> (example-extension:test-special-serializer/deserializer)
-    12345
-    "Hi, I decided to write this instead of a 'something-else"
-    "But actually, it told me to tell you:"
-    "Hi"
+See the example in extensions earlier.
 
 ## Compressed output
 

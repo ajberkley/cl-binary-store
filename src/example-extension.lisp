@@ -35,27 +35,31 @@
 (defconstant +test-code+ 99)
 
 (defclass something-else ()
-  ((information :initform "Hi" :accessor information)))
+  ((information :initform (format nil "Hi from slot information!~%") :accessor information)))
 
 (defun store-something-else (obj storage store-object)
   (when storage
     (store-ub8 +test-code+ storage nil)
     (store-ub16 12345 storage))
-  (funcall store-object (format nil "Hi, I decided to write this instead of a 'something-else"))
-  (funcall store-object (format nil "But actually, it told me to tell you:"))
+  (funcall store-object (format nil "Hi, I decided to write this instead of a 'something-else~%"))
+  (funcall store-object (format nil "But actually, it told me to tell you:~%"))
   (funcall store-object (information obj)))
 
 (defun restore-something-else (restore-object)
   (assert (= (funcall restore-object) 12345))
   (format t (funcall restore-object))
   (format t (funcall restore-object))
-  (format t (funcall restore-object)))
+  (format t (funcall restore-object))
+  "And here is a bonus thing returned to you")
 
 (defun test-special-serializer/deserializer ()
   ;; Option one write the version number into the stream
+  (format t "Example of writing something completely different for a 'something-else object:~%")
+  (format t "First example writing a version number into the stream to switch codespaces~%")
   (let ((*write-version* +extension-codespace+)
 	(*write-magic-number* t))
     (restore (store nil (make-instance 'something-else))))
+  (format t "Second example forcing the right codespace~%")
   ;; Option two just keep track of it yourself
   (let ((*write-version* +extension-codespace+)
 	(*read-version* +extension-codespace+)
