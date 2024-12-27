@@ -48,24 +48,21 @@
  fill this vector up with fix-ups at the beginning)"
   (vector (make-array nil) :type simple-vector))
 
-;; During the storing phase, we pass around a references hash table
-;; which is an EQL hash-table which maps objects to reference ids.
-;; Nominally we could have multiple reference hash tables if we wanted
-;; to parallelize the storage operation more by reducing contention.
-
 (declaim (inline check-reference))
 (defun check-reference (object references &optional (add-new-reference t))
   "Returns T if OBJECT has already been seen and updates its reference count.
  If OBJECT has not been seen, and ADD-NEW-REFERENCE is T, then adds it to
- references and returns NIL.  If ADD-NEW-REFERENCE is NIL, just returns NIL
- and returns NIL"
+ references and returns NIL.  If ADD-NEW-REFERENCE is NIL, just returns NIL.
+ This should *ONLY* be called during the reference counting phase, that is
+ when STORAGE is nil."
   (when references
     (if add-new-reference
         (let ((number-of-times-referenced (gethash object references 0)))
           (declare (type fixnum number-of-times-referenced))
           ;; We store the number of times an object is referenced as 1 or 2, where 2 means anything
           ;; more than 1 (except if debug-cbs is in *features* then we keep track of the exact
-          ;; number). The logic below is unnecessarily complex, clean this up with clear brain
+          ;; number). The logic below is unnecessarily complex, clean this up with clear brain.
+          ;; When :info-cbs is in features, we do a complete count of occurences.
           (cond
             ((zerop number-of-times-referenced)
              (setf (gethash object references) 1)
@@ -82,7 +79,8 @@
 (declaim (inline referenced-already))
 (defun referenced-already (object storage references)
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
- Otherwise returns NIL"
+ Otherwise returns NIL.  This should only be called during the actual storage phase,
+ not the reference counting phase."
   (declare (type storage storage))
   (when references
     (let ((ref-idx (gethash object references)))

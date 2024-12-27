@@ -21,7 +21,7 @@
   (declare (optimize speed safety) (type (integer -4294967295 0) sb32))
   (store-ub32 (- sb32) storage tag))
 
-(declaim (notinline restore-sb8))
+(declaim (inline restore-sb8))
 (defun restore-sb8 (storage)
   "Despite the name, restore an (integer -255 0) value from storage
  that has previously been stored by STORE-SB8"
