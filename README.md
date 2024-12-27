@@ -20,7 +20,8 @@ I have not cut a first release tag even though the system works well currently b
 - Data that has multiple and circular references within it
   - This dominates serialization time (but you can disable this feature to get crazy speeds)
   - Complex list circularity and references (other than to the head of lists, separately disableable as well)
-- Extensibility for specialized data and objects
+- Versioned output
+- Extensibility for user data types
 - Should work out of the box without any effort with an easy programmer / user interface
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 
