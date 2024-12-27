@@ -14,7 +14,7 @@
 
 (defun restore-from-stream (stream)
   (declare (optimize speed safety))
-  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
     (with-storage (storage :flusher (make-read-into-storage/stream stream) :max 0)
       (restore-objects storage))))
 
@@ -72,7 +72,7 @@
 (defun restore-from-vector (vector)
   (declare (optimize speed safety))
   #+debug-cbs(format t "Restoring from a vector with ~A bytes in it~%" (length vector))
-  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
     (if (typep vector '(simple-array (unsigned-byte 8) (*)))
 	(with-storage (storage
 		       :flusher
@@ -111,7 +111,7 @@
 
 (defun restore-from-sap (sap size)
   (declare (optimize speed safety))
-  (let ((*current-codespace* (gethash *read-version* *codespaces*))
+  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*)))
 	(store (make-array 0 :element-type '(unsigned-byte 8))))
     (declare (dynamic-extent store))
     (with-storage (storage :flusher
@@ -134,7 +134,7 @@
 
 (defun restore-from-file (filename)
   (declare (optimize speed safety))
-  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
     (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
       (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0
 			     :stream str)
@@ -144,7 +144,7 @@
 
 (defvar *write-magic-number* nil
   "If T we will write out a magic number and *write-version* to the stream, which will be
- validated against *supported-versions* when we read it back")
+ validated against our existing *codespaces* when we read it back")
 
 (defvar *read-version* #x0001
   "The default codespace version to use if no versioning information is in the stream")
@@ -156,8 +156,8 @@
  (restore-from-vector (store nil :hi :bye)) -> (values :hi :bye)
 
  Note that if you specified *write-magic-number* then a `magic-number' will be the first value
- returned.  It will be asserted against *supported-versions*"
-  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+ returned.  It will be asserted against available decoders in *codespaces*"
+  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
     (etypecase place
       ((or string pathname)
        (restore-from-file place))

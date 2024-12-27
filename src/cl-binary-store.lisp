@@ -113,10 +113,10 @@
    #:*write-end-marker*
 
    ;; Versioning
-   #:*supported-versions*
    #:*write-version*
    #:*version-being-read*
    #:*write-magic-number*
+   #:*current-codespace*
 
    #:out-of-space-current-offset
    #:out-of-space-wanted-bytes
@@ -143,6 +143,12 @@
    #:eq-refs
    #:double-float-refs
    #:num-eq-refs
-   #:define-codespace))
+   #:define-codespace
+   #:+action-code+
+   #:store-action&
+   #:restore-action&
+   #:references
+   #:+basic-codespace+
+   #:*read-version*))
 
 (in-package :cl-binary-store)

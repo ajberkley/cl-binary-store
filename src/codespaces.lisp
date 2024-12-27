@@ -37,6 +37,11 @@
   (store-objects #'invalid :type function)
   (report-dispatch-counts #'invalid :type function)) ;; not implemented
 
+(defun deep-copy-codespace (target source-codespace)
+  (setf (codespace-ref-tables target) (codespace-ref-tables source-codespace))
+  (setf (codespace-store-infos target) (codespace-store-infos source-codespace))
+  (setf (codespace-restore-infos target) (codespace-restore-infos source-codespace)))
+
 (defun build-restore-objects ()
   "Returns all the elements in storage.  If a single element just
      returns it, otherwise returns a list of all elements restored."
@@ -181,13 +186,16 @@
     (setf *current-codespace/compile-time* nil))
   codespace)
 
-(defmacro define-codespace ((name magic-number) &body body)
+(defmacro define-codespace ((name magic-number &key inherits-from) &body body)
   "Creates and registers a codespace into *codespaces*."
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (unwind-protect
 	  (progn
 	    (setf *current-codespace/compile-time*
-		  (make-codespace :magic-number ,magic-number :name ,name))
+		  (let ((codespace (make-codespace :magic-number ,magic-number :name ,name)))
+		    ,(when inherits-from
+		       `(deep-copy-codespace codespace (gethash ,inherits-from *codespaces*)))
+		    codespace))
 	    ,@body
 	    (when (gethash ,magic-number *codespaces*)
 	      (format t "WARNING: redefining code-space ~A~%" ,magic-number))

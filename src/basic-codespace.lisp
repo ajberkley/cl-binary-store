@@ -1,6 +1,6 @@
 (in-package :cl-binary-store)
 
-(defconstant +basic-codespace-magic-number+ #x0001)
+(defconstant +basic-codespace+ #x0001)
 
 (defconstant +ub8-code+ 0)
 (defconstant +ub16-code+ 1)
@@ -44,7 +44,7 @@
 (defconstant +simple-string-code+ 39)
 (defconstant +action-code+ 40)
 
-(define-codespace ("basic codespace" +basic-codespace-magic-number+)
+(define-codespace ("basic codespace" +basic-codespace+)
   (register-references num-eq-refs (make-hash-table :test #'eq))
   (register-references double-float-refs (make-hash-table :test #'double-float-=))
   (register-references eq-refs (make-hash-table :test #'eq))

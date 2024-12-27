@@ -60,7 +60,7 @@
    #:*write-end-marker*
 
    ;; Versioning
-   #:*supported-versions*
+   #:*current-codespace*
    #:*write-version*
    #:*version-being-read*
    #:*write-magic-number*

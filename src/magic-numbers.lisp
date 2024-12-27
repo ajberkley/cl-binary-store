@@ -7,8 +7,6 @@
 
 (in-package :cl-binary-store)
 
-(defvar *supported-versions* '(#x0001))
-
 (defvar *write-version* #x0001
   "Set this to the magic number you wish to write into the file.  It may
  be queried by serialization routines if desired.")
@@ -22,9 +20,6 @@
 
 (defmethod action ((code (eql +magic-number-action-code+)) storage references restore-object)
   (let ((magic-number (funcall restore-object)))
-    (unless (member magic-number *supported-versions*)
-      (error "Unsupported version #x~X, we support ~{#x~X~^ ~}"
-	     magic-number *supported-versions*))
     (setf *version-being-read* magic-number)
     (let ((codespace (gethash magic-number *codespaces*)))
       (unless codespace
