@@ -12,7 +12,7 @@ This project works, has some test coverage, but is not finished yet.  I expect i
 
 ## Status
 
-I have not cut a first release tag even though the system works well currently because I'd like to put in the pluggable version coding schemes first to always keep backwards compatibility with first release
+I have not cut a first release tag even though the system works well currently because I'd like to put in the pluggable versioned coding schemes first to always keep backwards compatibility with first release
 
 ## Focus
 - Speed
