@@ -8,13 +8,17 @@
   :components ((:file "features")
 	       (:file "cl-binary-store")
 	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))
+	       (:file "codespaces" :depends-on ("features"))
+	       (:file "sbcl-special-hash-tables")
 	       (:file "type-discrimination")
+	       (:file "basic-codespace" :depends-on ("sbcl-special-hash-tables"
+						     "type-discrimination"
+						     "features"))
 	       (:file "storage" :depends-on ("features" "cl-binary-store"))
-	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"))
-	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"))
-	       (:file "defstore" :depends-on ("features"))
-	       (:file "reference-tables" :depends-on ("defstore"))
-               (:file "codes" :depends-on ("defstore" "reference-tables"))
+	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
+							      "basic-codespace"))
+	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"
+									  "basic-codespace"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 							      "features"))
                (:file "actions" :depends-on ("unsigned-bytes" "storage"))
@@ -36,14 +40,7 @@
 								    "unsigned-bytes" "features"))
 	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes" "features"))
 	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes" "features"))
-
-	       (:file "dispatch" :depends-on ("codes" "array" "symbols" "simple-vector" "cons"
-						      "hash-table" "features" "actions" "magic-numbers"
-						      "referrers-and-fixup" "numbers" "pathname"
-						      "unsigned-bytes" "objects" "storage"
-						      "reference-count" "type-discrimination"))
-	       (:file "rebuild-dispatch" :depends-on ("codes" "dispatch"))
-	       (:file "user" :depends-on ("dispatch" "storage" "features" "magic-numbers")))
+	       (:file "user" :depends-on ("basic-codespace" "storage" "features" "magic-numbers")))
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))
 

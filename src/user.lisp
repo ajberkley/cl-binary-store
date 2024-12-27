@@ -14,15 +14,17 @@
 
 (defun restore-from-stream (stream)
   (declare (optimize speed safety))
-  (with-storage (storage :flusher (make-read-into-storage/stream stream) :max 0)
-    (restore-objects storage)))
+  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+    (with-storage (storage :flusher (make-read-into-storage/stream stream) :max 0)
+      (restore-objects storage))))
 
 ;;; UB8 VECTORS
 
 (defun store-to-vector (&rest elements)
   (declare (dynamic-extent elements) (optimize speed safety))
   "Returns an (array (unsigned-byte 8) (*)) with the data"
-  (let* ((output-vector (make-array 16 :element-type '(unsigned-byte 8) :fill-pointer 0)))
+  (let* ((output-vector (make-array 16 :element-type '(unsigned-byte 8) :fill-pointer 0))
+	 (*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
     (with-storage (storage :flusher (make-write-into-adjustable-ub8-vector output-vector))
       (apply #'store-objects storage elements)
       (flush-write-storage storage)
@@ -30,7 +32,8 @@
 
 (defun store-to-extant-vector (vector &rest data)
   (declare (optimize speed safety))
-  (let* ((offset 0)
+  (let* ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*)))
+	 (offset 0)
 	 (is-simple-octet-array (typep vector '(simple-array (unsigned-byte 8) (*))))
 	 (is-adjustable (adjustable-array-p vector))
 	 (temp-vector
@@ -69,17 +72,18 @@
 (defun restore-from-vector (vector)
   (declare (optimize speed safety))
   #+debug-cbs(format t "Restoring from a vector with ~A bytes in it~%" (length vector))
-  (if (typep vector '(simple-array (unsigned-byte 8) (*)))
-      (with-storage (storage
-		     :flusher
-		     (lambda (storage)
-		       (the fixnum (- (storage-max storage)
-				      (storage-offset storage))))
-		     :store vector :max (length vector))
-	(restore-objects storage))
-      (flexi-streams:with-input-from-sequence (str vector)
-	(with-storage (storage :flusher (make-read-into-storage/stream str) :max 0)
-	  (restore-objects storage)))))
+  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+    (if (typep vector '(simple-array (unsigned-byte 8) (*)))
+	(with-storage (storage
+		       :flusher
+		       (lambda (storage)
+			 (the fixnum (- (storage-max storage)
+					(storage-offset storage))))
+		       :store vector :max (length vector))
+	  (restore-objects storage))
+	(flexi-streams:with-input-from-sequence (str vector)
+	  (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0)
+	    (restore-objects storage))))))
 
 ;;; SAP vectors
 
@@ -97,7 +101,8 @@
  to the chunk.  Call (replace-store-sap-buffer sap sap-offset) in a
  handler-bind to do this updating.  See test test-sap-write/read for
  an example."
-  (let ((store (make-array 0 :element-type '(unsigned-byte 8))))
+  (let ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*)))
+	(store (make-array 0 :element-type '(unsigned-byte 8))))
     (declare (dynamic-extent store))
     (with-storage (storage :flusher (lambda (storage) (storage-offset storage))
                            :sap sap :store store :max size :buffer-size nil)
@@ -106,7 +111,8 @@
 
 (defun restore-from-sap (sap size)
   (declare (optimize speed safety))
-  (let ((store (make-array 0 :element-type '(unsigned-byte 8))))
+  (let ((*current-codespace* (gethash *read-version* *codespaces*))
+	(store (make-array 0 :element-type '(unsigned-byte 8))))
     (declare (dynamic-extent store))
     (with-storage (storage :flusher
 		   (lambda (storage)
@@ -119,24 +125,29 @@
 
 (defun store-to-file (filename &rest elements)
   (declare (optimize speed safety))
-  (with-open-file (str filename :direction :output
-				:if-exists :supersede
-				:element-type '(unsigned-byte 8))
-    (with-storage (storage :flusher (make-write-into-storage/stream str))
-      (apply #'store-objects storage elements))))
+  (let ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
+    (with-open-file (str filename :direction :output
+				  :if-exists :supersede
+				  :element-type '(unsigned-byte 8))
+      (with-storage (storage :flusher (make-write-into-storage/stream str))
+	(apply #'store-objects storage elements)))))
 
 (defun restore-from-file (filename)
   (declare (optimize speed safety))
-  (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
-    (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0
-                   :stream str)
-      (restore-objects storage))))
+  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+    (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
+      (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0
+			     :stream str)
+	(restore-objects storage)))))
 
 ;;; General interface
 
 (defvar *write-magic-number* nil
   "If T we will write out a magic number and *write-version* to the stream, which will be
  validated against *supported-versions* when we read it back")
+
+(defvar *read-version* #x0001
+  "The default codespace version to use if no versioning information is in the stream")
 
 (defun restore (place)
   "(restore #(14 39 37 0 2 72 73 15)) -> (values :hi))
@@ -146,13 +157,14 @@
 
  Note that if you specified *write-magic-number* then a `magic-number' will be the first value
  returned.  It will be asserted against *supported-versions*"
-  (etypecase place
-    ((or string pathname)
-     (restore-from-file place))
-    (stream
-     (restore-from-stream place))
-    (vector
-     (restore-from-vector place))))
+  (let ((*current-codespace* (gethash *read-version* *codespaces*)))
+    (etypecase place
+      ((or string pathname)
+       (restore-from-file place))
+      (stream
+       (restore-from-stream place))
+      (vector
+       (restore-from-vector place)))))
 
 (defun store (place &rest data)
   "When place is NIL, returns a (vector (unsigned-byte 8) (*)) with fill-pointer
@@ -174,8 +186,14 @@
  it will then be validated on restore."
   (declare (dynamic-extent data) (optimize speed safety))
   (let* ((magic-number (make-magic-number :number *write-version*))
+	 (*current-codespace* (gethash *write-version* *codespaces*))
 	 (data* (if *write-magic-number* (cons magic-number data) data)))
     (declare (dynamic-extent magic-number data*))
+    (assert *current-codespace* nil
+	    (format nil "Write-version ~A does not have an existing codespace, we have ~A"
+		    *write-version* (loop for key being the hash-keys of *codespaces*
+					  collect (list key (codespace-name
+							      (gethash key *codespaces* ))))))
     (etypecase place
       ((or string pathname)
        (apply #'store-to-file place data*)

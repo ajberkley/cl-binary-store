@@ -326,17 +326,31 @@
     (is '= num (restore-from-vector (store-to-vector num)))
     (is '= mnum (restore-from-vector (store-to-vector mnum)))))
 
+;; Do nothing
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun store-string-for-tests (obj storage)
+  (declare (ignore obj storage)))
+  (define-codespace ("test-codespace" 999999)
+    (defstore action (store-action& obj storage store-object))
+    (defrestore +action-code+ (restore-action& storage references restore-object))
+    (defstore string (store-string-for-tests obj storage))))
+
 (define-test test-versioning
   (fail
       (restore
        (let ((*write-magic-number* t)
-	     (*write-version* 123))
+	     (*write-version* 999999))
 	 (store nil "check"))))
+  (let ((*supported-versions* '(999999)))
+    (true (null (restore
+		 (let ((*write-magic-number* t)
+		       (*write-version* 999999))
+		   (store nil "check"))))))
   (is 'equalp
       "check"
       (restore
-       (let ((*write-magic-number* nil)
-	     (*write-version* 123))
+       (let ((*write-magic-number* nil))
 	 (store nil "check"))))
   (is 'equalp
       "check"

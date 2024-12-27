@@ -142,6 +142,7 @@
    #:storage-sap
    #:eq-refs
    #:double-float-refs
-   #:num-eq-refs))
+   #:num-eq-refs
+   #:define-codespace))
 
 (in-package :cl-binary-store)
