@@ -21,7 +21,8 @@ I have not cut a first release tag even though the system works well currently b
   - This dominates serialization time (but you can disable this feature to get crazy speeds)
   - Complex list circularity and references (other than to the head of lists, separately disableable as well)
 - Versioned output
-- Extensibility for user data types
+- Extensibility for user data types (with good defaults for 99% of use)
+- Ability to change the coding mechanism straight-forwardly
 - Should work out of the box without any effort with an easy programmer / user interface
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 
