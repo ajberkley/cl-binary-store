@@ -274,8 +274,8 @@
 
 (declaim (inline store-tagged-unsigned-integer))
 (defun store-tagged-unsigned-integer (integer storage)
-  "Store and tag any integer.  For restoring this, call restore-object as this may
- be a bignum."
+  "Store and tag any unsigned integer.  For restoring this, call restore-object as this may
+ be a bignum.  Prefer `store-tagged-unsigned-fixnum' if you are sure this isn't a bignum"
   (if (typep integer 'fixnum)
       (when storage
 	(store-tagged-unsigned-fixnum integer storage))
