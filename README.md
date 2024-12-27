@@ -6,18 +6,38 @@ A fast and reasonably customizable serializer/deserializer of Common Lisp object
 
 Currently this is sbcl specific, but I'd like to fix this up to work on other implementations, but it isn't top of mind.
 
-This project works, has some test coverage, but is not finished yet.  I expect it to be polished and released mid-January 2025.
+This project works, has some test coverage, but is not finished yet.  I expect it to be polished and 1.0 released mid-January 2025.
 
 > :warning: This is a work in progress, do not rely on it yet!
+
+## Status
+
+I have not cut a first release tag even though the system works well currently because I'd like to put in the pluggable version coding schemes first to always keep backwards compatibility with first release
 
 ## Focus
 - Data that has multiple and circular references within it
   - This dominates serialization time (but you can disable this feature to get crazy speeds)
   - Complex list circularity and references (other than to the head of lists, separately disableable as well)
-- Speed and compactness
+- Speed and compactness of output
 - Extensibility for specialized data and objects
 - Should work out of the box without any effort with an easy programmer / user interface
-- Serialization deserialization on the same architecture (and 64-bit only currently)
+- Stable API and no breaking changes (this is a standard Common Lisp goal)
+
+## In progress / planned soon
+- [ ] Pluggable versioned coding schemes:
+  - [ ] optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes)
+  - [ ] optimized for non-referential data (tag bits used for immediate small numbers, small vectors / lists, for example)
+  - [ ] messagepack (for example)
+- [ ] Support for other Common Lisps aside from sbcl
+  - [ ] At least basic slow support
+  - [ ] Optimized support
+- [ ] Further discoveries from real world use cases (that is, my use case)
+  - [ ] Add restarts to handle missing packages / moved symboles during restore (create-package / rehome / discard)
+  - [ ] Reference-id allocation by use amount
+  - [ ] Build compacted hash tables after the reference counting
+- [ ] Parallel restore?  I've given up on parallel store phase.
+- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)
+- [ ] Always use references for symbols even when *track-references* nil.
 
 ## General features
 
@@ -131,20 +151,11 @@ Performance during serialization is dominated by the reference hash table buildi
 If your data does not contain multiple references or repeated objects (in particular, repeated symbols will be stored repeatedly!), then you can let \*track-references\* to NIL and you can hit hundreds of MB/sec depending on your data (unicode strings are currently a bit slow as we
 are not using a fast utf-8 encoder) and 500M cons+integer objects per second.  It's about 10-30x faster than cl-store in this mode.  This package is between 3x faster and 3x slower than hyperluminal-mem depending on data patterns both on store and restore.  If you are storing simple arrays / matrices, you want to use cl-binary-store.
 
-## TODO
-
-- [ ] add restarts to handle missing packages during symbol restore (create-package / rehome / discard)
-- [ ] Parallel store and restore ... restore is easy but store is near impossible
-- [ ] Provide non-sbcl specific serializers
-- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)
-- [ ] Sort reference-ids by use amount if we have more than 255 or 65535 of them to shrink file?  An approximate radix sort might work quickly enough, but the cost of an extra puthash to keep an exact count is probably not worth it.
-- [ ] Build compacted hash tables after the reference counting (work is ~number of references instead of currently ~total objects to clean the hash tables and data will be more local)
-- [ ]  Two element lists to save one byte each?  Meh.
-
-
 ## Adding extensions
 
-The current backend stores each object with a 8-bit type tag.  You can define new type tags and write specialized storage and restore methods.  See codes.lisp for examples.  If you do this, you probably want to change the \*write-version\* and \*supported-versions\*.  To rebuild the dispatch mechanism if you have defined new defstore and defrestore things, you want to either load src/rebuild-dispatch.lisp, or call (rebuild-dispatch).  At that point all your object types have to be real, so typically this is done in a second file that is loaded after the first (see example-extension-2.lisp which both defines new dispatch mechanisms and calls (rebuild-dispatch)).
+This is how it is currently done, which is janky --- pluggable coding schemes dispatched by magic-number / version are coming soon.
+
+The current backend stores each object with a 8-bit type tag (with some reserved bits very soon).  You can define new type tags and write specialized storage and restore methods.  See codes.lisp for examples.  If you do this, you probably want to change the \*write-version\* and \*supported-versions\*.  To rebuild the dispatch mechanism if you have defined new defstore and defrestore things, you want to either load src/rebuild-dispatch.lisp, or call (rebuild-dispatch).  At that point all your object types have to be real, so typically this is done in a second file that is loaded after the first (see example-extension-2.lisp which both defines new dispatch mechanisms and calls (rebuild-dispatch)).
 
 For serializing objects, the default behavior is probably good enough for 95% of users.  We provide a simple extension point with a generic function serializable-slot-info which you can change the behavior of, for example to enable calling initialize-instance instead of allocate-instance, or to not save certain slots or transform them before saving.  See comments in [objects.lisp](src/objects.lisp) and the example extension [example-extension.lisp](src/example-extension.lisp) for an example.
 
