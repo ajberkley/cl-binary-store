@@ -131,11 +131,31 @@
   (assert (string= (symbol-name obj) "OBJ"))
   (store-object/phase obj 'store-info-reference-phase-code))
 
+#+info-cbs
+(declaim (type (simple-array fixnum (256)) *dispatch-counter*))
+#+info-cbs
+(defparameter *dispatch-counter* (make-array 256 :element-type 'fixnum :initial-element 0))
+#+info-cbs
+(defun report-dispatch-counts ()
+  (let ((res nil))
+    (maphash (lambda (dispatch-code restore-info)
+               (push (cons (aref *dispatch-counter* dispatch-code)
+                           (format nil "#~A (count ~A) ~A"
+                                   dispatch-code
+                                   (aref *dispatch-counter* dispatch-code)
+                                   (restore-info-restore-function-code restore-info)))
+                     res))
+             *restore-info*)
+    (format t "~{~A~%~}" (mapcar #'cdr (sort res #'> :key #'car)))
+    (values)))
+
 (defun make-read-dispatch-table (code-to-dispatch-on)
   ;; Assumes this is in a context where STORAGE, REFERENCES, and RESTORE-OBJECT are defined
   (let ((code nil))
     (maphash (lambda (dispatch-code restore-info)
-               (push (list dispatch-code (restore-info-restore-function-code restore-info)) code))
+               (push (list dispatch-code
+                           #+info-cbs `(incf (aref *dispatch-counter* ,dispatch-code))
+                           (restore-info-restore-function-code restore-info)) code))
              *restore-info*)
     (setf code (sort code #'< :key #'first))
     `(case ,code-to-dispatch-on
