@@ -265,9 +265,10 @@
 (defun maybe-shift-data-to-beginning-of-read-storage (read-storage bytes)
   "If all we have is a sap the store is a length 0 vector so this
  fails gracefully"
+  (declare (optimize speed safety) (type fixnum bytes))
   (let ((vector-length (storage-size read-storage))
 	(valid-data-ends-at (storage-max read-storage)))
-    (when (and (> bytes (- vector-length valid-data-ends-at)) ;; we don't have room
+    (when (and (> bytes (the fixnum (- vector-length valid-data-ends-at))) ;; we don't have room
                (<= bytes vector-length))
       #+debug-cbs(format t "Shifting data to beginning~%")
       (shift-data-to-beginning read-storage)
