@@ -123,7 +123,7 @@
   (defrestore +t-code+ (restore-t))
 
   ;; INTERNED SYMBOLS / KEYWORDS / UNINTERNED SYMBOLS
-  (defstore (and symbol (not null) (not (eql t))) (store-symbol obj storage eq-refs store-object))
+  (defstore (and symbol (not null) (not (eql t))) (store-symbol obj storage symbol-refs store-object))
   (defrestore +symbol-code+ (restore-symbol storage restore-object))
   (defrestore +uninterned-symbol-code+ (restore-uninterned-symbol storage))
   
