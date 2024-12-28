@@ -26,21 +26,6 @@ I have not cut a first release tag even though the system works well currently b
 - Should work out of the box without any effort with an easy programmer / user interface
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 
-## In progress / planned soon
-- [X] Pluggable versioned coding schemes
-  - [X] codespace optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes) (in progress)
-  - [ ] messagepack (for example; for a limited subset of types)
-- [ ] Support for other Common Lisps aside from sbcl
-  - [ ] At least basic slow support
-  - [ ] Optimized support
-- [ ] Further discoveries from real world use cases (that is, my use case)
-  - [ ] Add restarts to handle missing packages / moved symboles during restore (create-package / rehome / discard)
-  - [ ] Build compacted hash tables after the reference counting
-- [ ] Parallel restore?  I've given up on parallel store phase.
-- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
-- [X] Always use references for symbols even when *track-references* nil.
-- [X] small integer immediate storage
-
 ## General features
 
 All number types are supported, with the addition of specialized compact and fast writers for ub8, ub16, ub32, ub64, sb8, sb16, sb32, fixnum, single-float, double-float, (complex double-float), and (complex single-float).
@@ -206,143 +191,17 @@ I suggest just piping the output through gzip.  Otherwise you can use [deoxybyte
 ## Benchmarking
 
 See [benchmarking.md](benchmarking.md).
-> :warning: These are out of date, we write even smaller files now
 
-To make something fast you have to measure it!  In src/benchmarks.lisp you'll see comparisons between CL-STORE, HYPERLUMINAL-MEM, and this package.  For example:
-
-### A long list of very small integers
-    ;; HYPERLUMINAL-MEM
-    ;;  OUTPUT SIZE: 8.00 MB
-    ;;  HLMEM WRITE: 2.32 ms at 3448 MB/sec
-    ;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-    ;; CL-BINARY-STORE
-    ;;  OUTPUT SIZE: 3.00 MB
-    ;;  CL-BINARY-STORE WRITE: 3.60 ms at 833 MB/sec ;; (/ 2e6 3.6e-3) = 550Mobjs/second
-    ;;  CL-BINARY-STORE READ : 8.20 ms at 366 MB/sec
-    ;; CL-STORE
-    ;;  OUTPUT SIZE: 5.00MB
-    ;;  CL-STORE WRITE: 59.20 ms at 84 MB/sec
-    ;;  CL-STORE READ : 50.40 ms at 99 MB/sec
-    (defun long-list-of-small-integers (&optional (n 1000000))
-      (make-list n :initial-element (random 256)))
-
-This is the most synthetic of all the tests.  It runs cl-binary-store without reference tracking which matches the behavior of cl-store and hyperluminal-mem for this single list case.  First thing to note is that the output file is small, because very small integers get written at 2 bytes per, one for a tag and one for the value.  For numbers less than 64-bit represented, we special case 8-bit, 16-bit, 32-bit, fixnum.  Note that MB/sec isn't a great benchmark when output sizes vary a lot.  I note the above Mobjs/second instead, which is pretty incredible when you think about it --- I mean this is a super synthetic benchmark but we are doing type dispatching nice and quick here (OK, conses and fixnums are immediate objects, so type dispatch is crazy fast and they are at the front of the dispatch table --- see type-discrimination.md for some poking at this stuff).
-
-### A long list of fixnums
-
-The next one is cool because you can see the neat way hyperluminal-mem does tagging, a lot like the underlying sbcl implementation.  It's cool and makes things go very very fast in some cases.  Here you can see the wild difference between cl-store and this package.
-
-    ;; HYPERLUMINAL-MEM
-    ;;  OUTPUT SIZE: 8.00 MB ;; bit tagging, not byte tagging
-    ;;  HLMEM WRITE: 2.24 ms at 3571 MB/sec
-    ;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-    ;; CL-BINARY-STORE
-    ;;  OUTPUT SIZE: 10.00 MB
-    ;;  CL-BINARY-STORE WRITE: 3.84 ms at 2604 MB/sec
-    ;;  CL-BINARY-STORE READ : 9.48 ms at 1055 MB/sec
-    ;; CL-STORE
-    ;;  OUTPUT SIZE: 38.00MB
-    ;;  CL-STORE WRITE: 422.39 ms at 90 MB/sec
-    ;;  CL-STORE READ : 293.20 ms at 130 MB/sec
-    (defun long-list-of-random-fixnums (&optional (n 1000000))
-      (make-list n :initial-element (random (- (expt 2 61) (expt 2 60)))))
-
-### Keywords!
-
-While we are talking about synthetic things, how about a bunch of random keywords, cause who doesn't like randomly filling their heap with stuff.  Here we have reference tracking on all three systems (symbols is the only case where hyperluminal-mem does this).
-
-    ;; With reference tracking on everyone
-    ;; HYPERLUMINAL-MEM
-    ;;  OUTPUT SIZE: 3.20 MB
-    ;;  HLMEM WRITE: 18.52 ms at 173 MB/sec
-    ;;  HLMEM READ : 33.32 ms at 96 MB/sec
-    ;; CL-BINARY-STORE
-    ;;  OUTPUT SIZE: 1.15 MB
-    ;;  CL-BINARY-STORE WRITE: 28.56 ms at 40 MB/sec
-    ;;  CL-BINARY-STORE READ : 29.36 ms at 39 MB/sec
-    ;; CL-STORE
-    ;;  OUTPUT SIZE: 1.24MB
-    ;;  CL-STORE WRITE: 52.80 ms at 24 MB/sec
-    ;;  CL-STORE READ : 63.60 ms at 20 MB/sec
-    (defun lots-of-keywords ()
-      (loop for i fixnum from 0 below 100000
-    	collect (intern (format nil "~A" (random 250000)) 'keyword)))
-
-Here we are eq hash table dominated... not much to do about it right now.
-
-### structure-objects
-
-I didn't check hyperluminal-mem on this because you have to write a couple lines of code to make it work for user structs.
-
-    ;; hyperluminal mem needs an extension for this so skipping it for now
-    ;; CL-BINARY-STORE
-    ;;  OUTPUT SIZE: 1.79 MB
-    ;;  CL-BINARY-STORE WRITE: 49.00 ms at 37 MB/sec
-    ;;  CL-BINARY-STORE READ : 9.24 ms at 194 MB/sec
-    ;; CL-STORE
-    ;;  OUTPUT SIZE: 6.69MB
-    ;;  CL-STORE WRITE: 171.20 ms at 39 MB/sec
-    ;;  CL-STORE READ : 182.40 ms at 37 MB/sec
-    (defun lots-of-structure-objects ()
-      (loop for i below 100000
-            collect (make-blarg :a (random 1d0) :b (format nil "~A" (random 100)))))
-
-### UTF-8 encoded strings
-
-So hyperluminal-mem and cl-store output the raw 32-bit code points, whereas this package utf-8 encodes/decodes them.  I just happen to have a lot of (simple-array character (*)) in the data set that I use that are really just simple-base-strings... so a feature for me. It does increase the cons'ing during store restore as I have to copy the strings during encode / decode currently.
-
-    ;; HYPERLUMINAL-MEM
-    ;;  OUTPUT SIZE: 2.40 MB
-    ;;  HLMEM WRITE: 4.52 ms at 531 MB/sec
-    ;;  HLMEM READ : 3.12 ms at 769 MB/sec
-    ;; CL-BINARY-STORE
-    ;;  OUTPUT SIZE: 1.19 MB
-    ;;  CL-BINARY-STORE WRITE: 4.04 ms at 294 MB/sec
-    ;;  CL-BINARY-STORE READ : 8.68 ms at 137 MB/sec
-    ;; CL-STORE
-    ;;  OUTPUT SIZE: 2.08MB
-    ;;  CL-STORE WRITE: 23.20 ms at 90 MB/sec
-    ;;  CL-STORE READ : 11.60 ms at 179 MB/sec
-    (defun simple-strings ()
-      (loop for i below 100000
-            collect (format nil "~A~A" (random 1000000) #\U+03b1)))
-
-### Maybe more real world like?
-
-Heh, not a chance.  This is still synthetic but I wanted to stress the dispatch mechanism a little bit. It is funny here if you put in random single floats cl-store doesn't finish for ages... it's something bad in sbcl eql hash tables but I haven't tracked it down yet.  Anyhow the first set of numbers are without reference tracking, so eql'ity is violated (that is they are all storing multiple copies of the strings --- do not worry, this is not the default settings of my package!).  Anyhow, still moving at a rapid clip, beating hyperluminal-mem which is nice.  Of course the real world use is the second set of numbers below "and using referencing" comment, where you see the explicit referencing scheme speeding up restore quite a lot.
-
-    ;; HYPERLUMINAL-MEM
-    ;;  OUTPUT SIZE: 20.48 MB
-    ;;  HLMEM WRITE: 34.12 ms at 600 MB/sec
-    ;;  HLMEM READ : 30.96 ms at 662 MB/sec
-    ;; CL-BINARY-STORE
-    ;;  OUTPUT SIZE: 8.06 MB
-    ;;  CL-BINARY-STORE WRITE: 25.20 ms at 320 MB/sec
-    ;;  CL-BINARY-STORE READ : 43.76 ms at 184 MB/sec
-    ;; CL-STORE
-    ;;  OUTPUT SIZE: 27.78MB
-    ;;  CL-STORE WRITE: 448.79 ms at 62 MB/sec
-    ;;  CL-STORE READ : 408.40 ms at 68 MB/sec
-    ;; and using referencing to deduplicate the double-floats and strings
-    ;; CL-BINARY-STORE
-    ;;  OUTPUT SIZE: 3.38 MB
-    ;;  CL-BINARY-STORE WRITE: 65.52 ms at 52 MB/sec
-    ;;  CL-BINARY-STORE READ : 12.32 ms at 274 MB/sec
-    ;; CL-STORE
-    ;;  OUTPUT SIZE: 4.88MB
-    ;;  CL-STORE WRITE: 129.60 ms at 38 MB/sec
-    ;;  CL-STORE READ : 110.40 ms at 44 MB/sec
-    (defun long-complex-list ()
-      (loop repeat 1000000 collect (if (> (random 1000) 500)
-    				   3.1415d0
-    				   ;; (complex 1d0) ;; cl-store chokes
-    				   ;; (random 1d0) ;; cl-store chokes
-    				   (if (> (random 100) 50)
-    				       ;;(random 1f0) ;; <- makes cl-store take forever!
-    				       "hi" ;;(format nil "~A" (random 123))
-    				       (if (> (random 100) 50)
-    					   (cons (random 30) 2)
-    					   (if (= (random 2) 1)
-    					       "hello"
-    					       ;; (random 1f0) slows cl-store crazily
-    					       #()))))))
+## TODO
+- [X] Pluggable versioned coding schemes
+  - [X] codespace optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes) (in progress)
+  - [ ] messagepack (for example; for a limited subset of types)
+- [ ] Support for other Common Lisps aside from sbcl
+  - [ ] At least basic slow support
+  - [ ] Optimized support
+- [ ] Further discoveries from real world use cases (that is, my use case)
+  - [ ] Add restarts to handle missing packages / moved symboles during restore (create-package / rehome / discard)
+  - [ ] Build compacted hash tables after the reference counting
+- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
+- [X] Always use references for symbols even when *track-references* nil.
+- [X] small integer immediate storage
