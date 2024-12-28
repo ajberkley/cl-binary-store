@@ -214,13 +214,13 @@
 ;;  CL-STORE READ : 408.40 ms at 68 MB/sec
 ;; and using referencing to deduplicate the double-floats and strings
 ;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 3.38 MB
-;;  CL-BINARY-STORE WRITE: 65.52 ms at 52 MB/sec
-;;  CL-BINARY-STORE READ : 12.32 ms at 274 MB/sec
+;;  OUTPUT SIZE: 2.50 MB
+;;  CL-BINARY-STORE WRITE: 66.20 ms at 38 MB/sec
+;;  CL-BINARY-STORE READ : 15.64 ms at 160 MB/sec
 ;; CL-STORE
-;;  OUTPUT SIZE: 4.88MB
-;;  CL-STORE WRITE: 129.60 ms at 38 MB/sec
-;;  CL-STORE READ : 110.40 ms at 44 MB/sec
+;;  OUTPUT SIZE: 4.87MB
+;;  CL-STORE WRITE: 148.39 ms at 33 MB/sec
+;;  CL-STORE READ : 107.19 ms at 45 MB/sec
 (defun long-complex-list ()
   (loop repeat 1000000 collect (if (> (random 1000) 500)
 				   3.1415d0
@@ -239,29 +239,37 @@
 ;; With reference tracking on everyone
 ;; HYPERLUMINAL-MEM
 ;;  OUTPUT SIZE: 3.20 MB
-;;  HLMEM WRITE: 18.52 ms at 173 MB/sec
-;;  HLMEM READ : 33.32 ms at 96 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 1.15 MB
-;;  CL-BINARY-STORE WRITE: 28.56 ms at 40 MB/sec
-;;  CL-BINARY-STORE READ : 29.36 ms at 39 MB/sec
+;;  HLMEM WRITE: 8.84 ms at 362 MB/sec
+;;  HLMEM READ : 17.76 ms at 180 MB/sec
+;; CL-BINARY-STORE ;; full reference counting
+;;  OUTPUT SIZE: 1.04 MB
+;;  CL-BINARY-STORE WRITE: 18.24 ms at 57 MB/sec
+;;  CL-BINARY-STORE READ : 15.80 ms at 66 MB/sec
+;; CL-BINARY-STORE ;; ref counts on symbols only (like hl-mem)
+;;  OUTPUT SIZE: 2.06 MB
+;;  CL-BINARY-STORE WRITE: 9.60 ms at 214 MB/sec
+;;  CL-BINARY-STORE READ : 28.04 ms at 73 MB/sec
 ;; CL-STORE
-;;  OUTPUT SIZE: 1.24MB
-;;  CL-STORE WRITE: 52.80 ms at 24 MB/sec
-;;  CL-STORE READ : 63.60 ms at 20 MB/sec
+;;  OUTPUT SIZE: 2.06MB
+;;  CL-STORE WRITE: 39.60 ms at 52 MB/sec
+;;  CL-STORE READ : 47.20 ms at 44 MB/sec
 (defun lots-of-keywords ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'keyword)))
 
-;; With referencing counting on everyone
-;; HYPERLUMINAL-MEM
+;; With referencing counting
+;; HYPERLUMINAL-MEM ; reference counting on symbols only
 ;;  OUTPUT SIZE: 3.20 MB
 ;;  HLMEM WRITE: 8.56 ms at 374 MB/sec
 ;;  HLMEM READ : 18.92 ms at 169 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 1.15 MB
-;;  CL-BINARY-STORE WRITE: 31.88 ms at 36 MB/sec
-;;  CL-BINARY-STORE READ : 32.12 ms at 36 MB/sec
+;; CL-BINARY-STORE ; referencing counting on symbols only (like hl-mem)
+;;  OUTPUT SIZE: 2.96 MB
+;;  CL-BINARY-STORE WRITE: 6.52 ms at 453 MB/sec
+;;  CL-BINARY-STORE READ : 23.48 ms at 126 MB/sec
+;; CL-BINARY-STORE ; reference counting on everything (like cl-store)
+;;  OUTPUT SIZE: 1.04 MB
+;;  CL-BINARY-STORE WRITE: 19.60 ms at 53 MB/sec
+;;  CL-BINARY-STORE READ : 20.24 ms at 51 MB/sec
 ;; CL-STORE
 ;;  OUTPUT SIZE: 1.24MB
 ;;  CL-STORE WRITE: 56.00 ms at 22 MB/sec

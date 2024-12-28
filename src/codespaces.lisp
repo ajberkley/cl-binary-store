@@ -224,10 +224,16 @@
 
 (defstruct ref-table
   (name nil)
-  (construction-code nil))
+  (construction-code nil)
+  (priority-for-ref-ids 0)
+  (never-disable nil))
 
-(defun register-references& (current-codespace/compile-time table-name construction-code)
-  (let* ((new-ref-table (make-ref-table :name table-name :construction-code construction-code))
+(defun register-references& (current-codespace/compile-time table-name construction-code
+			     priority never-disable)
+  "Priority, lower is better.  You want symbols first, for example usually"
+  (let* ((new-ref-table (make-ref-table :name table-name :construction-code construction-code
+					:priority-for-ref-ids priority
+					:never-disable never-disable))
 	 (ref-tables (codespace-ref-tables current-codespace/compile-time))
          (pre-existing (gethash table-name ref-tables)))
     (when (and pre-existing (not (equalp pre-existing new-ref-table)))
@@ -236,8 +242,10 @@
     (setf (gethash table-name ref-tables) new-ref-table))
   (values))
 
-(defmacro register-references (table-name construction-code)
-  `(register-references& *current-codespace/compile-time* ',table-name ',construction-code))
+(defmacro register-references (table-name construction-code
+			       &key (priority 0) (never-disable nil))
+  `(register-references& *current-codespace/compile-time* ',table-name ',construction-code
+			 ,priority ,never-disable))
   
 (defun with-reference-tables (track-references &rest body)
   "Wrap body with defined reference tables"
@@ -245,7 +253,8 @@
   (assert (codespace-ref-tables *current-codespace/compile-time*))
   (let ((let-bindings nil))
     (maphash (lambda (table-name ref-table)
-               (push (list table-name `(when ,track-references
+               (push (list table-name `(when (or ,track-references
+						 ,(ref-table-never-disable ref-table))
                                          ,(ref-table-construction-code ref-table)))
                      let-bindings))
              (codespace-ref-tables *current-codespace/compile-time*))
@@ -257,8 +266,11 @@
   (let ((code nil))
     (maphash (lambda (table-name ref-table)
                (declare (ignorable ref-table))
-               (push `(funcall ,func ',table-name ,table-name) code))
+               (push (cons (ref-table-priority-for-ref-ids ref-table)
+			   `(funcall ,func ',table-name ,table-name))
+		     code))
              (codespace-ref-tables *current-codespace/compile-time*))
+    (setf code (mapcar #'cdr (sort code #'< :key #'car)))
     `(progn ,@code)))
 
 (defun update-store-info

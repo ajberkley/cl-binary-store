@@ -71,10 +71,13 @@
     (+ 16403 (- tag-byte #x80) (ash next-16-bits 6))))
 
 (define-codespace ("basic codespace" +basic-codespace+)
-  (register-references num-eq-refs (make-hash-table :test #'eq))
-  (register-references double-float-refs (make-hash-table :test #'double-float-=))
-  (register-references eq-refs (make-hash-table :test #'eq))
-  ;;(register-references symbol-refs (make-hash-table :test #'eq) :never-disable t)
+  (register-references num-eq-refs (make-hash-table :test #'eq)
+		       :priority 3)
+  (register-references double-float-refs (make-hash-table :test #'double-float-=)
+		       :priority 2)
+  (register-references eq-refs (make-hash-table :test #'eq) :priority 1)
+  (register-references symbol-refs (make-hash-table :test #'eq) :never-disable t
+		       :priority 0)
 
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
   (defrestore +ub8-code+ (restore-ub8 storage))
