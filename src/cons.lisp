@@ -49,9 +49,9 @@
 	   (funcall store-object cdr))))
   (values))
 
-(declaim (notinline restore-cons))
+(declaim (inline restore-cons))
 (defun restore-cons (storage restore-object)
-  (declare (optimize (speed 3) (safety 0) (debug 3)))
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (let ((first-cons (cons nil nil)))
     (loop
       with cons = first-cons

@@ -14,7 +14,7 @@
                 (ms-per (/ (- ,end ,start)
                            (* 0.001f0 internal-time-units-per-second)
                            ,repeats)))
-           (format t "~A ~,6f ms ~A~%" ,annotation ms-per
+           (format t "~A ~,2f ms ~A~%" ,annotation ms-per
                    ,(if output-size-MB
                         `(format nil "at ~d MB/sec" (round (/ ,output-size-MB ms-per 1f-3)))
                         "")))))))
@@ -42,10 +42,11 @@
          (output-size-MB (/ size 1e6))
          (store (make-array size :element-type '(unsigned-byte 8))))
     (format t "CL-BINARY-STORE~%")
-    (format t " OUTPUT SIZE: ~,6f MB~%" output-size-MB)
-    (when write
-      (timed (" CL-BINARY-STORE WRITE:" repeats output-size-MB)
-        (dotimes (x repeats) (cl-binary-store:store store data))))
+    (format t " OUTPUT SIZE: ~,2f MB~%" output-size-MB)
+    (if write
+	(timed (" CL-BINARY-STORE WRITE:" repeats output-size-MB)
+	  (dotimes (x repeats) (cl-binary-store:store store data)))
+	(cl-binary-store:store store data))
     (when read
       (timed (" CL-BINARY-STORE READ :" repeats output-size-MB)
         (dotimes (x repeats) (cl-binary-store:restore store))))

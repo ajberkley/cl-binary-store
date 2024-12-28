@@ -63,10 +63,13 @@
 	  (references (make-references :vector references-vector))
 	  (*version-being-read* nil))
      (declare (dynamic-extent references references-vector))
-     (labels ((read-dispatch (code storage restore-object)
-		,(make-read-dispatch-table 'code))
-	      (restore-object (&optional (tag (restore-ub8 storage)))
-                (read-dispatch tag storage #'restore-object)))
+     (labels ((restore-object2 (&optional (code (restore-ub8 storage)))
+		(let ((restore-object #'restore-object))
+                  ,(make-read-dispatch-table 'code)))
+	      (restore-object (&optional (code (restore-ub8 storage)))
+		(let ((restore-object #'restore-object2))
+                  ,(make-read-dispatch-table 'code))))
+       (declare (inline restore-object2)) ;; inline one level
        (let ((objects
                (loop
 		 with object and ignore/eof
@@ -368,6 +371,7 @@
 
 (defun make-read-dispatch-table (code-to-dispatch-on)
   ;; Assumes this is in a context where STORAGE, REFERENCES, and RESTORE-OBJECT are defined
+  (assert (eq code-to-dispatch-on 'code))
   (let ((code nil))
     (maphash (lambda (dispatch-code restore-info)
                (push (list dispatch-code
@@ -375,13 +379,13 @@
                            (restore-info-restore-function-source-code restore-info)) code))
              (codespace-restore-infos *current-codespace/compile-time*))
     (let ((numeric-dispatch-codes (sort (remove-if-not #'numberp code :key #'first) #'< :key #'first)))
-      `(case ,code-to-dispatch-on
-	 ,@numeric-dispatch-codes
-	 (otherwise
-	  (cond
-	    ,@(loop for source-code in (remove-if #'numberp code :key #'first)
-		    collect (list (first source-code) (second source-code)))
-	    (t (error 'simple-error :format-control "Unknown code ~A found in stream"
+      `(cond
+	 ,@(loop for source-code in (remove-if #'numberp code :key #'first)
+		 collect (list (first source-code) (second source-code)))
+	 (t (case ,code-to-dispatch-on
+	      ,@numeric-dispatch-codes
+	      (otherwise
+	       (error 'simple-error :format-control "Unknown code ~A found in stream"
 				    :format-arguments (list ,code-to-dispatch-on)))))))))
 
 (defun store-objects (storage &rest stuff)
