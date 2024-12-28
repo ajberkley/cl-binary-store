@@ -114,6 +114,10 @@ If T we will write out a magic number and the \*write-version\* to the output, w
 
 If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.  It also means you can write multiple chunks of objects to a stream and have restore-objects return between each chunk.
 
+#### \*eq-refs-table-size\*, \*double-float-refs-table-size\*, \*num-eq-refs-table-size\* default 7
+
+If you have a large set of objects you want these tables to be approximately the size of the number of elements that you will have in them to avoid the overhead of a lot of rehashing as the tables grow.  You can ignore this until it shows up in profiling, then you can change it.
+
 ## Extensions
 
 ### Changing object slot serialization
@@ -175,10 +179,9 @@ With explicit referencing we can do some parallelization during restore (things 
 
 ### Performance during serialization
 
-Performance during serialization is dominated by the reference hash table building and use.  This is quite hard to improve as the hash table is an eq table.  To enable parallelization on the serialization side would require hacking the internals of the system.
+Performance during serialization is dominated by the reference hash table building and use.  This is quite hard to improve as the hash table is an eq table, so I can't just plug something else in.  You can hint the size of your data to save a lot of hash table growing and resizing if you have a large data set.
 
-If your data does not contain multiple references or repeated objects (in particular, repeated symbols will be stored repeatedly!), then you can let \*track-references\* to NIL and you can hit hundreds of MB/sec depending on your data (unicode strings are currently a bit slow as we
-are not using a fast utf-8 encoder) and 500M cons+integer objects per second.  It's about 10-30x faster than cl-store in this mode.  This package is between 3x faster and 3x slower than hyperluminal-mem depending on data patterns both on store and restore.  If you are storing simple arrays / matrices, you want to use cl-binary-store.
+If your data does not contain multiple references or repeated objects (in particular, repeated symbols will have their names and packages stored repeatedly!), then you can let \*track-references\* to NIL and you can hit hundreds of MB/sec depending on your data (unicode strings are currently a bit slow as we are not using a fast utf-8 encoder) and 500M cons+integer objects per second.  It's about 10-30x faster than cl-store in this mode.  This package is between 3x faster and 3x slower than hyperluminal-mem depending on data patterns both on store and restore.  If you are storing simple arrays / matrices, you want to use cl-binary-store.
 
 ### Easily versionable and extensible
 
@@ -186,7 +189,7 @@ See the example in extensions earlier.
 
 ## Compressed output
 
-I suggest just piping the output through gzip.  Otherwise you can use [deoxybyte-gzip](https://github.com/keithj/deoxybyte-gzip) but warning it has a small bug in read-sequence, so use the version [here](https://github.com/ajberkley/deoxybyte-gzip).
+I suggest just piping the output through gzip if you need the smallest possible files, though the output is reasonably compact as it.  Otherwise you can use [deoxybyte-gzip](https://github.com/keithj/deoxybyte-gzip) but make sure to use the most up to date version.
 
 ## Benchmarking
 
