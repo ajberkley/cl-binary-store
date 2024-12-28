@@ -49,7 +49,7 @@
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
    (package-string :initarg :package-string :reader missing-package-package-string)))
 
-(defmethod print-object ((obj missing-package) stream)
+(defmethod print-object ((obj missing-package-during-restore) stream)
   (format stream "~S says it is from package ~S, but no such package!"
 	  (missing-package-symbol-string obj)
 	  (missing-package-package-string obj)))
