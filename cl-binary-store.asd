@@ -21,19 +21,19 @@
 									  "basic-codespace"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 							      "features"))
-               (:file "actions" :depends-on ("unsigned-bytes" "storage" "features"))
+               (:file "actions" :depends-on ("unsigned-bytes" "storage" "features" "numbers"))
 	       (:file "reference-count" :depends-on ("actions" "numbers" "features"))
                (:file "magic-numbers" :depends-on ("actions" "numbers"))
-	       (:file "end-action" :depends-on ("actions"))
+	       (:file "end-action" :depends-on ("actions" "numbers"))
 	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"
 								"features"))
 	       (:file "sbcl-utilities" :if-feature :sbcl :depends-on ("features"))
 	       (:file "simple-array-sbcl" :if-feature :sbcl
 		:depends-on ("referrers-and-fixup" "numbers" "features"))
 	       (:file "simple-vector" :depends-on ("unsigned-bytes" "referrers-and-fixup"
-								    "features"))
+								    "features" "numbers"))
 	       (:file "symbols" :depends-on ("unsigned-bytes" "referrers-and-fixup"
-							      "features"))
+							      "features" "numbers"))
 	       (:file "array" :depends-on ("unsigned-bytes" "cons" "symbols" "numbers"
 							    "referrers-and-fixup" "features"))
 	       (:file "pathname" :depends-on ("referrers-and-fixup" "symbols" "numbers"

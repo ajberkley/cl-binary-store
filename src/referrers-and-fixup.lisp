@@ -241,7 +241,7 @@
 (defconstant +reference-two-byte-max-ref-id+
   (- (expt 2 22) 1))
 
-(declaim (notinline encode-reference-direct))
+(declaim (inline encode-reference-direct))
 (defun encode-reference-direct (ref-index)
   "reference indicies start a 1, so we subtract one here."
   (assert (<= 1 ref-index +reference-direct-max-ref-id+))
@@ -252,7 +252,7 @@
     encoded))
 
 ;; Little endian, least significant byte first
-(declaim (notinline encode-reference-one-byte))
+(declaim (inline encode-reference-one-byte))
 (defun encode-reference-one-byte (ref-index)
   "Returns a 16 bit value"
   (assert (< +reference-direct-max-ref-id+ ref-index (+ 1 +reference-one-byte-max-ref-id+)))
@@ -261,7 +261,7 @@
 	 (tag-byte (+ #x40 (logand shifted-ref-index #x3F))))
     (+ tag-byte (ash (logand shifted-ref-index #xFFC0) 2))))
 
-(declaim (notinline encode-reference-two-bytes))
+(declaim (inline encode-reference-two-bytes))
 (defun encode-reference-two-bytes (ref-index)
   (assert (< +reference-one-byte-max-ref-id+ ref-index (+ 1 +reference-two-byte-max-ref-id+)))
   (let ((shifted-ref-index

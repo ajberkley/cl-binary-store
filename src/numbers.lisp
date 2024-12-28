@@ -241,23 +241,27 @@
  You can call `restore-tagged-unsigned-fixnum' to restore it (or restore-object)"
   (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
   (when storage
-    (if (< fixnum 256)
-        (store-ub8 fixnum storage)
-        (if (< fixnum 65536)
-	    (store-ub16 fixnum storage)
-	    (if (< fixnum #.(expt 2 32))
-	        (store-ub32 fixnum storage)
-	        (store-only-fixnum fixnum storage))))))
+    (if (<= fixnum +maximum-untagged-unsigned-integer+)
+	(store-ub8 (+ fixnum +first-small-unsigned-integer-code+) storage nil)
+	(if (< fixnum 256)
+            (store-ub8 fixnum storage)
+            (if (< fixnum 65536)
+		(store-ub16 fixnum storage)
+		(if (< fixnum #.(expt 2 32))
+	            (store-ub32 fixnum storage)
+	            (store-only-fixnum fixnum storage)))))))
 
 (declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
 (defun restore-tagged-unsigned-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
   (let ((tag (restore-ub8 storage)))
-    (ecase tag
-      (#.+ub8-code+ (restore-ub8 storage))
-      (#.+ub16-code+ (restore-ub16 storage))
-      (#.+ub32-code+ (restore-ub32 storage))
-      (#.+fixnum-code+ (restore-fixnum storage)))))
+    (if (<= +first-small-unsigned-integer-code+ tag +last-small-unsigned-integer-code+)
+	(- tag +first-small-unsigned-integer-code+)
+	(ecase tag
+	  (#.+ub8-code+ (restore-ub8 storage))
+	  (#.+ub16-code+ (restore-ub16 storage))
+	  (#.+ub32-code+ (restore-ub32 storage))
+	  (#.+fixnum-code+ (restore-fixnum storage))))))
 
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage)

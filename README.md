@@ -28,20 +28,18 @@ I have not cut a first release tag even though the system works well currently b
 
 ## In progress / planned soon
 - [X] Pluggable versioned coding schemes
-  - [ ] codespace optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes) (in progress)
-  - [ ] codespace optimized for non-referential data (tag bits used for immediate small numbers, small vectors / lists, for example)
-  - [ ] messagepack (for example)
+  - [X] codespace optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes) (in progress)
+  - [ ] messagepack (for example; for a limited subset of types)
 - [ ] Support for other Common Lisps aside from sbcl
   - [ ] At least basic slow support
   - [ ] Optimized support
 - [ ] Further discoveries from real world use cases (that is, my use case)
   - [ ] Add restarts to handle missing packages / moved symboles during restore (create-package / rehome / discard)
-  - [ ] Reference-id allocation by use amount
   - [ ] Build compacted hash tables after the reference counting
 - [ ] Parallel restore?  I've given up on parallel store phase.
-- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)
+- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
 - [X] Always use references for symbols even when *track-references* nil.
-- [ ] small integer immediate storage (in progress)
+- [X] small integer immediate storage
 
 ## General features
 
@@ -207,6 +205,7 @@ I suggest just piping the output through gzip.  Otherwise you can use [deoxybyte
 
 ## Benchmarking
 
+See [benchmarking.md](benchmarking.md).
 > :warning: These are out of date, we write even smaller files now
 
 To make something fast you have to measure it!  In src/benchmarks.lisp you'll see comparisons between CL-STORE, HYPERLUMINAL-MEM, and this package.  For example:

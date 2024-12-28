@@ -62,6 +62,8 @@
 (defconstant +first-small-unsigned-integer-code+ 35)
 ;; [35 43] used for small unsigned integers [0 8]
 (defconstant +last-small-unsigned-integer-code+ 43)
+(defconstant +maximum-untagged-unsigned-integer+ (- +last-small-unsigned-integer-code+
+						    +first-small-unsigned-integer-code+))
 (defconstant +first-direct-reference-id-code+ (+ +last-small-unsigned-integer-code+ 1))
 ;; [44 63] used for direct reference codes
 (defconstant +last-direct-reference-id-code+ 63)

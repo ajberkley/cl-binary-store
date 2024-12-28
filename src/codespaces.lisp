@@ -106,15 +106,17 @@
 	;; written, in order as we are keeping the implicit numbering scheme, on
 	;; reading
 	`(let ((max-ref-id 0))
-           (map-reference-tables
-	    (lambda (table-name table)
-	      (declare (ignore table-name))
-	      (maphash (lambda (k v)
-        	         (if (> (the fixnum v) 1)
-        		     (progn (setf (gethash k table) t) ; signal it needs assigning
-				    (the fixnum (incf max-ref-id)))
-			     (remhash k table)))
-		       table)))
+	   (declare (type fixnum max-ref-id))
+           (when track-references
+	     (map-reference-tables
+	      (lambda (table-name table)
+		(declare (ignore table-name))
+		(maphash (lambda (k v)
+        	           (if (> (the fixnum v) 1)
+        		       (progn (setf (gethash k table) t) ; signal it needs assigning
+				      (the fixnum (incf max-ref-id)))
+			       (remhash k table)))
+			 table))))
            #+debug-cbs
            (map-reference-tables (lambda (table-name table)
                                    (format t "~A: there are ~A actual references~%"

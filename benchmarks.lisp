@@ -78,80 +78,25 @@
   (when cl-store
     (test-cl-store-on-data data :check-for-circs (not hlmem))))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 8.00 MB
-;;  HLMEM WRITE: 2.32 ms at 3448 MB/sec
-;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 3.00 MB
-;;  CL-BINARY-STORE WRITE: 3.60 ms at 833 MB/sec ;; (/ 2e6 3.6e-3) = 550Mobjs/second
-;;  CL-BINARY-STORE READ : 8.20 ms at 366 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 5.00MB
-;;  CL-STORE WRITE: 59.20 ms at 84 MB/sec
-;;  CL-STORE READ : 50.40 ms at 99 MB/sec
-;; If we reverse the *preferred-dispatch-order* this takes twice as long.
-(defun long-list-of-small-integers (&optional (n 1000000))
+;; Data to test on
+(defun long-list-of-tiny-integers (&optional (n 1000000))
+  (loop repeat n collect (random 8)))
+
+(defun long-list-of-not-tiny-integers (&optional (n 1000000))
   (make-list n :initial-element (random 256)))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 8.00 MB ;; bit tagging, not byte tagging
-;;  HLMEM WRITE: 2.24 ms at 3571 MB/sec
-;;  HLMEM READ : 5.04 ms at 1587 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 10.00 MB
-;;  CL-BINARY-STORE WRITE: 3.84 ms at 2604 MB/sec
-;;  CL-BINARY-STORE READ : 9.48 ms at 1055 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 38.00MB
-;;  CL-STORE WRITE: 422.39 ms at 90 MB/sec
-;;  CL-STORE READ : 293.20 ms at 130 MB/sec
 (defun long-list-of-random-fixnums (&optional (n 1000000))
-  (make-list n :initial-element (random (- (expt 2 61) (expt 2 60)))))
+  (loop repeat n collect (random (- (expt 2 61) (expt 2 60)))))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 16.00 MB
-;;  HLMEM WRITE: 23.28 ms at 687 MB/sec
-;;  HLMEM READ : 15.68 ms at 1020 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 10.00 MB
-;;  CL-BINARY-STORE WRITE: 13.44 ms at 744 MB/sec
-;;  CL-BINARY-STORE READ : 13.84 ms at 723 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 48.00MB
-;;  CL-STORE WRITE: 577.99 ms at 83 MB/sec
-;;  CL-STORE READ : 701.99 ms at 68 MB/sec
 (defun long-list-of-random-double-floats (&optional (n 1000000))
-  (make-list n :initial-element (random 1d0)))
+  (loop repeat n collect (random 1d0)))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 8.00 MB
-;;  HLMEM WRITE: 2.96 ms at 2703 MB/sec
-;;  HLMEM READ : 5.96 ms at 1342 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 6.00 MB
-;;  CL-BINARY-STORE WRITE: 6.84 ms at 877 MB/sec
-;;  CL-BINARY-STORE READ : 9.08 ms at 661 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 22.00MB
-;;  CL-STORE WRITE: 307.20 ms at 72 MB/sec
-;;  CL-STORE READ : 414.40 ms at 53 MB/sec
 (defun long-list-of-random-single-floats (&optional (n 1000000))
-  (make-list n :initial-element (random 1f0)))
+  (loop repeat n collect (random 1f0)))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 80.02 MB
-;;  HLMEM WRITE: 31.60 ms at 2532 MB/sec
-;;  HLMEM READ : 40.08 ms at 1997 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 10.01 MB
-;;  CL-BINARY-STORE WRITE: 1.20 ms at 8339 MB/sec
-;;  CL-BINARY-STORE READ : 2.60 ms at 3849 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 10.01MB
-;;  CL-STORE WRITE: 80.79 ms at 124 MB/sec
-;;  CL-STORE READ : 32.40 ms at 309 MB/sec
-;; No surpise here since I just blit them out
+(defun long-list-of-random-complex-double-floats (&optional (n 1000000))
+  (loop repeat n collect (complex (random 1d0) (random 1d0))))
+
 (defun long-list-of-big-ub8-vectors ()
   (loop repeat 1000
 	collect
@@ -160,18 +105,6 @@
 	       collect 123)
          '(simple-array (unsigned-byte 8) (*)))))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 1.27 MB
-;;  HLMEM WRITE: 7.88 ms at 161 MB/sec
-;;  HLMEM READ : 14.24 ms at 89 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 1.26 MB
-;;  CL-BINARY-STORE WRITE: 0.12 ms at 10467 MB/sec
-;;  CL-BINARY-STORE READ : 0.12 ms at 10467 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 40.05MB
-;;  CL-STORE WRITE: 551.19 ms at 73 MB/sec
-;;  CL-STORE READ : 490.39 ms at 82 MB/sec
 (defun long-list-of-big-simple-bit-vectors ()
   (loop repeat 1000
 	collect
@@ -180,18 +113,6 @@
 	       collect (random 1))
          '(simple-array bit (*)))))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 16.02 MB
-;;  HLMEM WRITE: 34.68 ms at 462 MB/sec
-;;  HLMEM READ : 13.60 ms at 1178 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 8.01 MB
-;;  CL-BINARY-STORE WRITE: 0.84 ms at 9531 MB/sec
-;;  CL-BINARY-STORE READ : 1.60 ms at 5004 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 47.06MB
-;;  CL-STORE WRITE: 577.99 ms at 81 MB/sec
-;;  CL-STORE READ : 831.99 ms at 57 MB/sec
 (defun long-list-of-big-simple-double-float-vectors ()
   (loop repeat 1000
 	collect
@@ -200,27 +121,15 @@
 	       collect (random 1d0))
          '(simple-array double-float (*)))))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 20.48 MB
-;;  HLMEM WRITE: 34.12 ms at 600 MB/sec
-;;  HLMEM READ : 30.96 ms at 662 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 8.06 MB
-;;  CL-BINARY-STORE WRITE: 25.20 ms at 320 MB/sec
-;;  CL-BINARY-STORE READ : 43.76 ms at 184 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 27.78MB
-;;  CL-STORE WRITE: 448.79 ms at 62 MB/sec
-;;  CL-STORE READ : 408.40 ms at 68 MB/sec
-;; and using referencing to deduplicate the double-floats and strings
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 2.50 MB
-;;  CL-BINARY-STORE WRITE: 66.20 ms at 38 MB/sec
-;;  CL-BINARY-STORE READ : 15.64 ms at 160 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 4.87MB
-;;  CL-STORE WRITE: 148.39 ms at 33 MB/sec
-;;  CL-STORE READ : 107.19 ms at 45 MB/sec
+(defun list-of-double-float-matrices ()
+  (loop repeat 100
+	collect
+	(let ((m (make-array '(100 100) :element-type 'double-float)))
+	  (dotimes (i 100)
+	    (dotimes (j 100)
+	      (setf (aref m i j) (random 1d0))))
+	  m)))
+
 (defun long-complex-list ()
   (loop repeat 1000000 collect (if (> (random 1000) 500)
 				   3.1415d0
@@ -236,44 +145,10 @@
 					       ;; (random 1f0) slows cl-store crazily
 					       #()))))))
 
-;; With reference tracking on everyone
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 3.20 MB
-;;  HLMEM WRITE: 8.84 ms at 362 MB/sec
-;;  HLMEM READ : 17.76 ms at 180 MB/sec
-;; CL-BINARY-STORE ;; full reference counting
-;;  OUTPUT SIZE: 1.04 MB
-;;  CL-BINARY-STORE WRITE: 18.24 ms at 57 MB/sec
-;;  CL-BINARY-STORE READ : 15.80 ms at 66 MB/sec
-;; CL-BINARY-STORE ;; ref counts on symbols only (like hl-mem)
-;;  OUTPUT SIZE: 2.06 MB
-;;  CL-BINARY-STORE WRITE: 9.60 ms at 214 MB/sec
-;;  CL-BINARY-STORE READ : 28.04 ms at 73 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 2.06MB
-;;  CL-STORE WRITE: 39.60 ms at 52 MB/sec
-;;  CL-STORE READ : 47.20 ms at 44 MB/sec
 (defun lots-of-keywords ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'keyword)))
 
-;; With referencing counting
-;; HYPERLUMINAL-MEM ; reference counting on symbols only
-;;  OUTPUT SIZE: 3.20 MB
-;;  HLMEM WRITE: 8.56 ms at 374 MB/sec
-;;  HLMEM READ : 18.92 ms at 169 MB/sec
-;; CL-BINARY-STORE ; referencing counting on symbols only (like hl-mem)
-;;  OUTPUT SIZE: 2.96 MB
-;;  CL-BINARY-STORE WRITE: 6.52 ms at 453 MB/sec
-;;  CL-BINARY-STORE READ : 23.48 ms at 126 MB/sec
-;; CL-BINARY-STORE ; reference counting on everything (like cl-store)
-;;  OUTPUT SIZE: 1.04 MB
-;;  CL-BINARY-STORE WRITE: 19.60 ms at 53 MB/sec
-;;  CL-BINARY-STORE READ : 20.24 ms at 51 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 1.24MB
-;;  CL-STORE WRITE: 56.00 ms at 22 MB/sec
-;;  CL-STORE READ : 70.00 ms at 18 MB/sec
 (defun lots-of-symbols ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'cl-user)))
@@ -282,47 +157,33 @@
   a
   b)
 
-;; hyperluminal mem needs an extension for this so skipping it for now
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 1.79 MB
-;;  CL-BINARY-STORE WRITE: 49.00 ms at 37 MB/sec
-;;  CL-BINARY-STORE READ : 9.24 ms at 194 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 6.69MB
-;;  CL-STORE WRITE: 171.20 ms at 39 MB/sec
-;;  CL-STORE READ : 182.40 ms at 37 MB/sec
 (defun lots-of-structure-objects ()
   (loop for i below 100000
         collect (make-blarg :a (random 1d0) :b (format nil "~A" (random 100)))))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 2.40 MB
-;;  HLMEM WRITE: 4.00 ms at 600 MB/sec
-;;  HLMEM READ : 2.48 ms at 968 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 0.99 MB
-;;  CL-BINARY-STORE WRITE: 2.12 ms at 466 MB/sec
-;;  CL-BINARY-STORE READ : 2.44 ms at 405 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 0.99MB
-;;  CL-STORE WRITE: 12.00 ms at 82 MB/sec
-;;  CL-STORE READ : 7.60 ms at 130 MB/sec
+(defclass c-blarg
+    ()
+  ((a :initarg :a)
+   (b :initarg :b)))
+
+(defun lots-of-standard-objects ()
+  (loop for i below 100000
+	collect (make-instance 'c-blarg :a (random 256) :b "hello")))
+
 (defun simple-base-strings ()
   (loop for i below 100000
         collect (coerce (format nil "~A" (random 1000000)) 'simple-base-string)))
 
-;; HYPERLUMINAL-MEM
-;;  OUTPUT SIZE: 2.40 MB
-;;  HLMEM WRITE: 4.52 ms at 531 MB/sec
-;;  HLMEM READ : 3.12 ms at 769 MB/sec
-;; CL-BINARY-STORE
-;;  OUTPUT SIZE: 1.19 MB
-;;  CL-BINARY-STORE WRITE: 4.04 ms at 294 MB/sec
-;;  CL-BINARY-STORE READ : 8.68 ms at 137 MB/sec
-;; CL-STORE
-;;  OUTPUT SIZE: 2.08MB
-;;  CL-STORE WRITE: 23.20 ms at 90 MB/sec
-;;  CL-STORE READ : 11.60 ms at 179 MB/sec
 (defun simple-strings ()
   (loop for i below 100000
         collect (format nil "~A~A" (random 1000000) #\U+03b1)))
+
+(defun a-pile-of-tangled-conses (&optional (number 20000))
+  (let ((a (make-array number)))
+    (loop for n below number do (setf (svref a n) (cons nil nil)))
+    (loop repeat (* 10 number)
+	  do (setf (car (svref a (random number)))
+		   (svref a (random number)))
+	     (setf (cdr (svref a (random number)))
+		  (svref a (random number))))
+    a))
