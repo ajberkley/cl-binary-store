@@ -24,7 +24,7 @@
 (defun restore-from-stream (stream)
   (declare (optimize speed safety))
   (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
-    (with-storage (storage :flusher (make-read-into-storage/stream stream) :max 0)
+    (with-storage (storage :flusher (make-read-into-storage/stream stream) :max 0 :buffer-size 32768)
       (restore-objects storage))))
 
 ;;; UB8 VECTORS

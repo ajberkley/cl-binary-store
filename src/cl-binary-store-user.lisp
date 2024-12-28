@@ -74,6 +74,10 @@
    #:create-package
    #:change-package
 
+   ;; Hinting how many objects you will want to track
+   #:*eq-refs-table-size*
+   #:*num-eq-refs-table-size*
+   #:*double-float-refs-table-size*
    ))
 
 (in-package #:cl-binary-store-user)

@@ -102,11 +102,15 @@
     (+ 1 (+ 16384 (- +last-direct-reference-id-code+ +first-direct-reference-id-code+))
          (- tag-byte #x80) (ash next-16-bits 6))))
 
+(defvar *eq-refs-table-size* 7)
+(defvar *double-float-refs-table-size* 7)
+(defvar *num-eq-refs-table-size* 7)
+
 (define-codespace ("basic codespace" +basic-codespace+)
-  (register-references num-eq-refs (make-hash-table :test #'eq))
-  (register-references double-float-refs (make-hash-table :test #'double-float-=))
-  (register-references eq-refs (make-hash-table :test #'eq))
-  (register-references symbol-refs (make-hash-table :test #'eq))
+  (register-references num-eq-refs (make-hash-table :test #'eq :size *num-eq-refs-table-size*))
+  (register-references double-float-refs
+                       (make-hash-table :test #'double-float-= :size *double-float-refs-table-size*))
+  (register-references eq-refs (make-hash-table :test #'eq :size *eq-refs-table-size*))
 
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
   (defrestore +ub8-code+ (restore-ub8 storage))
@@ -154,7 +158,7 @@
 
   ;; INTERNED SYMBOLS / KEYWORDS / UNINTERNED SYMBOLS
   (defstore (and symbol (not null) (not (eql t)))
-      (store-symbol obj storage symbol-refs store-object assign-new-reference-id))
+      (store-symbol obj storage eq-refs store-object assign-new-reference-id))
   (defrestore +symbol-code+ (restore-symbol storage restore-object))
   (defrestore +uninterned-symbol-code+ (restore-uninterned-symbol storage))
   

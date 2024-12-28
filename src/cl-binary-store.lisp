@@ -154,6 +154,9 @@
    #:store-struct
    #:restore-struct
    #:restore-symbol
-   #:assign-new-reference-id))
+   #:assign-new-reference-id
+   #:*eq-refs-table-size*
+   #:*double-float-refs-table-size*
+   #:*num-eq-refs-table-size*))
 
 (in-package :cl-binary-store)
