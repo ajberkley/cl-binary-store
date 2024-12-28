@@ -14,7 +14,7 @@
                 (ms-per (/ (- ,end ,start)
                            (* 0.001f0 internal-time-units-per-second)
                            ,repeats)))
-           (format t "~A ~,2f ms ~A~%" ,annotation ms-per
+           (format t "~A ~,6f ms ~A~%" ,annotation ms-per
                    ,(if output-size-MB
                         `(format nil "at ~d MB/sec" (round (/ ,output-size-MB ms-per 1f-3)))
                         "")))))))
@@ -42,7 +42,7 @@
          (output-size-MB (/ size 1e6))
          (store (make-array size :element-type '(unsigned-byte 8))))
     (format t "CL-BINARY-STORE~%")
-    (format t " OUTPUT SIZE: ~,2f MB~%" output-size-MB)
+    (format t " OUTPUT SIZE: ~,6f MB~%" output-size-MB)
     (when write
       (timed (" CL-BINARY-STORE WRITE:" repeats output-size-MB)
         (dotimes (x repeats) (cl-binary-store:store store data))))
@@ -187,3 +187,39 @@
 	     (setf (cdr (svref a (random number)))
 		  (svref a (random number))))
     a))
+
+(defstruct address
+  (street "Ave Greene" :type simple-string)
+  (state "QC" :type simple-string)
+  (zip "H3Z1Z9" :type simple-base-string))
+
+(defstruct person
+  (first "Andrew" :type simple-string)
+  (second "Berkley" :type simple-string)
+  (age 49 :type (unsigned-byte 8)) ;; take that future people living to 256 years old!
+  (addresses nil :type list)
+  (telephone "" :type simple-base-string)
+  (email "" :type simple-string))
+  
+(defun a-lot-of-people-and-addresses (&optional (n 10000))
+  (let* ((addresses (coerce
+		    (loop repeat n
+			  collect (make-address :street (format nil "~A" (random 1000000))
+						:state (format nil "~A" (random 100))
+						:zip (format nil "~A" (random 100000))))
+		    'simple-vector))
+	 (people-with-addresses
+	   (coerce
+	    (loop repeat n
+		  collect (make-person
+			   :first (format nil "~A" (random 10000000))
+			   :second (format nil "~A" (random 10000000))
+			   :age (random 100)
+			   :addresses (list (svref addresses (random n)))
+			   :telephone (format nil "~A" (random 1000000))
+			   :email (format nil "~A" (random 100000000))))
+	    'simple-vector)))
+    people-with-addresses))
+    
+    
+			       
