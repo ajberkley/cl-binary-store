@@ -42,7 +42,7 @@ Large simple-arrays have dedicated (at least on sbcl) serializers / deserializer
 
 Support for writing and reading from files, vectors, streams, and raw memory without having to jump through hoops.
 
-A sketch of a versioning scheme is implemented.
+A simple versioning scheme is implemented.
 
 ## User interface
 ### (store place &rest data)
