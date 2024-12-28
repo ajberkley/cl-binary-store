@@ -3,14 +3,23 @@
 ;; User facing interface is generally just `restore' and `store' except
 ;; for SAPs which would be `restore-from-sap' `store-to-sap' and `replace-store-sap-buffer'
 
+(defvar *write-magic-number* nil
+  "If T we will write out a magic number and *write-version* to the stream, which will be
+ validated against our existing *codespaces* when we read it back")
+
+(defvar *read-version* #x0001
+  "The default codespace version to use if no versioning information is in the stream")
+
+
 ;;; STREAMS
 
 (defun store-to-stream (stream &rest elements)
   (declare (dynamic-extent elements) (optimize speed safety))
-  (with-storage (storage :flusher (make-write-into-storage/stream stream))
-    (apply #'store-objects storage elements)
-    (flush-write-storage storage)
-    (values)))
+  (let ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
+    (with-storage (storage :flusher (make-write-into-storage/stream stream))
+      (apply #'store-objects storage elements)
+      (flush-write-storage storage)
+      (values))))
 
 (defun restore-from-stream (stream)
   (declare (optimize speed safety))
@@ -141,13 +150,6 @@
 	(restore-objects storage)))))
 
 ;;; General interface
-
-(defvar *write-magic-number* nil
-  "If T we will write out a magic number and *write-version* to the stream, which will be
- validated against our existing *codespaces* when we read it back")
-
-(defvar *read-version* #x0001
-  "The default codespace version to use if no versioning information is in the stream")
 
 (defun restore (place)
   "(restore #(14 39 37 0 2 72 73 15)) -> (values :hi))
