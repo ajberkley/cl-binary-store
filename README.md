@@ -186,9 +186,9 @@ They are extensible, but not enough --- you cannot completely change the coding 
 
 ### Explicit reference scheme
 
-To make deserialization fast, we break the symmetry of store and restore by not using an implicit referencing scheme.  We add a reference counting pass across the input data where we find out what objects are multiply referenced.  Then on the actual write pass we write the references out on first use.  This speeds up restoration by about 10x.  Serialization with referencing is hash-table table lookup/update dominated.
+To make deserialization fast, we break the symmetry of store and restore by not using an implicit referencing scheme.  We add a reference counting pass across the input data where we find out what objects are multiply referenced.  Then on the actual write pass we write the references out when we first see them.  This speeds up restoration by about 10x.  Serialization with referencing is hash-table table lookup/update dominated.
 
-With explicit referencing we can do parallelization during restore, though I haven't implemented it because it's already reasonably fast (it averages 20MB/sec on my data set)... see TODO.
+With explicit referencing we can do some parallelization during restore (things would block if we don't have reference resolved yet, but we can use fixups for that), though I haven't implemented it because it's already reasonably fast (it averages 20MB/sec on my data set)... see TODO.
 
 ### Performance during serialization
 
