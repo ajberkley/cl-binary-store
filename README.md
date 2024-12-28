@@ -158,6 +158,8 @@ Anyhow, here is the result of running the code
     Hi from slot information!
     "And here is a bonus thing returned to you"
 
+The codespace can nominally be changed multiple times in a file if needed.
+
 ## Why?
 
 I've been using [cl-store](https://cl-store.common-lisp.dev/) forever and it works well and meets most needs once you tweak how it serializes a bunch of things for speed.  I am usually serializing / deserializing > 1GB of data and in the end all the tweaks I've done don't make it fast enough.  The original cl-store hits about 1-2MB/sec for store and restore on the data set I use which just is too slow. It also doesn't support complex list circularity in a reasonable way (the correct-list-store you can turn on blows the stack).
@@ -173,9 +175,7 @@ They are extensible, but not enough --- you cannot completely change the coding 
 
 ### Explicit reference scheme
 
-To make deserialization fast, we break the symmetry of store and restore by not using an implicit referencing scheme.  We add a reference counting pass across the input data where we find out what objects are multiply referenced.  Then on the actual write pass we write the references out when we first see them.  This speeds up restoration by about 10x.  Serialization with referencing is hash-table table lookup/update dominated.
-
-With explicit referencing we can do some parallelization during restore (things would block if we don't have reference resolved yet, but we can use fixups for that), though I haven't implemented it because it's already reasonably fast (it averages 20MB/sec on my data set)... see TODO.
+To make deserialization fast, we break the symmetry of store and restore by using an explicit referencing scheme (as opposed to an implicit one, like is used in cl-store).  We add a reference counting pass across the input data where we find out what objects are multiply referenced.  Then on the actual storage pass we write out a new-reference-indicator just before serializing the object.  We will then refer to this object by its reference-id in the future in the file.  Knowing which objects will be multiply referenced in advance speeds up restoration by about 10x compared with cl-store.  Serialization with referencing is hash-table table lookup/update dominated.  See [referrers-and-fixup.lisp](src/referrers-and-fixup.lisp) for some discussion.
 
 ### Performance during serialization
 

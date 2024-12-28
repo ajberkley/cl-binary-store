@@ -48,14 +48,17 @@
 ;; To debug this stuff you might have to do:
 ;; (let ((*current-codespace/compile-time* (gethash 1 *codespaces*)))
 ;;   (build-store-objects)) ;; or (build-restore-objects)
+;; Or just inspect *codespaces*, the source code stored in the -source-code slots
+;; can be put into a file and compiled and then you have full debuggability.
 
 (defvar *slot-info* nil
   "An eql hash table which maps from structure-object or standard-class type name
- to a `slot-info' structure")
+ to a `slot-info' structure.  This is bound locally during operation of store-objects
+ and restore-objects.")
 
 (defun build-restore-objects ()
-  "Returns all the elements in storage.  If a single element just
-     returns it, otherwise returns a list of all elements restored."
+  "Builds the body of a function that reads tag bytes and dispatches them through a
+ big case statement built by make-read-dispatch-table."
   `(let* ((references-vector (make-array 2048 :initial-element nil))
 	  (references (make-references :vector references-vector))
 	  (*version-being-read* nil))
@@ -382,15 +385,21 @@
 				    :format-arguments (list ,code-to-dispatch-on)))))))))
 
 (defun store-objects (storage &rest stuff)
+  "Store all the objects in stuff to storage.  Do not call this directly without let'ing
+ *current-codespace* to a valid entry in *codespaces*.  Prefer the functions in user.lisp
+ which do this for you based on *write-version* and *read-version*."
   (declare (dynamic-extent stuff) (type storage storage))
   (let ((codespace *current-codespace*))
     (assert codespace nil "Unknown codespace to store with... is *write-version* not correct?")
     (apply (codespace-store-objects codespace) storage stuff)))
 
 (defun restore-objects (storage)
-  ;; Starts with whatever the current-codespace is, may change the
-  ;; codespace when we hit a magic number.
+  "Read data from storage until we run into an end of data signal, or an +end-action-code+.
+ If you want to call this directly, you should let *current-codespace* to a codespace, as is
+ done in the user facing functions in user.lisp which choose it based on *write-version* and
+ *read-version*."
   (declare (type storage storage))
   (let ((codespace *current-codespace*))
-    (assert codespace)
+    (assert codespace nil
+	    "Unknown codespace to restore objects with... is *read-version* not correct?"))
     (funcall (codespace-restore-objects codespace) storage)))

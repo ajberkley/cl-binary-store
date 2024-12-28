@@ -1,51 +1,54 @@
 (in-package :cl-binary-store)
 
-;; References are used to handle circularity (in lists, non-specialized
-;; vectors, structure-classes and standard-classes).  References are
-;; created during serialization and deserialization.
+;; References are used to handle both circularity and the maintenance
+;; of equality of objects.  For example if you have two references to
+;; the same object in your data you do not want them to be restored as
+;; separate objects!  Or if you have a circular list we need to detect
+;; the circularity so we can store and restore it.
 
-;; We use references when the underlying common lisp structure allows sharing
-;; and when it makes sense to save memory in the restored image (that is objects
-;; that are tagged):
-;;  (and number (not fixnum) (not `single-float')) will be de-duplicated
-;;  `structure-class'es and slot-values thereof
-;;  `standard-class'es and slot-values thereof
-;;  `cons'es
+;; We use references when the underlying common lisp structure allow
+;; sharing transparently to the user (double-floats, complex, ratio,
+;; or bignums) or if the objects were #'eq originally.  That is, in
+;; addition to maintaining #'eq-uality, (and number (not fixnum)
+;; (not `single-float')) will be de-duplicated during serialization.
 ;;
-;; During serialization, we record every (referrable) object we see.
-;; This is done during an explicit reference pass through the data.
-;; Then, if we have seen an object multiple times we assign it a
-;; sequential reference id.  Then we begin the serialization process
-;; with that information.  While the reference assignment pass is hard
-;; to parallelize the rest of the storage can then in principle be
-;; easily parallized (with just some contention over when we decide to
-;; serialize the reference objects).
+;; During the initial phase of serialization, we do an explicit
+;; reference counting pass through the data and record (almost) every
+;; (referrable) object we see (there are some small exceptions --- the
+;; contents of specialized vectors and arrays, the symbol-names of
+;; uninterned symbols, (complex double-float), (complex
+;; single-float)).  Then, if we have seen an object multiple times we
+;; keep it around in a hash-table for the storage pass where we will
+;; assign it a sequential reference id and emit a code that says "the
+;; next object should be assigned a new reference id" when we store
+;; objects that we know will be multiply referenced.  We also add a
+;; note in the file of the total number of references the file
+;; contains which helps restore speed.  The counting is implicit ---
+;; so the restoration side keeps a count as it sees objects registered
+;; as referrable.
 
-;; The nice thing about this explicit reference scheme is that it also
-;; allows the restoration to be parallelized (though we would need to
-;; add some file features to allow that).  Say some bookmarks at the
-;; end of the file (with some rule about where object starts are with
-;; respect to the buffers that we flush during ;; serialization 
-
-;; A few things I've tried to speed this up, I tried precompiling the dispatch
-;; during the reference step to avoid the dispatch tree, but that just made things
-;; slower.  I tried parallelizing the reference pass but there is way too much
-;; contention for the reference hash table and we need eq hashing, so I cannot
-;; just plug in a lockless hashtable.
+;; The other complexity handled in this file is that an object may be
+;; referred to during deserialization *before* it has been fully
+;; created.  This is rare, but can happen with displaced-arrays for
+;; example.  To handle this we put a placeholder object in the reference
+;; vector during restore and anyone who finds a reference to that object
+;; can register a "fix-up" which we will call once the object is fully
+;; constructed to resolve the object.  This allows circular list building
+;; among other things.  See `restore-object-to'.
 
 (defvar *track-references* t
   "If you let this to NIL, then every object will be stored anew, and
  there will be no circular reference detection.  It's a huge
  performance win (you can hit hundreds of MB/sec instead of 10s of
  MB/sec, but you need to make sure your data is safe to serialize and
- you don't care about EQL checks of data..")
+ you don't care about EQL checks of data.")
 
 (declaim (inline references-vector make-references references-ref-id))
 (defstruct references
-  "During deserialization this array grows as we restore references.
- In a parallel restore scenario this would have to work differently
- (we'd want to store the number of references in the file and then
- fill this vector up with fix-ups at the beginning)"
+  "During deserialization this array contains all the references we
+ have seen so far, and a running count ref-id of assigned ids.  Nominally
+ the array size is hinted at the start of restore, but the code allows it
+ to grow if needed."
   (vector (make-array nil) :type simple-vector)
   (ref-id 0 :type fixnum)) ;; ref-ids run from 1 to infinity; they are incf'ed from here
 
@@ -244,18 +247,18 @@
 (declaim (inline encode-reference-direct))
 (defun encode-reference-direct (ref-index)
   "reference indicies start a 1, so we subtract one here."
-  (assert (<= 1 ref-index +reference-direct-max-ref-id+))
+  ;;(assert (<= 1 ref-index +reference-direct-max-ref-id+))
   (let ((encoded (+ (- +first-direct-reference-id-code+ 1)
 		    ref-index)))
-    (assert (and (>= encoded +first-direct-reference-id-code+)
-		 (<= encoded +last-direct-reference-id-code+)))
+    ;; (assert (and (>= encoded +first-direct-reference-id-code+)
+    ;; 		 (<= encoded +last-direct-reference-id-code+)))
     encoded))
 
 ;; Little endian, least significant byte first
 (declaim (inline encode-reference-one-byte))
 (defun encode-reference-one-byte (ref-index)
   "Returns a 16 bit value"
-  (assert (< +reference-direct-max-ref-id+ ref-index (+ 1 +reference-one-byte-max-ref-id+)))
+  ;;(assert (< +reference-direct-max-ref-id+ ref-index (+ 1 +reference-one-byte-max-ref-id+)))
   (let* ((shifted-ref-index
 	   (- ref-index +reference-direct-max-ref-id+))
 	 (tag-byte (+ #x40 (logand shifted-ref-index #x3F))))
@@ -263,7 +266,7 @@
 
 (declaim (inline encode-reference-two-bytes))
 (defun encode-reference-two-bytes (ref-index)
-  (assert (< +reference-one-byte-max-ref-id+ ref-index (+ 1 +reference-two-byte-max-ref-id+)))
+  ;;(assert (< +reference-one-byte-max-ref-id+ ref-index (+ 1 +reference-two-byte-max-ref-id+)))
   (let ((shifted-ref-index
 	  (- ref-index (+ 16384 (- +last-direct-reference-id-code+
 				   +first-direct-reference-id-code+ -1)))))
@@ -272,7 +275,8 @@
 
 (declaim (inline store-new-reference-indicator))
 (defun store-new-reference-indicator (storage)
-  "Write an indicator that we should assign a reference id to the next object"
+  "Write an indicator that we should assign a reference id to the next object; that is place
+ it in the restore reference-vector (and increment the ref-id counter)."
   (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
     (storage-write-byte! storage +new-reference-indicator-code+ :sap sap :offset offset)))
 
@@ -285,7 +289,9 @@
 			
 (declaim (notinline store-reference))
 (defun store-reference (ref-index storage)
-  "We store references as the minimum possible size we can"
+  "Write a reference id to the output which will be resolved at restore time to an object.  The
+ basic-codespace implementation here reserves 6 bits of the codespace for reference ids which
+ makes these pretty cheap."
   (declare (type (and (integer 1) fixnum) ref-index)
 	   (type (not null) storage))
   (when storage
@@ -295,7 +301,6 @@
        (storage-write-byte storage (encode-reference-direct ref-index)))
       ((<= ref-index +reference-one-byte-max-ref-id+)
        (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
-	 ;; It's in the wrong order!
 	 ;;(format t "~16,'0b~%" (encode-reference-one-byte ref-index))
 	 (storage-write-ub16! storage (encode-reference-one-byte ref-index)
 			      :sap sap :offset offset)))

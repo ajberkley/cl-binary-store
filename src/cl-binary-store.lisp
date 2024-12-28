@@ -157,6 +157,9 @@
    #:assign-new-reference-id
    #:*eq-refs-table-size*
    #:*double-float-refs-table-size*
-   #:*num-eq-refs-table-size*))
+   #:*num-eq-refs-table-size*
+   #:missing-package-during-restore
+   #:change-package
+   #:create-package))
 
 (in-package :cl-binary-store)

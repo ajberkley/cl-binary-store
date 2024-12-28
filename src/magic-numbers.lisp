@@ -1,9 +1,10 @@
 ;; Simple versioning mechanism.  All versioned output should start
 ;; with +magic-number-code+ and then a number (though it can occur
 ;; anywhere and even multiple times in the stream / file, not sure why
-;; you'd want that).  When restored, the magic number is checked
-;; against the numbers in *supported-version* and *version-being-read*
-;; (which is locally bound in restore-objects) is bound to it.
+;; you'd want that).  When restored, the magic number is used to
+;; pull up the correct `codespace' in *codespaces* and then restoration
+;; continues.  If there is no codespace matching that magic number
+;; an error will be signalled.
 
 (in-package :cl-binary-store)
 
