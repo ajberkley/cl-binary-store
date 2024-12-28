@@ -1,9 +1,14 @@
+# Context
+
+This file was just me figuring out that you need to do some by hand
+tweaking of type dispatching to get good results.
+
 # Serialization speed and type dispatching
 
 So, this whole thing works reasonably well for the use case I have and
 deserialization of complex objects is blazingly fast.  But
 serialization in the case of non-multiply referenced data (and no
-circularity) is still about 3x slower than hyperluminal-mem.  So I did
+circularity) is still a bit slower than hyperluminal-mem.  So I did
 a bit of benchmarking and found that about 30% of my time is spent in
 type dispatch (this is for a very synthetic example of a list of a
 million small numbers).  My dispatch mechanism is just a flat
