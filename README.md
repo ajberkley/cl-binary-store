@@ -108,7 +108,7 @@ Standard object :class allocated slots will be stored if this is T.
 
 #### \*write-magic-number\* default: NIL
 
-If T we will write out a magic number and the \*write-version\* to the output, which will then be validated against \*supported-versions\* when read back in.
+If T we will write out a magic number and the \*write-version\* to the output, which will be used on restore to load the correct codespace (or error if it does not exist).
 
 #### \*write-end-marker*\* default: NIL
 
