@@ -2,7 +2,7 @@
 
 A fast and reasonably customizable serializer/deserializer of Common Lisp objects to/from a binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.
 
-> :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-messagepack](https://github.com/mbrezu/cl-messagepack).
+> :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for messagepack support.
 
 Currently this is sbcl specific, but I'd like to fix this up to work on other implementations, but it isn't top of mind.
 
