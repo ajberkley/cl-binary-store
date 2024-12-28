@@ -41,13 +41,16 @@
     (loop for elt in restored-a
 	  do (is 'eql elt (first restored-a)))))
 
+;; This test uses too much memory to run regularly...
 (define-test up-to-ub32-references-work
-  ;; Break even is 5 bytes for references if they are mainly ub16s
-  (let* ((elts (loop for i fixnum from 0 below 100000
-		     collect (format nil "Longish header: ~A" i)))
-	 (double-elts (append elts elts)))
-    (is 'equal double-elts (restore-from-vector (store-to-vector double-elts)))
-    (true (< (length (store-to-vector double-elts))
+  (let* ((elts (loop for i fixnum from 0 below 50000;;5000000
+		     collect (format nil "Header: ~A" i)))
+	 (double-elts (append elts elts))
+	 (stored-double-elts (store-to-vector double-elts))
+	 (len-stored-double-elts (length stored-double-elts)))
+    (is 'equal double-elts (restore-from-vector stored-double-elts))
+    (setf stored-double-elts nil)
+    (true (< len-stored-double-elts
 	     (length (store-to-vector (append elts (map 'list #'copy-seq elts))))))))
 
 (define-test test-simple-displaced-array-circularity
@@ -148,7 +151,7 @@
     (true (equalp
 	   (restore-from-vector (store-to-vector symbols))
 	   symbols))
-    (let ((vec (print (store-to-vector symbols))))
+    (let ((vec (store-to-vector symbols)))
       (unintern (find-symbol "HI"))
       (unintern (find-symbol "TEST-SYMBOL-HI" "CL-BINARY-STORE"))
       (restore-from-vector vec)
@@ -330,23 +333,15 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun store-string-for-tests (obj storage)
-  (declare (ignore obj storage)))
-  (define-codespace ("test-codespace" 999999)
-    (defstore action (store-action& obj storage store-object))
-    (defrestore +action-code+ (restore-action& storage references restore-object))
-    (defstore string (store-string-for-tests obj storage))))
+    (declare (ignore obj storage)))
+  (define-codespace ("test-codespace" 999999 :inherits-from +basic-codespace+)
+    (defstore simple-string (store-string-for-tests obj storage) :override t)))
 
 (define-test test-versioning
-  (fail
-      (restore
-       (let ((*write-magic-number* t)
-	     (*write-version* 999999))
-	 (store nil "check"))))
-  (let ((*supported-versions* '(999999)))
-    (true (null (restore
-		 (let ((*write-magic-number* t)
-		       (*write-version* 999999))
-		   (store nil "check"))))))
+  (true (null (restore
+	       (let ((*write-magic-number* t)
+		     (*write-version* 999999))
+		 (store nil "check")))))
   (is 'equalp
       "check"
       (restore
@@ -418,11 +413,12 @@
 				    (store nil 3))))
       '(1 2 3)))
 
+(defparameter *a* 1d0)
+(defparameter *b* 4d0)
+(defparameter *c* 5d0)
+
 (define-test test-double-float-references
   ;; Have to use globals so the compiler doesn't make our double floats eq
-  (defparameter *a* 1d0)
-  (defparameter *b* 4d0)
-  (defparameter *c* 5d0)
   (let ((len-just-a (length (store nil *a*))) ;; 9 bytes
 	(len-two-as (length (store nil *a* *a*))) ;; 13 bytes
 	(len-a-and-b/4 (length (store nil *a* (/ *b* 4d0)))) ;; 13 bytes

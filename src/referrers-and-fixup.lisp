@@ -53,8 +53,8 @@
   "Returns T if OBJECT has already been seen and updates its reference count.
  If OBJECT has not been seen, and ADD-NEW-REFERENCE is T, then adds it to
  references and returns NIL.  If ADD-NEW-REFERENCE is NIL, just returns NIL.
- This should *ONLY* be called during the reference counting phase, that is
- when STORAGE is nil."
+ This should *ONLY* be called during the reference counting phase, that is when
+ storage is nil."
   (when references
     (if add-new-reference
         (let ((number-of-times-referenced (gethash object references 0)))
@@ -62,7 +62,7 @@
           ;; We store the number of times an object is referenced as 1 or 2, where 2 means anything
           ;; more than 1 (except if debug-cbs is in *features* then we keep track of the exact
           ;; number). The logic below is unnecessarily complex, clean this up with clear brain.
-          ;; When :info-cbs is in features, we do a complete count of occurences.
+	  ;; When :info-cbs is in features, we do a complete count of occurences.
           (cond
             ((zerop number-of-times-referenced)
              (setf (gethash object references) 1)
@@ -79,7 +79,7 @@
 (declaim (inline referenced-already))
 (defun referenced-already (object storage references)
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
- Otherwise returns NIL.  This should only be called during the actual storage phase,
+ Otherwise returns NIL.  This should *ONLY* be called during the actual storage phase,
  not the reference counting phase."
   (declare (type storage storage))
   (when references
@@ -101,7 +101,7 @@
 	     #+dribble-cbs (format t "Storing reference definition (#~A) for next object: ~A~%"
 				   (- ref-idx) (type-of object))
 	     (setf ref-idx (- ref-idx))
-	     (store-reference-id-for-following-object ref-idx storage)
+	     (store-reference ref-idx storage)
 	     (setf (gethash object references) ref-idx)
 	     nil)))))))
 
@@ -151,33 +151,6 @@
   (let ((vec (ensure-references-vector references ref-id)))
     (locally (declare (optimize (speed 3) (safety 0)))
       (setf (svref vec ref-id) value))))
-
-(defun invalid-referrer (ref-idx)
-  (cerror "skip" (format nil "reference index ~A does not refer to anything!" ref-idx)))
-
-(declaim (inline get-reference))
-(defun get-reference (ref-id references)
-  (declare (optimize speed safety))
-  (let ((actual-object (svref (references-vector references) ref-id)))
-  #+debug-cbs (format t "Resolving reference ~A to a ~A~%"
-		      ref-id (if actual-object (type-of actual-object) 'invalid-object))
-    (or actual-object (invalid-referrer ref-id))))
-
-(declaim (inline restore-referrer))
-(defun restore-referrer (storage references)
-  (get-reference (restore-fixnum storage) references))
-
-(declaim (inline restore-referrer-ub8))
-(defun restore-referrer-ub8 (storage references)
-  (get-reference (restore-ub8 storage) references))
-
-(declaim (inline restore-referrer-ub16))
-(defun restore-referrer-ub16 (storage references)
-  (get-reference (restore-ub16 storage) references))
-
-(declaim (inline restore-referrer-ub32))
-(defun restore-referrer-ub32 (storage references)
-  (get-reference (restore-ub32 storage) references))
 
 ;; During restoring, we cannot always construct objects before we have
 ;; restored a bunch of other information (for example building displaced
@@ -253,6 +226,24 @@
        (progn
 	 ,@body)))
 
+(declaim (inline encode-reference-direct))
+(defun encode-reference-direct (ref-index)
+  (+ 43 ref-index))
+
+;; Little endian, least significant byte first
+(declaim (inline encode-reference-one-byte))
+(defun encode-reference-one-byte (ref-index)
+  "Returns a 16 bit value"
+  (let ((shifted-ref-index (- ref-index 19)))
+    (+ (+ #x40 (logand shifted-ref-index #x3F))
+       (ash (logand shifted-ref-index #xFFC0) 2))))
+
+(declaim (inline encode-reference-two-bytes))
+(defun encode-reference-two-bytes (ref-index)
+  (let ((shifted-ref-index (- ref-index 16403)))
+    (values (+ #x80 (logand shifted-ref-index #x3F))
+	    (ash shifted-ref-index -6))))
+
 (declaim (notinline store-reference))
 (defun store-reference (ref-index storage)
   "We store references as the minimum possible size we can"
@@ -260,67 +251,38 @@
 	   (type (not null) storage))
   (when storage
     #+dribble-cbs (format t "Writing reference ~A~%" ref-index)
-    (typecase ref-index
-      ((unsigned-byte 8)
+    (cond
+      ((< ref-index 19)
+       ;;(format t "~8,'0b~%" (encode-reference-direct ref-index))
+       (storage-write-byte storage (encode-reference-direct ref-index)))
+      ((< ref-index 16403)
        (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
-	 (storage-write-ub16! storage (+ +referrer-ub8-code+ (ash ref-index 8))
-			      :offset offset :sap sap)))
-      ((unsigned-byte 16)
-       (with-write-storage (storage :offset offset :reserve-bytes 3 :sap sap)
-	 (storage-write-byte! storage +referrer-ub16-code+ :offset offset :sap sap)
-	 (storage-write-ub16! storage ref-index :offset (incf offset) :sap sap)))
-      ((unsigned-byte 32)
-       (with-write-storage (storage :offset offset :reserve-bytes 5 :sap sap)
-	 (storage-write-byte! storage +referrer-ub32-code+ :offset offset :sap sap)
-	 (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)))
+	 ;; It's in the wrong order!
+	 ;;(format t "~16,'0b~%" (encode-reference-one-byte ref-index))
+	 (storage-write-ub16! storage (encode-reference-one-byte ref-index)
+			      :sap sap :offset offset)))
+      ((< ref-index 4210707)
+	  (with-write-storage (storage :offset offset :reserve-bytes 3 :sap sap)
+	    (multiple-value-bind (tag-byte second-two-bytes)
+		(encode-reference-two-bytes ref-index)
+	      ;;(format t "~16,'0b~8,'0b~%" second-two-bytes tag-byte)
+	      (storage-write-byte! storage tag-byte :sap sap :offset offset)
+	      (storage-write-ub16! storage second-two-bytes :sap sap :offset (incf offset)))))
       (t
-       (storage-write-byte storage +referrer-code+)
-       (store-tagged-unsigned-fixnum ref-index storage)))))
+       (storage-write-byte storage +tagged-reference-code+)
+       (store-tagged-unsigned-integer ref-index storage)))))
 
-(declaim (notinline store-reference-id-for-following-object))
-(defun store-reference-id-for-following-object (ref-index storage)
-  (declare (type (and (integer 0) fixnum) ref-index)
-	   (type (not null) storage))
-  #+dribble-cbs (format t "Writing reference follows ~A~%" ref-index)
-  (typecase ref-index
-    ((unsigned-byte 8)
-     (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
-       (storage-write-ub16! storage (+ +record-reference-ub8-code+ (ash ref-index 8))
-			    :offset offset :sap sap)
-       (setf (storage-offset storage) (+ 2 offset))))
-    ((unsigned-byte 16)
-     (with-write-storage (storage :offset offset :reserve-bytes 3 :sap sap)
-       (storage-write-byte! storage +record-reference-ub16-code+ :offset offset :sap sap)
-       (storage-write-ub16! storage ref-index :offset (incf offset) :sap sap)
-       (setf (storage-offset storage) (+ 2 offset))))
-    ((unsigned-byte 32)
-     (with-write-storage (storage :offset offset :reserve-bytes 5 :sap sap)
-       (storage-write-byte! storage +record-reference-ub32-code+ :offset offset :sap sap)
-       (storage-write-ub32! storage ref-index :offset (incf offset) :sap sap)
-       (setf (storage-offset storage) (+ 4 offset))))
-    (t
-     (storage-write-byte storage +record-reference-code+)
-     (store-only-fixnum ref-index storage nil))))
-
-(declaim (notinline restore-reference-id-for-following-object))
-(defun restore-reference-id-for-following-object (ref-id references restore-object)
-  "Object may not reified before other objects refer to it"
-  (with-delayed-reference/fixup (ref-id references)
-    (funcall (the function restore-object))))
-
-(defun restore-reference-id-ub8 (storage references restore-object)
-  (restore-reference-id-for-following-object (restore-ub8 storage) references restore-object))
-
-(defun restore-reference-id-ub16 (storage references restore-object)
-  (let ((ref-id (restore-ub16 storage)))
-    #+debug-cbs(format t "Restoring reference id ~A~%" ref-id)
-    (restore-reference-id-for-following-object ref-id references restore-object)))
-
-(defun restore-reference-id-ub32 (storage references restore-object)
-  (let ((ref-id (restore-ub32 storage)))
-    #+debug-cbs(format t "Restoring reference id ~A~%" ref-id)
-    (restore-reference-id-for-following-object ref-id references restore-object)))
-
-(defun restore-reference-id (storage references restore-object)
-  (restore-reference-id-for-following-object
-   (restore-fixnum storage) references (funcall restore-object)))
+(declaim (notinline restore-reference))
+(defun restore-reference (ref-id references restore-object)
+  "The reference has already been calculated in the dispatch code for us.
+ If we are actually restoring the next object, it may not be re-ified before
+ someone refers to it, so we have to store a fixup for those other objects
+ to hang their reference onto."
+  (let ((vector (references-vector references)))
+    #+debug-cbs (format t "Restoring reference ~A~%" ref-id)
+    (or (svref vector ref-id)
+	(progn
+	  #+debug-cbs (format t " We have never seen it before, loading next object~%")
+	  (setf (svref vector ref-id)
+		(with-delayed-reference/fixup (ref-id references)
+		  (funcall (the function restore-object))))))))

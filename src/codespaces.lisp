@@ -42,10 +42,18 @@
   (setf (codespace-store-infos target) (codespace-store-infos source-codespace))
   (setf (codespace-restore-infos target) (codespace-restore-infos source-codespace)))
 
+;; To debug this stuff you might have to do:
+;; (let ((*current-codespace/compile-time* (gethash 1 *codespaces*)))
+;;   (build-restore-objects))
+
+(defvar *slot-info* nil
+  "An eql hash table which maps from structure-object or standard-class type name
+ to a `slot-info' structure")
+
 (defun build-restore-objects ()
   "Returns all the elements in storage.  If a single element just
      returns it, otherwise returns a list of all elements restored."
-  `(let* ((references-vector (make-array 2048))
+  `(let* ((references-vector (make-array 2048 :initial-element nil))
 	  (references (make-references :vector references-vector))
 	  (*version-being-read* nil))
      (declare (dynamic-extent references references-vector))
@@ -204,7 +212,10 @@
        (setf *current-codespace/compile-time* nil))))
 
 (defstruct restore-info
-  (restore-function-code nil))
+  ;; If the dispatch code is a piece of lisp source code, then we do it
+  ;; after the basic case statement.
+  (restore-function-dispatch-code nil :type (or (unsigned-byte 8) list))
+  (restore-function-source-code nil))
   
 (defstruct store-info
   (type nil)
@@ -253,7 +264,7 @@
 (defun update-store-info
     (codespace type store-function-signature
      &key (call-during-reference-phase nil call-during-reference-phase-provided-p)
-       check-for-ref-in write-phase-code)
+       check-for-ref-in write-phase-code override)
   (labels ((maybe-wrap-code-with-ref-check-for-store-phase (code)
              (if check-for-ref-in
                  `(unless (referenced-already obj storage ,check-for-ref-in)
@@ -281,35 +292,34 @@
                 :storage-phase-code (maybe-wrap-code-with-ref-check-for-store-phase write-phase-code)))
 	   (store-info (codespace-store-infos codespace)))
       (unless (or (null (gethash type store-info))
-                  (equalp (gethash type store-info) si))
+                  (equalp (gethash type store-info) si)
+		  override)
         (cerror "REPLACE IT" (format nil "Replacing already existing store code for type ~A" type)))
       (setf (gethash type store-info) si))))
 
 (defmacro defstore
     (type store-function-signature
      &key (call-during-reference-phase nil call-during-reference-phase-provided-p)
-       check-for-ref-in write-phase-code)
+       check-for-ref-in write-phase-code override)
   `(update-store-info *current-codespace/compile-time* ',type ',store-function-signature
 		      ,@(if call-during-reference-phase-provided-p
 			    `(:call-during-reference-phase ',call-during-reference-phase))
 		      :check-for-ref-in ',check-for-ref-in
-		      :write-phase-code ',write-phase-code))
+		      :write-phase-code ',write-phase-code
+		      :override ,override))
 
 (defun update-restore-info (current-codespace/compile-time code restore-function-signature)
-  (let ((code (eval code)))
-    (loop for param in (cdr restore-function-signature)
-          do (unless (member param '(storage references restore-object))
-               (error (format nil "While parsing DEFRESTORE for code ~A, found unknown param ~A, it must be one~%~
-                                 of STORAGE, REFERENCES, or RESTORE-OBJECT" code param))))
-    (let ((ri (make-restore-info :restore-function-code restore-function-signature))
-	  (restore-info (codespace-restore-infos current-codespace/compile-time)))
-      (unless (or (null (gethash code restore-info))
-                  (equalp (gethash code restore-info) ri))
-        (cerror "REPLACE IT" (format nil "Replacing already existing restore code for code ~A" code)))
-      (setf (gethash code restore-info) ri))))
+  (when (constantp code) ;; maybe be a defconstant or a direct number
+    (setf code (eval code)))
+  (let ((ri (make-restore-info :restore-function-source-code restore-function-signature))
+	(restore-info (codespace-restore-infos current-codespace/compile-time)))
+    (unless (or (null (gethash code restore-info))
+                (equalp (gethash code restore-info) ri))
+      (cerror "REPLACE IT" (format nil "Replacing already existing restore code for code ~A" code)))
+    (setf (gethash code restore-info) ri)))
 
 (defmacro defrestore (code restore-function-signature)
-  `(update-restore-info *current-codespace/compile-time* ,code ',restore-function-signature))
+  `(update-restore-info *current-codespace/compile-time* ',code ',restore-function-signature))
 
 (defun store-object/phase (obj store-info-accessor)
   ;; This assumes that the caller has defined OBJ, STORAGE, STORE-OBJECT, and the various
@@ -348,7 +358,7 @@
 ;;                            (format nil "#~A (count ~A) ~A"
 ;;                                    dispatch-code
 ;;                                    (aref *dispatch-counter* dispatch-code)
-;;                                    (restore-info-restore-function-code restore-info)))
+;;                                    (restore-info-restore-function-source-code restore-info)))
 ;;                      res))
 ;;              (codespace-restore-infos *current-codespace/compile-time*))
 ;;     (format t "~{~A~%~}" (mapcar #'cdr (sort res #'> :key #'car)))
@@ -359,15 +369,18 @@
   (let ((code nil))
     (maphash (lambda (dispatch-code restore-info)
                (push (list dispatch-code
-                           #+info-cbs `(incf (aref *dispatch-counter* ,dispatch-code))
-                           (restore-info-restore-function-code restore-info)) code))
+                           ;; #+info-cbs `(incf (aref *dispatch-counter* ,dispatch-code))
+                           (restore-info-restore-function-source-code restore-info)) code))
              (codespace-restore-infos *current-codespace/compile-time*))
-    (setf code (sort code #'< :key #'first))
-    `(case ,code-to-dispatch-on
-       ,@code
-       (otherwise
-        (error 'simple-error :format-control "Unknown code ~A found in stream"
-                             :format-arguments (list ,code-to-dispatch-on))))))
+    (let ((numeric-dispatch-codes (sort (remove-if-not #'numberp code :key #'first) #'< :key #'first)))
+      `(case ,code-to-dispatch-on
+	 ,@numeric-dispatch-codes
+	 (otherwise
+	  (cond
+	    ,@(loop for source-code in (remove-if #'numberp code :key #'first)
+		    collect (list (first source-code) (second source-code)))
+	    (t (error 'simple-error :format-control "Unknown code ~A found in stream"
+				    :format-arguments (list ,code-to-dispatch-on)))))))))
 
 (defun store-objects (storage &rest stuff)
   (declare (dynamic-extent stuff) (type storage storage))

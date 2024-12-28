@@ -1,5 +1,23 @@
 (in-package :cl-binary-store)
 
+;; This codespace uses codes 0 to 32 and reserves 192 to 255 for the
+;; user to extend things (those have the two highest bits set).  Codes
+;; between 34 and 43 are small integer codes, and codes from 44 to 63
+;; are direct encoded references.  Reference codes from 64 to 127 are
+;; 6 bits plus the next 8 bits read.  Then codes from 128-191 (highest
+;; bit set) are 6 lowest bits plus the next 16 bits read.  This gives
+;; us a codespace of 25 million references.  We do not distinguish the
+;; first instance of a reference --- the state in the references
+;; vector tells us whether or not we have seen an object before --- if
+;; we haven't, we assign the next object to the reference id.  This
+;; means that parallel restore isn't really practical in this
+;; codespace.  One would have to shrink down to a 5 bit direct
+;; reference codespace for that... which might be good enough?  Anyhow,
+;; easy to fixup with a different codespace.
+
+;; TODO Handle the encoding of -5 to 5.
+;; TODO Handle the reference encoding
+
 (defconstant +basic-codespace+ #x0001)
 
 (defconstant +ub8-code+ 0)
@@ -24,31 +42,40 @@
 (defconstant +structure-object-code+ 19)
 (defconstant +standard-object-code+ 20)
 (defconstant +t-code+ 21)
-(defconstant +referrer-ub8-code+ 22)
-(defconstant +referrer-ub16-code+ 23)
-(defconstant +referrer-ub32-code+ 24)
-(defconstant +referrer-code+ 25)
-(defconstant +record-reference-ub8-code+ 26)
-(defconstant +record-reference-ub16-code+ 27)
-(defconstant +record-reference-ub32-code+ 28)
-(defconstant +record-reference-code+ 29)
-(defconstant +simple-specialized-vector-code+ 30)
-(defconstant +simple-vector-code+ 31)
-(defconstant +simple-specialized-array-code+ 32)
-(defconstant +array-code+ 33)
-(defconstant +slot-info-code+ 34)
-(defconstant +unbound-code+ 35)
-(defconstant +pathname-code+ 36)
-(defconstant +hash-table-code+ 37)
-(defconstant +simple-base-string-code+ 38)
-(defconstant +simple-string-code+ 39)
-(defconstant +action-code+ 40)
+(defconstant +simple-specialized-vector-code+ 22)
+(defconstant +simple-vector-code+ 23)
+(defconstant +simple-specialized-array-code+ 24)
+(defconstant +array-code+ 25)
+(defconstant +slot-info-code+ 26)
+(defconstant +unbound-code+ 27)
+(defconstant +pathname-code+ 28)
+(defconstant +hash-table-code+ 29)
+(defconstant +simple-base-string-code+ 30)
+(defconstant +simple-string-code+ 31)
+(defconstant +action-code+ 32)
+(defconstant +tagged-reference-code+ 33) ;; for more than 4194322 references!
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (declaim (inline decode-reference-direct))
+  (defun decode-reference-direct (raw-8-bit)
+    (- raw-8-bit 43))
+
+  (declaim (inline decode-reference-one-byte))
+  (defun decode-reference-one-byte (tag-byte next-byte)
+    ;;(format t "Tag byte is ~A, next-byte is ~A~%" tag-byte next-byte)
+    (+ 19 (- tag-byte #x40) (ash next-byte 6)))
+
+  (declaim (inline decode-reference-two-bytes))
+  (defun decode-reference-two-bytes (tag-byte next-16-bits)
+    ;;(format t "Tag byte is ~A, next-16-bits is ~A~%" tag-byte next-16-bits)
+    (+ 16403 (- tag-byte #x80) (ash next-16-bits 6))))
 
 (define-codespace ("basic codespace" +basic-codespace+)
   (register-references num-eq-refs (make-hash-table :test #'eq))
   (register-references double-float-refs (make-hash-table :test #'double-float-=))
   (register-references eq-refs (make-hash-table :test #'eq))
-  
+  ;;(register-references symbol-refs (make-hash-table :test #'eq) :never-disable t)
+
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
   (defrestore +ub8-code+ (restore-ub8 storage))
   (defrestore +ub16-code+ (restore-ub16 storage))
@@ -104,16 +131,25 @@
   (defrestore +standard-object-code+ (restore-standard-object restore-object))
 
   ;; REFERENCES
-  (defrestore +referrer-ub8-code+ (restore-referrer-ub8 storage references))
-  (defrestore +referrer-ub16-code+ (restore-referrer-ub16 storage references))
-  (defrestore +referrer-ub32-code+ (restore-referrer-ub32 storage references))
-  (defrestore +referrer-code+ (restore-referrer storage references))
-  
-  (defrestore +record-reference-ub8-code+ (restore-reference-id-ub8 storage references restore-object))
-  (defrestore +record-reference-ub16-code+ (restore-reference-id-ub16 storage references restore-object))
-  (defrestore +record-reference-ub32-code+ (restore-reference-id-ub32 storage references restore-object))
-  (defrestore +record-reference-code+ (restore-reference-id storage references restore-object))
-  
+  (defrestore (and (> code 33) (<= code 43)) (- code 38)) ;; direct integer encoding -4 .. 5
+  ;; 44 - 63 directly coded references (0 .. 19)
+  (defrestore (and (> code 43) (< code 63))
+      (restore-reference (decode-reference-direct code) references restore-object))
+  ;; 64 - 127 14 bit references (tag byte plus another byte)
+  ;; Handles references from 19 to 16402
+  (defrestore (logtest code #b01000000)
+      (restore-reference (decode-reference-one-byte code (restore-ub8 storage))
+			 references restore-object))
+  ;; 128 - 191 22 bit references (tag byte plus another two bytes)
+  ;; Handles references from 16403 to 4194322
+  (defrestore (logtest code #b10000000)
+      (restore-reference (decode-reference-two-bytes code (restore-ub16 storage))
+			 references
+			 restore-object))
+  (defrestore +tagged-reference-code+ (restore-reference (funcall restore-object)
+							 references
+							 restore-object))
+
   ;; SIMPLE VECTORS
   #+sbcl
   (defstore (simple-array * (*)) (store-simple-specialized-vector obj storage) :check-for-ref-in eq-refs)

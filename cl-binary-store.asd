@@ -13,7 +13,7 @@
 	       (:file "type-discrimination")
 	       (:file "basic-codespace" :depends-on ("sbcl-special-hash-tables"
 						     "type-discrimination"
-						     "features"))
+						     "features" "codespaces"))
 	       (:file "storage" :depends-on ("features" "cl-binary-store"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
 							      "basic-codespace"))
@@ -21,8 +21,8 @@
 									  "basic-codespace"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 							      "features"))
-               (:file "actions" :depends-on ("unsigned-bytes" "storage"))
-	       (:file "reference-count" :depends-on ("actions" "numbers"))
+               (:file "actions" :depends-on ("unsigned-bytes" "storage" "features"))
+	       (:file "reference-count" :depends-on ("actions" "numbers" "features"))
                (:file "magic-numbers" :depends-on ("actions" "numbers"))
 	       (:file "end-action" :depends-on ("actions"))
 	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"
@@ -39,7 +39,7 @@
 	       (:file "pathname" :depends-on ("referrers-and-fixup" "symbols" "numbers"
 								    "unsigned-bytes" "features"))
 	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes" "features"))
-	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes" "features"))
+	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes" "features" "codespaces"))
 	       (:file "user" :depends-on ("basic-codespace" "storage" "features" "magic-numbers")))
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))

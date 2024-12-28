@@ -50,10 +50,6 @@
 ;; standard-object We generate and store this once for each object type
 ;; into *class-info* and also into the output stream.
 
-(defvar *slot-info* nil
-  "An eql hash table which maps from structure-object or standard-class type name
- to a `slot-info' structure")
-
 (declaim (inline slot-info-class slot-info-slot-names slot-info-type
 		 slot-info-call-initialize-instance make-slot-info))
 (defstruct slot-info
