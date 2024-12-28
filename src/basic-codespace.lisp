@@ -174,11 +174,11 @@
       (restore-reference (decode-reference-direct code) references))
   ;; 64 - 127 14 bit references (tag byte plus another byte)
   ;; Handles references from 19 to 16402
-  (defrestore (logtest code #b01000000)
+  (defrestore (and (logtest code #b01000000) (not (logtest code #b10000000)))
       (restore-reference (decode-reference-one-byte code (restore-ub8 storage)) references))
   ;; 128 - 191 22 bit references (tag byte plus another two bytes)
   ;; Handles references from 16403 to 4194322
-  (defrestore (logtest code #b10000000)
+  (defrestore (and (logtest code #b10000000) (not (logtest code #b01000000)))
       (restore-reference (decode-reference-two-bytes code (restore-ub16 storage)) references))
   (defrestore +tagged-reference-code+ (restore-reference (funcall restore-object) references))
   (defrestore +new-reference-indicator-code+
