@@ -402,4 +402,4 @@
   (let ((codespace *current-codespace*))
     (assert codespace nil
 	    "Unknown codespace to restore objects with... is *read-version* not correct?"))
-    (funcall (codespace-restore-objects codespace) storage)))
+    (funcall (codespace-restore-objects codespace) storage))
