@@ -90,19 +90,19 @@
 		    (let ((store-object #'store-object)
 			  (storage nil)
 			  (assign-new-reference-id nil))
-		      (store-object/reference-phase obj)))
+		      ,(build-store-object/reference-phase)))
 		  (store-object (obj)
 		    (let ((store-object #'store-object2)
 			  (assign-new-reference-id nil)
 			  (storage nil))
-		      (store-object/reference-phase obj))))
+		      ,(build-store-object/reference-phase))))
 	   (declare (inline store-object2)) ;; inline one level deep
 	   (when track-references
 	     (dolist (elt stuff)
 	       (store-object elt))))
 	#+debug-cbs `(format t "Finished reference counting pass~%")
 	`(when track-references
-           (map-reference-tables #'analyze-references-hash-table)) ;; debugging only
+           ,(build-map-reference-tables ''analyze-references-hash-table)) ;; debugging only
         ;; Now clean up the references table: delete anyone who has no references
         #+debug-cbs `(format t "Generating real reference hash-table~%")
 	;; We do not assign reference ids.  They are assigned as objects are
@@ -111,18 +111,18 @@
 	`(let ((max-ref-id 0))
 	   (declare (type fixnum max-ref-id))
            (when track-references
-	     (map-reference-tables
-	      (lambda (table-name table)
-		(declare (ignore table-name))
-		(maphash (lambda (k v)
-        	           (if (> (the fixnum v) 1)
-        		       (progn (setf (gethash k table) t) ; signal it needs assigning
-				      (the fixnum (incf max-ref-id)))
-			       (remhash k table)))
-			 table))))
+	     ,(build-map-reference-tables
+	      `(lambda (table-name table)
+		 (declare (ignore table-name))
+		 (maphash (lambda (k v)
+        	            (if (> (the fixnum v) 1)
+        			(progn (setf (gethash k table) t) ; signal it needs assigning
+				       (the fixnum (incf max-ref-id)))
+				(remhash k table)))
+			  table))))
            #+debug-cbs
-           (map-reference-tables (lambda (table-name table)
-                                   (format t "~A: there are ~A actual references~%"
+           ,(build-map-reference-tables `(lambda (table-name table)
+                                           (format t "~A: there are ~A actual references~%"
                                            table-name
                                            (hash-table-count table))))
            #+debug-cbs `(format t "Starting actual storage phase~%")
@@ -274,7 +274,7 @@
        (declare (dynamic-extent ,@(mapcar #'first let-bindings)))
        ,@body)))
   
-(defmacro map-reference-tables (func)
+(defun build-map-reference-tables (func)
   (let ((code nil))
     (maphash (lambda (table-name ref-table)
                (declare (ignorable ref-table))

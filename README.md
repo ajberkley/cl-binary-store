@@ -191,6 +191,10 @@ See the example in extensions earlier.
 
 I suggest just piping the output through gzip if you need the smallest possible files, though the output is reasonably compact as it.  Otherwise you can use [deoxybyte-gzip](https://github.com/keithj/deoxybyte-gzip) but make sure to use the most up to date version.
 
+## Debugging
+
+We generate the codespace code through a maze of macros and functions in [codespaces.lisp](src/codespaces.lisp), so if something isn't doing what you want, it is easiest to inspect cl-binary-store::\*codespaces\* and look at the codespace objects that are built and then look at the slots RESTORE-OBJECTS-SOURCE-CODE and STORE-OBJECTS-SOURCE-CODE (which are what are used to build the restore-objects and store-objects functions in the codespace).  These can be compiled at the repl or put into a file and compiled so that you can get full debugging of store-objects / restore-objects.
+
 ## Benchmarking
 
 See [benchmarking.md](benchmarking.md).
