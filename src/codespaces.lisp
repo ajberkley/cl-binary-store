@@ -44,7 +44,7 @@
 
 ;; To debug this stuff you might have to do:
 ;; (let ((*current-codespace/compile-time* (gethash 1 *codespaces*)))
-;;   (build-restore-objects))
+;;   (build-store-objects)) ;; or (build-restore-objects)
 
 (defvar *slot-info* nil
   "An eql hash table which maps from structure-object or standard-class type name
@@ -85,10 +85,12 @@
 	#+debug-cbs `(format t "Starting reference counting pass on ~A objects~%" (length stuff))
 	`(labels ((store-object2 (obj)
 		    (let ((store-object #'store-object)
-			  (storage nil))
+			  (storage nil)
+			  (assign-new-reference-id nil))
 		      (store-object/reference-phase obj)))
 		  (store-object (obj)
 		    (let ((store-object #'store-object2)
+			  (assign-new-reference-id nil)
 			  (storage nil))
 		      (store-object/reference-phase obj))))
 	   (declare (inline store-object2)) ;; inline one level deep
@@ -96,40 +98,51 @@
 	     (dolist (elt stuff)
 	       (store-object elt))))
 	#+debug-cbs `(format t "Finished reference counting pass~%")
-	`(let ((ref-id 0))
-           (declare (type fixnum ref-id))
-           (when track-references
-             (map-reference-tables #'analyze-references-hash-table) ;; debugging only
-             ;; Now clean up the references table: delete anyone who has no references
-             #+debug-cbs `(format t "Generating real reference hash-table~%")
-             (map-reference-tables
-	      (lambda (table-name table)
-		(declare (ignore table-name))
-		(maphash (lambda (k v)
-        	           (if (> (the fixnum v) 1)
-        		       (setf (gethash k table) (- (incf ref-id))) ; signal it needs writing
-			       (remhash k table)))
-			 table)))
-             #+debug-cbs
-             `(map-reference-tables (lambda (table-name table)
-                                      (format t "~A: there are ~A actual references~%"
-                                              table-name
-                                              (hash-table-count table)))))
+	`(when track-references
+           (map-reference-tables #'analyze-references-hash-table)) ;; debugging only
+        ;; Now clean up the references table: delete anyone who has no references
+        #+debug-cbs `(format t "Generating real reference hash-table~%")
+	;; We do not assign reference ids.  They are assigned as objects are
+	;; written, in order as we are keeping the implicit numbering scheme, on
+	;; reading
+	`(let ((max-ref-id 0))
+           (map-reference-tables
+	    (lambda (table-name table)
+	      (declare (ignore table-name))
+	      (maphash (lambda (k v)
+        	         (if (> (the fixnum v) 1)
+        		     (progn (setf (gethash k table) t) ; signal it needs assigning
+				    (the fixnum (incf max-ref-id)))
+			     (remhash k table)))
+		       table)))
+           #+debug-cbs
+           (map-reference-tables (lambda (table-name table)
+                                   (format t "~A: there are ~A actual references~%"
+                                           table-name
+                                           (hash-table-count table))))
            #+debug-cbs `(format t "Starting actual storage phase~%")
-           (labels ((store-object2 (obj) ;; inline one deep
-		      (let ((store-object #'store-object))
-			(store-object/storage-phase obj)))
-                    (store-object (obj)
-		      (let ((store-object #'store-object2))
-			(store-object/storage-phase obj))))
-             (declare (inline store-object2))
-             (when (>= ref-id 2048) ;; if we would have to expand the references vector
-	       #+debug-cbs `(format t "Writing total reference count ~A to file~%" (1+ ref-id))
-	       (write-reference-count (1+ ref-id) #'store-object))
-             (dolist (elt stuff)
-	       (store-object elt))
-	     (when *write-end-marker* (store-object (make-end-marker)))))
-	`(flush-write-storage storage))))
+           (let ((ref-id 0))
+	     (declare (type fixnum ref-id))
+	     (labels ((assign-new-reference-id ()
+			#+dribble-cbs
+			(format t "Assigning new reference id! (ref-id is ~A)~%" ref-id)
+			(the fixnum (incf ref-id)))
+		      (store-object2 (obj) ;; inline one deep
+			(let ((store-object #'store-object)
+			      (assign-new-reference-id #'assign-new-reference-id))
+			  (store-object/storage-phase obj)))
+                      (store-object (obj)
+			(let ((store-object #'store-object2)
+			      (assign-new-reference-id #'assign-new-reference-id))
+			  (store-object/storage-phase obj))))
+	       (declare (inline store-object2) (inline assign-new-reference-id))
+	       (when (>= max-ref-id 2048) ;; if we would have to expand the references vector
+		 #+debug-cbs `(format t "Writing total reference count ~A to file~%" (1+ ref-id))
+		 (write-reference-count (1+ max-ref-id) #'store-object))
+	       (dolist (elt stuff)
+		 (store-object elt))
+	       (when *write-end-marker* (store-object (make-end-marker)))))
+	   (flush-write-storage storage)))))
 
 (defun analyze-references-hash-table (table-name references)
   (declare (ignorable table-name references))
@@ -224,16 +237,10 @@
 
 (defstruct ref-table
   (name nil)
-  (construction-code nil)
-  (priority-for-ref-ids 0)
-  (never-disable nil))
+  (construction-code nil))
 
-(defun register-references& (current-codespace/compile-time table-name construction-code
-			     priority never-disable)
-  "Priority, lower is better.  You want symbols first, for example usually"
-  (let* ((new-ref-table (make-ref-table :name table-name :construction-code construction-code
-					:priority-for-ref-ids priority
-					:never-disable never-disable))
+(defun register-references& (current-codespace/compile-time table-name construction-code)
+  (let* ((new-ref-table (make-ref-table :name table-name :construction-code construction-code))
 	 (ref-tables (codespace-ref-tables current-codespace/compile-time))
          (pre-existing (gethash table-name ref-tables)))
     (when (and pre-existing (not (equalp pre-existing new-ref-table)))
@@ -242,10 +249,8 @@
     (setf (gethash table-name ref-tables) new-ref-table))
   (values))
 
-(defmacro register-references (table-name construction-code
-			       &key (priority 0) (never-disable nil))
-  `(register-references& *current-codespace/compile-time* ',table-name ',construction-code
-			 ,priority ,never-disable))
+(defmacro register-references (table-name construction-code)
+  `(register-references& *current-codespace/compile-time* ',table-name ',construction-code))
   
 (defun with-reference-tables (track-references &rest body)
   "Wrap body with defined reference tables"
@@ -253,8 +258,7 @@
   (assert (codespace-ref-tables *current-codespace/compile-time*))
   (let ((let-bindings nil))
     (maphash (lambda (table-name ref-table)
-               (push (list table-name `(when (or ,track-references
-						 ,(ref-table-never-disable ref-table))
+               (push (list table-name `(when ,track-references
                                          ,(ref-table-construction-code ref-table)))
                      let-bindings))
              (codespace-ref-tables *current-codespace/compile-time*))
@@ -266,11 +270,8 @@
   (let ((code nil))
     (maphash (lambda (table-name ref-table)
                (declare (ignorable ref-table))
-               (push (cons (ref-table-priority-for-ref-ids ref-table)
-			   `(funcall ,func ',table-name ,table-name))
-		     code))
+               (push `(funcall ,func ',table-name ,table-name) code))
              (codespace-ref-tables *current-codespace/compile-time*))
-    (setf code (mapcar #'cdr (sort code #'< :key #'car)))
     `(progn ,@code)))
 
 (defun update-store-info
@@ -279,7 +280,7 @@
        check-for-ref-in write-phase-code override)
   (labels ((maybe-wrap-code-with-ref-check-for-store-phase (code)
              (if check-for-ref-in
-                 `(unless (referenced-already obj storage ,check-for-ref-in)
+                 `(unless (referenced-already obj storage ,check-for-ref-in assign-new-reference-id)
                     ,@(when write-phase-code
                         `((store-ub8 ,write-phase-code storage nil)))
                     ,code)
@@ -290,7 +291,8 @@
                     ,code)
                  code)))
     (loop for param in (cdr store-function-signature)
-          do (unless (or (member param '(obj storage store-object)) (gethash param (codespace-ref-tables codespace)))
+          do (unless (or (member param '(obj storage store-object assign-new-reference-id))
+			 (gethash param (codespace-ref-tables codespace)))
                (error (format nil "While parsing DEFSTORE for ~A, ~A is an unknown parameter of DEFSTORE~%~
                                    it must be one of OBJ, STORAGE, STORE-OBJECT or a reference table name from~%~
                                    REGISTER-REFERENCES" type param))))

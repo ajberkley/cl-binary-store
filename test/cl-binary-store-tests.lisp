@@ -41,9 +41,9 @@
     (loop for elt in restored-a
 	  do (is 'eql elt (first restored-a)))))
 
-;; This test uses too much memory to run regularly...
+;; This test uses too much memory and is too slow to run regularly...
 (define-test up-to-ub32-references-work
-  (let* ((elts (loop for i fixnum from 0 below 50000;;5000000
+  (let* ((elts (loop for i fixnum from 0 below 50000 ;;5000000
 		     collect (format nil "Header: ~A" i)))
 	 (double-elts (append elts elts))
 	 (stored-double-elts (store-to-vector double-elts))
@@ -202,7 +202,7 @@
       (setf (blarg-a (second result)) nil)
       (is 'equalp result s))))
 
-(define-test test-struct-info
+(define-test test-slot-info
   (let ((b (compute-slot-info (make-instance 'blarg))))
     (is 'equalp
 	(restore-from-vector (store-to-vector b))

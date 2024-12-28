@@ -149,7 +149,8 @@
          (setf ,slot (aref a 0))))))
 
 (declaim (notinline store-double-float))
-(defun store-double-float (double-float storage double-float-refs &optional (tag t))
+(defun store-double-float (double-float storage double-float-refs assign-new-reference-id
+			   &optional (tag t))
   (declare (optimize speed safety) (type double-float double-float))
   ;; We de-duplicate double-floats as there is no visible way to
   ;; determine this from common lisp, and it saves space in the image
@@ -157,7 +158,8 @@
   (if (= double-float 0d0)
       (when storage
         (storage-write-byte storage +double-float-zero-code+))
-      (maybe-store-reference-instead (double-float storage double-float-refs)
+      (maybe-store-reference-instead (double-float storage double-float-refs
+				      assign-new-reference-id)
         (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
           (when tag
 	    (storage-write-byte! storage +double-float-code+ :offset offset :sap sap)
@@ -172,11 +174,11 @@
   (/ (the integer (funcall restore-object))
      (the integer (funcall restore-object))))
 
-(defun store-ratio (ratio storage num-eq-refs)
+(defun store-ratio (ratio storage num-eq-refs assign-new-reference-id)
   "Nominally we don't need to do references here, but if someone has two bignums and takes
  a ratio of them, we don't want to store the bignums twice."
   (declare (optimize speed safety))
-  (maybe-store-reference-instead (ratio storage num-eq-refs)
+  (maybe-store-reference-instead (ratio storage num-eq-refs assign-new-reference-id)
     (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
       (storage-write-byte! storage +ratio-code+ :offset offset :sap sap))
     (labels ((store-integer (integer)
@@ -216,8 +218,8 @@
   (declare (optimize speed safety) (type (complex double-float) complex-double-float))
   (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
     (storage-write-byte! storage +complex-double-float-code+ :offset offset :sap sap))
-  (store-double-float (realpart complex-double-float) storage nil nil)
-  (store-double-float (imagpart complex-double-float) storage nil nil))
+  (store-double-float (realpart complex-double-float) storage nil nil nil)
+  (store-double-float (imagpart complex-double-float) storage nil nil nil))
 
 (declaim (inline restore-complex-single-float))
 (defun restore-complex-single-float (storage)

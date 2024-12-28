@@ -15,10 +15,10 @@
 ;; During serialization, we record every (referrable) object we see.
 ;; This is done during an explicit reference pass through the data.
 ;; Then, if we have seen an object multiple times we assign it a
-;; reference id.  Then we begin the serialization process with that
-;; information.  While the reference assignment pass is hard to
-;; parallelize the rest of the storage can then in principle be easily
-;; parallized (with just some contention over when we decide to
+;; sequential reference id.  Then we begin the serialization process
+;; with that information.  While the reference assignment pass is hard
+;; to parallelize the rest of the storage can then in principle be
+;; easily parallized (with just some contention over when we decide to
 ;; serialize the reference objects).
 
 ;; The nice thing about this explicit reference scheme is that it also
@@ -40,13 +40,14 @@
  MB/sec, but you need to make sure your data is safe to serialize and
  you don't care about EQL checks of data..")
 
-(declaim (inline references-vector make-references))
+(declaim (inline references-vector make-references references-ref-id))
 (defstruct references
   "During deserialization this array grows as we restore references.
  In a parallel restore scenario this would have to work differently
  (we'd want to store the number of references in the file and then
  fill this vector up with fix-ups at the beginning)"
-  (vector (make-array nil) :type simple-vector))
+  (vector (make-array nil) :type simple-vector)
+  (ref-id 0 :type fixnum)) ;; ref-ids run from 1 to infinity; they are incf'ed from here
 
 (declaim (inline check-reference))
 (defun check-reference (object references &optional (add-new-reference t))
@@ -77,36 +78,39 @@
         (gethash object references))))
 
 (declaim (inline referenced-already))
-(defun referenced-already (object storage references)
+(defun referenced-already (object storage references assign-new-reference-id)
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
  Otherwise returns NIL.  This should *ONLY* be called during the actual storage phase,
  not the reference counting phase."
-  (declare (type storage storage))
+  (declare (type storage storage) (optimize speed safety))
   (when references
     (let ((ref-idx (gethash object references)))
       ;; When ref-idx is positive, it's a note that we have already written out the
       ;; actual value, so we can just store the reference id. If it is negative,
       ;; it means we must write out the ref-idx and the object as this is the first time
       ;; it has appeared in the output.
-      (when ref-idx
-        (locally
-            (declare (type fixnum ref-idx))
-	  (cond
-	    ((>= ref-idx 0)
-	     #+dribble-cbs (format t "Storing a reference (#~A) which is to a ~A~%"
-				   ref-idx (type-of object))
-	     (store-reference ref-idx storage)
-	     t)
-	    (t
-	     #+dribble-cbs (format t "Storing reference definition (#~A) for next object: ~A~%"
-				   (- ref-idx) (type-of object))
-	     (setf ref-idx (- ref-idx))
-	     (store-reference ref-idx storage)
-	     (setf (gethash object references) ref-idx)
-	     nil)))))))
+      (cond
+	((eq ref-idx t)
+	 ;; Assign a reference id
+	 (let ((new-ref-id (funcall assign-new-reference-id)))
+	   (declare (type fixnum new-ref-id))
+	   #+dribble-cbs (format t "Storing reference definition (#~A) for next object: ~A~%"
+				 new-ref-id (type-of object))
+	   (setf (gethash object references) new-ref-id))
+	 ;; We know the reference id here, so we could write it out, but it wastes a lot
+	 ;; of space, so until we want to do parallel store and restore leave it implicit
+	 ;; for the reader.
+	 (store-new-reference-indicator storage)
+	 nil)
+	((typep ref-idx 'fixnum)
+	 #+dribble-cbs (format t "Storing a reference (#~A) which is to a ~A~%"
+			       ref-idx (type-of object))
+	 (store-reference ref-idx storage)
+	 t)
+	(t nil)))))
 
 (declaim (inline check/store-reference))
-(defun check/store-reference (object storage references &optional (add-new-reference t))
+(defun check/store-reference (object storage references assign-new-reference-id &key (add-new-reference t))
   "Used during the storage phase both during the reference counting
  step and the serialization step.  This function returns T if this
  object has already been written out, in which case the caller should
@@ -119,7 +123,7 @@
  do during cons serialization."
   (declare (optimize speed safety))
   (if storage	     ; we are in the storage phase, writing things out
-      (referenced-already object storage references)
+      (referenced-already object storage references assign-new-reference-id)
       (check-reference object references add-new-reference)))
 
 ;; RESTORE PHASE
@@ -212,7 +216,8 @@
 	    (fixup-list ,restored))
 	   (setf ,place ,restored)))))
 
-(defmacro maybe-store-reference-instead ((obj storage references &optional (add-new-reference t))
+(defmacro maybe-store-reference-instead ((obj storage references assign-new-reference-id 
+					  &key (add-new-reference t))
 					 &body body)
   "Objects may be seen multiple times during serialization,
  so where object equality after deserialization is expected (pretty
@@ -222,46 +227,79 @@
  original object.  The counting of objects is done explicitly in the
  writing phase, so there is nothing to do in the reading phase except
  to plunk objects into the right place in the *references* array."
-  `(or (check/store-reference ,obj ,storage ,references ,add-new-reference)
+  `(or (check/store-reference ,obj ,storage ,references ,assign-new-reference-id
+			      :add-new-reference ,add-new-reference)
        (progn
 	 ,@body)))
 
-(declaim (inline encode-reference-direct))
+(defconstant +reference-direct-max-ref-id+
+  (- +last-direct-reference-id-code+ +first-direct-reference-id-code+ -1))
+(defconstant +reference-one-byte-min-ref-id+
+  (+ +reference-direct-max-ref-id+ 1))
+(defconstant +reference-one-byte-max-ref-id+
+  (+ 16383 +reference-direct-max-ref-id+))
+(defconstant +reference-two-byte-max-ref-id+
+  (- (expt 2 22) 1))
+
+(declaim (notinline encode-reference-direct))
 (defun encode-reference-direct (ref-index)
-  (+ 43 ref-index))
+  "reference indicies start a 1, so we subtract one here."
+  (assert (<= 1 ref-index +reference-direct-max-ref-id+))
+  (let ((encoded (+ (- +first-direct-reference-id-code+ 1)
+		    ref-index)))
+    (assert (and (>= encoded +first-direct-reference-id-code+)
+		 (<= encoded +last-direct-reference-id-code+)))
+    encoded))
 
 ;; Little endian, least significant byte first
-(declaim (inline encode-reference-one-byte))
+(declaim (notinline encode-reference-one-byte))
 (defun encode-reference-one-byte (ref-index)
   "Returns a 16 bit value"
-  (let ((shifted-ref-index (- ref-index 19)))
-    (+ (+ #x40 (logand shifted-ref-index #x3F))
-       (ash (logand shifted-ref-index #xFFC0) 2))))
+  (assert (< +reference-direct-max-ref-id+ ref-index (+ 1 +reference-one-byte-max-ref-id+)))
+  (let* ((shifted-ref-index
+	   (- ref-index +reference-direct-max-ref-id+))
+	 (tag-byte (+ #x40 (logand shifted-ref-index #x3F))))
+    (+ tag-byte (ash (logand shifted-ref-index #xFFC0) 2))))
 
-(declaim (inline encode-reference-two-bytes))
+(declaim (notinline encode-reference-two-bytes))
 (defun encode-reference-two-bytes (ref-index)
-  (let ((shifted-ref-index (- ref-index 16403)))
+  (assert (< +reference-one-byte-max-ref-id+ ref-index (+ 1 +reference-two-byte-max-ref-id+)))
+  (let ((shifted-ref-index
+	  (- ref-index (+ 16384 (- +last-direct-reference-id-code+
+				   +first-direct-reference-id-code+ -1)))))
     (values (+ #x80 (logand shifted-ref-index #x3F))
 	    (ash shifted-ref-index -6))))
 
+(declaim (inline store-new-reference-indicator))
+(defun store-new-reference-indicator (storage)
+  "Write an indicator that we should assign a reference id to the next object"
+  (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+    (storage-write-byte! storage +new-reference-indicator-code+ :sap sap :offset offset)))
+
+(declaim (inline restore-new-reference-indicator))
+(defun restore-new-reference-indicator (references restore-object)
+  (let ((ref-id (incf (references-ref-id references))))
+    (setf (svref (references-vector references) ref-id)
+	  (with-delayed-reference/fixup (ref-id references)
+	    (funcall (the function restore-object))))))
+			
 (declaim (notinline store-reference))
 (defun store-reference (ref-index storage)
   "We store references as the minimum possible size we can"
-  (declare (type (and (integer 0) fixnum) ref-index)
+  (declare (type (and (integer 1) fixnum) ref-index)
 	   (type (not null) storage))
   (when storage
     #+dribble-cbs (format t "Writing reference ~A~%" ref-index)
     (cond
-      ((< ref-index 19)
-       ;;(format t "~8,'0b~%" (encode-reference-direct ref-index))
+      ((<= 1 ref-index +reference-direct-max-ref-id+)
        (storage-write-byte storage (encode-reference-direct ref-index)))
-      ((< ref-index 16403)
+      ((<= ref-index +reference-one-byte-max-ref-id+)
        (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
 	 ;; It's in the wrong order!
 	 ;;(format t "~16,'0b~%" (encode-reference-one-byte ref-index))
 	 (storage-write-ub16! storage (encode-reference-one-byte ref-index)
 			      :sap sap :offset offset)))
-      ((< ref-index 4210707)
+      ((<= ref-index +reference-two-byte-max-ref-id+)
 	  (with-write-storage (storage :offset offset :reserve-bytes 3 :sap sap)
 	    (multiple-value-bind (tag-byte second-two-bytes)
 		(encode-reference-two-bytes ref-index)
@@ -272,17 +310,10 @@
        (storage-write-byte storage +tagged-reference-code+)
        (store-tagged-unsigned-integer ref-index storage)))))
 
-(declaim (notinline restore-reference))
-(defun restore-reference (ref-id references restore-object)
+(declaim (inline restore-reference))
+(defun restore-reference (ref-id references)
   "The reference has already been calculated in the dispatch code for us.
  If we are actually restoring the next object, it may not be re-ified before
  someone refers to it, so we have to store a fixup for those other objects
  to hang their reference onto."
-  (let ((vector (references-vector references)))
-    #+debug-cbs (format t "Restoring reference ~A~%" ref-id)
-    (or (svref vector ref-id)
-	(progn
-	  #+debug-cbs (format t " We have never seen it before, loading next object~%")
-	  (setf (svref vector ref-id)
-		(with-delayed-reference/fixup (ref-id references)
-		  (funcall (the function restore-object))))))))
+  (svref (references-vector references) ref-id))

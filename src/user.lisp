@@ -139,7 +139,8 @@
 				  :if-exists :supersede
 				  :element-type '(unsigned-byte 8))
       (with-storage (storage :flusher (make-write-into-storage/stream str))
-	(apply #'store-objects storage elements)))))
+	(apply #'store-objects storage elements)))
+    filename))
 
 (defun restore-from-file (filename)
   (declare (optimize speed safety))

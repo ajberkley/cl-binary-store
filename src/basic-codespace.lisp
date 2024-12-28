@@ -1,8 +1,8 @@
 (in-package :cl-binary-store)
 
-;; This codespace uses codes 0 to 32 and reserves 192 to 255 for the
+;; This codespace uses codes 0 to 34 and reserves 192 to 255 for the
 ;; user to extend things (those have the two highest bits set).  Codes
-;; between 34 and 43 are small integer codes, and codes from 44 to 63
+;; between 35 and 43 are small integer codes, and codes from 44 to 63
 ;; are direct encoded references.  Reference codes from 64 to 127 are
 ;; 6 bits plus the next 8 bits read.  Then codes from 128-191 (highest
 ;; bit set) are 6 lowest bits plus the next 16 bits read.  This gives
@@ -52,32 +52,59 @@
 (defconstant +hash-table-code+ 29)
 (defconstant +simple-base-string-code+ 30)
 (defconstant +simple-string-code+ 31)
-(defconstant +action-code+ 32)
-(defconstant +tagged-reference-code+ 33) ;; for more than 4194322 references!
+(defconstant +action-code+ 32
+  "A request to perform an action.  Used for checking codespace versions and for
+ updating reference vector size and for marking the end of data")
+(defconstant +tagged-reference-code+ 33
+  "A reference to an object")
+(defconstant +new-reference-indicator-code+ 34
+  "Note that the next object to be read should be assigned the next consecutive reference id")
+(defconstant +first-small-unsigned-integer-code+ 35)
+;; [35 43] used for small unsigned integers [0 8]
+(defconstant +last-small-unsigned-integer-code+ 43)
+(defconstant +first-direct-reference-id-code+ (+ +last-small-unsigned-integer-code+ 1))
+;; [44 63] used for direct reference codes
+(defconstant +last-direct-reference-id-code+ 63)
+;; [64 127] used for the one byte codes (6 bits)
+(defconstant +first-one-byte-reference-id-code+ 64)
+(defconstant +last-one-byte-reference-id-code+ 127)
+;; [128 191] used for the two byte codes (6 bits)
+(defconstant +first-two-byte-reference-id-code+ 128)
+(defconstant +last-two-byte-reference-id-code+ 191)
+;; 192-255 used for user codes
+(defconstant +first-user-code+ 192)
+(defconstant +last-user-code+ 255)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (declaim (inline decode-reference-direct))
   (defun decode-reference-direct (raw-8-bit)
-    (- raw-8-bit 43))
+    "Reference ids start at 1"
+    (assert (and (>= raw-8-bit +first-direct-reference-id-code+)
+		 (<= raw-8-bit +last-direct-reference-id-code+)))
+    (let ((decoded-reference-direct (+ 1 (- raw-8-bit +first-direct-reference-id-code+))))
+      decoded-reference-direct))
 
   (declaim (inline decode-reference-one-byte))
   (defun decode-reference-one-byte (tag-byte next-byte)
     ;;(format t "Tag byte is ~A, next-byte is ~A~%" tag-byte next-byte)
-    (+ 19 (- tag-byte #x40) (ash next-byte 6)))
+    (assert (and (>= tag-byte +first-one-byte-reference-id-code+)
+		 (<= tag-byte +last-one-byte-reference-id-code+)))
+    (+ 1 (- +last-direct-reference-id-code+ +first-direct-reference-id-code+)
+         (- tag-byte #x40) (ash next-byte 6)))
 
   (declaim (inline decode-reference-two-bytes))
   (defun decode-reference-two-bytes (tag-byte next-16-bits)
     ;;(format t "Tag byte is ~A, next-16-bits is ~A~%" tag-byte next-16-bits)
-    (+ 16403 (- tag-byte #x80) (ash next-16-bits 6))))
+    (assert (and (>= tag-byte +first-two-byte-reference-id-code+)
+		 (<= tag-byte +last-two-byte-reference-id-code+)))
+    (+ 1 (+ 16384 (- +last-direct-reference-id-code+ +first-direct-reference-id-code+))
+         (- tag-byte #x80) (ash next-16-bits 6))))
 
 (define-codespace ("basic codespace" +basic-codespace+)
-  (register-references num-eq-refs (make-hash-table :test #'eq)
-		       :priority 3)
-  (register-references double-float-refs (make-hash-table :test #'double-float-=)
-		       :priority 2)
-  (register-references eq-refs (make-hash-table :test #'eq) :priority 1)
-  (register-references symbol-refs (make-hash-table :test #'eq) :never-disable t
-		       :priority 0)
+  (register-references num-eq-refs (make-hash-table :test #'eq))
+  (register-references double-float-refs (make-hash-table :test #'double-float-=))
+  (register-references eq-refs (make-hash-table :test #'eq))
+  (register-references symbol-refs (make-hash-table :test #'eq))
 
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
   (defrestore +ub8-code+ (restore-ub8 storage))
@@ -95,11 +122,12 @@
   (defstore single-float (store-single-float obj storage) :call-during-reference-phase nil)
   (defrestore +single-float-code+ (restore-single-float storage))
   
-  (defstore double-float (store-double-float obj storage double-float-refs))
+  (defstore double-float
+      (store-double-float obj storage double-float-refs assign-new-reference-id))
   (defrestore +double-float-code+ (restore-double-float storage))
   (defrestore +double-float-zero-code+ (restore-double-float-zero))
   
-  (defstore ratio (store-ratio obj storage num-eq-refs))
+  (defstore ratio (store-ratio obj storage num-eq-refs assign-new-reference-id))
   (defrestore +ratio-code+ (restore-ratio restore-object))
   
   (defstore complex (store-complex obj storage store-object) :check-for-ref-in num-eq-refs)
@@ -110,7 +138,7 @@
   ;; CONS
   
   (defstore cons
-      (store-cons obj storage eq-refs store-object)
+      (store-cons obj storage eq-refs store-object assign-new-reference-id)
     :call-during-reference-phase (search-cons obj eq-refs store-object))
   
   (defrestore +cons-code+ (restore-cons storage restore-object))
@@ -123,35 +151,36 @@
   (defrestore +t-code+ (restore-t))
 
   ;; INTERNED SYMBOLS / KEYWORDS / UNINTERNED SYMBOLS
-  (defstore (and symbol (not null) (not (eql t))) (store-symbol obj storage symbol-refs store-object))
+  (defstore (and symbol (not null) (not (eql t)))
+      (store-symbol obj storage symbol-refs store-object assign-new-reference-id))
   (defrestore +symbol-code+ (restore-symbol storage restore-object))
   (defrestore +uninterned-symbol-code+ (restore-uninterned-symbol storage))
   
   ;; STRUCTURE-OBJECTS (defstruct) and STANDARD-CLASS (defclass)
-  (defstore structure-object (store-struct obj storage eq-refs store-object))
-  (defstore standard-object (store-standard-object obj storage eq-refs store-object))
+  (defstore structure-object (store-struct obj storage eq-refs store-object assign-new-reference-id))
+  (defstore standard-object (store-standard-object obj storage eq-refs store-object assign-new-reference-id))
   (defrestore +structure-object-code+ (restore-struct restore-object))
   (defrestore +standard-object-code+ (restore-standard-object restore-object))
 
   ;; REFERENCES
-  (defrestore (and (> code 33) (<= code 43)) (- code 38)) ;; direct integer encoding -4 .. 5
+  (defrestore (and (>= code +first-small-unsigned-integer-code+)
+		   (<= code +last-small-unsigned-integer-code+))
+      (- code +first-small-unsigned-integer-code+)) ;; direct integer encoding 0 .. 9
   ;; 44 - 63 directly coded references (0 .. 19)
-  (defrestore (and (> code 43) (< code 63))
-      (restore-reference (decode-reference-direct code) references restore-object))
+  (defrestore (and (>= code +first-direct-reference-id-code+)
+		   (<= code +last-direct-reference-id-code+))
+      (restore-reference (decode-reference-direct code) references))
   ;; 64 - 127 14 bit references (tag byte plus another byte)
   ;; Handles references from 19 to 16402
   (defrestore (logtest code #b01000000)
-      (restore-reference (decode-reference-one-byte code (restore-ub8 storage))
-			 references restore-object))
+      (restore-reference (decode-reference-one-byte code (restore-ub8 storage)) references))
   ;; 128 - 191 22 bit references (tag byte plus another two bytes)
   ;; Handles references from 16403 to 4194322
   (defrestore (logtest code #b10000000)
-      (restore-reference (decode-reference-two-bytes code (restore-ub16 storage))
-			 references
-			 restore-object))
-  (defrestore +tagged-reference-code+ (restore-reference (funcall restore-object)
-							 references
-							 restore-object))
+      (restore-reference (decode-reference-two-bytes code (restore-ub16 storage)) references))
+  (defrestore +tagged-reference-code+ (restore-reference (funcall restore-object) references))
+  (defrestore +new-reference-indicator-code+
+      (restore-new-reference-indicator references restore-object))
 
   ;; SIMPLE VECTORS
   #+sbcl
@@ -168,10 +197,10 @@
   (defrestore +simple-specialized-array-code+ (restore-simple-specialized-array storage))
   
   ;; COMPLEX VECTORS AND ARRAYS
-  (defstore array (store-array obj storage eq-refs store-object))
+  (defstore array (store-array obj storage eq-refs store-object assign-new-reference-id))
   (defrestore +array-code+ (restore-array storage restore-object))
   
-  (defstore slot-info (store-slot-info obj storage eq-refs store-object))
+  (defstore slot-info (store-slot-info obj storage eq-refs store-object assign-new-reference-id))
   (defrestore +slot-info-code+ (restore-slot-info storage restore-object))
   
   ;; UNBOUND MARKER
@@ -193,7 +222,8 @@
     :call-during-reference-phase nil)
   (defrestore +simple-base-string-code+ (restore-simple-base-string storage))
   
-  (defstore simple-string (store-simple-string obj storage) :check-for-ref-in eq-refs
+  (defstore simple-string (store-simple-string obj storage)
+    :check-for-ref-in eq-refs
     :call-during-reference-phase nil)
   (defrestore +simple-string-code+ (restore-simple-string storage))
   
@@ -202,4 +232,5 @@
   
   ;; On sbcl a condition is neither a structure-object nor a standard-object, but has slots and all
   #+sbcl
-  (defstore condition (store-standard-object obj storage eq-refs store-object)))
+  (defstore condition
+      (store-standard-object obj storage eq-refs store-object assign-new-reference-id)))

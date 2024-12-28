@@ -16,12 +16,12 @@
  best case you end up with multiple copies of parts of the list.")
 
 (declaim (inline store-cons))
-(defun store-cons (cons storage eq-refs store-object)
+(defun store-cons (cons storage eq-refs store-object assign-new-reference-id)
   "This is called during the actual storage output phase."
   (declare (optimize (speed 3) (safety 0) (debug 0))
            (type storage storage) (type function store-object))
   (tagbody start
-     (when (referenced-already cons storage eq-refs)
+     (when (referenced-already cons storage eq-refs assign-new-reference-id)
        (return-from store-cons (values)))
      (storage-write-byte storage +cons-code+)
      (funcall store-object (car cons))

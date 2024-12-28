@@ -78,8 +78,8 @@
 (defun satisfies-test (x) (< x 3))
 (deftype satisfies-something () '(satisfies satisfies-test))
 (defstruct another)
-(defstruct blarg)
-(defstruct (includes-blarg (:include blarg)))
+(defstruct blarg-td)
+(defstruct (includes-blarg-td (:include blarg-td)))
 
 (defclass class-a () ())
 (defclass class-b (class-a) ())
@@ -93,8 +93,8 @@
     bignum
     standard-object
     standard-class
-    blarg
-    includes-blarg
+    blarg-td
+    includes-blarg-td
     another
     satisfies-something
     vector

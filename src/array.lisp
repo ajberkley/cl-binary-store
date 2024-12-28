@@ -27,9 +27,9 @@
 		do (restore-object-to (row-major-aref array idx) restore-object))
 	  array))))
 
-(defun store-array (array storage eq-refs store-object)
+(defun store-array (array storage eq-refs store-object assign-new-reference-id)
   (declare (optimize speed safety) (type array array) (type function store-object))
-  (maybe-store-reference-instead (array storage eq-refs)
+  (maybe-store-reference-instead (array storage eq-refs assign-new-reference-id)
     #+debug-cbs(format t "~A array of type ~A~%"
 		       (if storage "Storing" "Analyzing")
 		       (type-of array))
@@ -58,12 +58,12 @@
 	    (store-t storage)
 	    (if (symbolp elt-type)
 		(store-symbol elt-type storage eq-refs store-object)
-		(store-cons elt-type storage eq-refs store-object))))
+		(store-cons elt-type storage eq-refs store-object assign-new-reference-id))))
       (cond
 	(next-array
 	 (when storage
 	   (store-tagged-unsigned-fixnum offset storage))
-	 (store-array next-array storage eq-refs store-object))
+	 (store-array next-array storage eq-refs store-object assign-new-reference-id))
 	(t
 	 ;; We have to store the array elements even past the fill pointer
 	 (dotimes (idx (array-total-size array))

@@ -76,17 +76,18 @@
      :slot-names names
      :call-initialize-instance call-initialize-info)))
 
-(defun store-slot-info (slot-info storage eq-refs store-object)
+(defun store-slot-info (slot-info storage eq-refs store-object assign-new-reference-id)
   (declare (optimize speed safety) (type slot-info slot-info))
-  (maybe-store-reference-instead (slot-info storage eq-refs)
+  (maybe-store-reference-instead (slot-info storage eq-refs assign-new-reference-id)
     (let ((slot-names (slot-info-slot-names slot-info)))
       (when storage
 	(store-ub8 +slot-info-code+ storage nil)
 	(store-tagged-unsigned-fixnum (length slot-names) storage)
         (store-boolean (slot-info-call-initialize-instance slot-info) storage))
-      (store-symbol (slot-info-type slot-info) storage eq-refs store-object)
+      (store-symbol (slot-info-type slot-info) storage eq-refs store-object
+		    assign-new-reference-id)
       (loop for name across slot-names
-	    do (store-symbol name storage eq-refs store-object)))))
+	    do (store-symbol name storage eq-refs store-object assign-new-reference-id)))))
 
 (defun restore-slot-info (storage restore-object)
   (declare (optimize speed safety) (type function restore-object))
@@ -109,13 +110,13 @@
 	(setf (gethash type *slot-info*)
 	      (serializable-slot-info object type)))))
 
-(defun store-struct (struct storage eq-refs store-object)
+(defun store-struct (struct storage eq-refs store-object assign-new-reference-id)
   (declare (optimize speed safety) (type structure-object struct) (type function store-object))
-  (maybe-store-reference-instead (struct storage eq-refs)
+  (maybe-store-reference-instead (struct storage eq-refs assign-new-reference-id)
     (when storage
       (store-ub8 +structure-object-code+ storage nil))
     (let ((slot-info (get-slot-info struct)))
-      (store-slot-info slot-info storage eq-refs store-object)
+      (store-slot-info slot-info storage eq-refs store-object assign-new-reference-id)
       (loop for name across (slot-info-slot-names slot-info)
 	    do (funcall store-object (slot-value struct name))))))
 
@@ -140,13 +141,13 @@
 (defun restore-unbound ()
   'unbound-slot)
 
-(defun store-standard-object (obj storage eq-refs store-object)
+(defun store-standard-object (obj storage eq-refs store-object assign-new-reference-id)
   (declare (optimize speed safety) (type (or standard-object condition) obj))
-  (maybe-store-reference-instead (obj storage eq-refs)
+  (maybe-store-reference-instead (obj storage eq-refs assign-new-reference-id)
     (when storage
       (store-ub8 +standard-object-code+ storage nil))
     (let ((slot-info (get-slot-info obj)))
-      (store-slot-info slot-info storage eq-refs store-object)
+      (store-slot-info slot-info storage eq-refs store-object assign-new-reference-id)
       (loop for name across (slot-info-slot-names slot-info)
 	    do (if (slot-boundp obj name)
 		   (funcall (the function store-object) (slot-value obj name))

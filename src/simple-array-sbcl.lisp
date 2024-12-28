@@ -101,7 +101,7 @@
 	     (setf (storage-offset storage) (+ offset write-length)))))))
 
 (declaim (notinline store-simple-base-string))
-(defun store-simple-base-string (string storage &optional references)
+(defun store-simple-base-string (string storage &optional references assign-new-reference-id)
   (declare (optimize speed safety) (type simple-base-string string))
   (labels ((write-it ()
 	     (with-write-storage (storage)
@@ -113,7 +113,7 @@
 					      string-length storage))))))
     (declare (inline write-it))
     (if references
-	(maybe-store-reference-instead (string storage references)
+	(maybe-store-reference-instead (string storage references assign-new-reference-id)
 	  (write-it))
 	(write-it))))
 
@@ -131,7 +131,7 @@
       string)))
 
 (declaim (notinline store-simple-string))
-(defun store-simple-string (string storage &optional references)
+(defun store-simple-string (string storage &optional references assign-new-reference-id)
   (declare (optimize speed safety) (type simple-string string))
   (labels ((write-it ()
 	     (with-write-storage (storage)
@@ -148,7 +148,7 @@
 	       #-sb-unicode (store-simple-base-string string storage nil))))
     (declare (inline write-it))
     (if references
-	(maybe-store-reference-instead (string storage references)
+	(maybe-store-reference-instead (string storage references assign-new-reference-id)
 	  (write-it))
 	(write-it))))
 
@@ -172,16 +172,16 @@
                                      :end num-bytes))))))
 
 (declaim (notinline store-string))
-(defun store-string (string storage references)
+(defun store-string (string storage references assign-new-reference-id)
   (etypecase string
-    (simple-base-string (store-simple-base-string string storage references))
-    (simple-string (store-simple-string string storage references))))
+    (simple-base-string (store-simple-base-string string storage references assign-new-reference-id))
+    (simple-string (store-simple-string string storage references assign-new-reference-id))))
 
 (declaim (notinline store-string/no-refs))
 (defun store-string/no-refs (string storage)
   (etypecase string
-    (simple-base-string (store-simple-base-string string storage nil))
-    (simple-string (store-simple-string string storage nil))))
+    (simple-base-string (store-simple-base-string string storage))
+    (simple-string (store-simple-string string storage))))
 
 (declaim (notinline restore-string))
 (defun restore-string (storage)

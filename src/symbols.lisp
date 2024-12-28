@@ -25,12 +25,12 @@
   t)
 
 (declaim (notinline store-symbol))
-(defun store-symbol (symbol storage eq-refs store-object)
+(defun store-symbol (symbol storage eq-refs store-object assign-new-reference-id)
   (declare (notinline store-simple-specialized-vector))
   (let ((symbol-package (symbol-package symbol)))
     (cond
       (symbol-package
-       (maybe-store-reference-instead (symbol storage eq-refs)
+       (maybe-store-reference-instead (symbol storage eq-refs assign-new-reference-id)
 	 #+debug-cbs
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
