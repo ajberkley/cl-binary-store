@@ -6,19 +6,19 @@
 ;; are direct encoded references.  Reference codes from 64 to 127 are
 ;; 6 bits plus the next 8 bits read.  Then codes from 128-191 (highest
 ;; bit set) are 6 lowest bits plus the next 16 bits read.  This gives
-;; us a codespace of 25 million references.  We do not distinguish the
-;; first instance of a reference --- the state in the references
-;; vector tells us whether or not we have seen an object before --- if
-;; we haven't, we assign the next object to the reference id.  This
-;; means that parallel restore isn't really practical in this
-;; codespace.  One would have to shrink down to a 5 bit direct
-;; reference codespace for that... which might be good enough?  Anyhow,
-;; easy to fixup with a different codespace.
+;; us a codespace of 25 million references (above that we just use a
+;; tagged integer)
 
-;; TODO Handle the encoding of -5 to 5.
-;; TODO Handle the reference encoding
+(defvar *eq-refs-table-size* 7
+  "A hint for the starting size of the object tracking hash table used for most objects")
+(defvar *double-float-refs-table-size* 7
+  "A hint for the starting size of the double float tracking reference table")
+(defvar *num-eq-refs-table-size* 7
+  "A hint for the starting size of the hash table tracking misc number types
+ (complex, ratios, bignums)")
 
-(defconstant +basic-codespace+ #x0001)
+(defconstant +basic-codespace+ #x0001
+  "This is the basic codespace of cl-binary-store.")
 
 (defconstant +ub8-code+ 0)
 (defconstant +ub16-code+ 1)
@@ -101,10 +101,6 @@
 		 (<= tag-byte +last-two-byte-reference-id-code+)))
     (+ 1 (+ 16384 (- +last-direct-reference-id-code+ +first-direct-reference-id-code+))
          (- tag-byte #x80) (ash next-16-bits 6))))
-
-(defvar *eq-refs-table-size* 7)
-(defvar *double-float-refs-table-size* 7)
-(defvar *num-eq-refs-table-size* 7)
 
 (define-codespace ("basic codespace" +basic-codespace+)
   (register-references num-eq-refs (make-hash-table :test #'eq :size *num-eq-refs-table-size*))

@@ -1,6 +1,8 @@
 (in-package :cl-binary-store)
 
-;; A codespace is the collection of defstore / defrestore definitions.
+;; A codespace is the collection of `defstore' / `defrestore' definitions
+;; and `register-references'.
+
 ;; It defines the data structure written on disk.  So far, we use a
 ;; single byte as the first dispatch mechanism for an object, so the
 ;; codespace defines a mapping from that byte to a deserialization
