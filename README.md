@@ -192,16 +192,11 @@ I suggest just piping the output through gzip.  Otherwise you can use [deoxybyte
 
 See [benchmarking.md](benchmarking.md).
 
-## TODO
-- [X] Pluggable versioned coding schemes
-  - [X] codespace optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes) (in progress)
-  - [ ] messagepack (for example; for a limited subset of types)
+## TODO ideas
+- [ ] A codespace for messagepack (for example; for a limited subset of types).  This is mainly as an exercise as cl-messagepack is fine.
 - [ ] Support for other Common Lisps aside from sbcl
   - [ ] At least basic slow support
   - [ ] Optimized support
 - [ ] Further discoveries from real world use cases (that is, my use case)
-  - [ ] Add restarts to handle missing packages / moved symboles during restore (create-package / rehome / discard)
   - [ ] Build compacted hash tables after the reference counting
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
-- [X] Always use references for symbols even when *track-references* nil.
-- [X] small integer immediate storage
