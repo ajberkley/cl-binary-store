@@ -28,7 +28,7 @@ Note that here we are writing out 1M conses and 1M small integers in < 10 ms, th
     CL-BINARY-STORE
      OUTPUT SIZE: 2.12 MB  <--- a lot smaller!
      CL-BINARY-STORE WRITE: 4.08 ms at 521 MB/sec
-     CL-BINARY-STORE READ : 10.08 ms at 211 MB/sec
+     CL-BINARY-STORE READ : 8.08 ms at 263 MB/sec
     CL-STORE
      OUTPUT SIZE: 5.00MB
      CL-STORE WRITE: 76.39 ms at 65 MB/sec
@@ -45,7 +45,7 @@ faster than the above, but whatever.
     CL-BINARY-STORE
      OUTPUT SIZE: 3.00 MB <-- one byte for each cons, two bytes for each small integer
      CL-BINARY-STORE WRITE: 3.12 ms at 961 MB/sec
-     CL-BINARY-STORE READ : 9.12 ms at 329 MB/sec
+     CL-BINARY-STORE READ : 6.60 ms at 455 MB/sec     
     CL-STORE
      OUTPUT SIZE: 5.00MB
      CL-STORE WRITE: 72.40 ms at 69 MB/sec
@@ -61,7 +61,7 @@ OK, now onto fixnums.  Still not doing shabbily.  I am not sure why the read dis
     CL-BINARY-STORE
      OUTPUT SIZE: 10.00 MB
      CL-BINARY-STORE WRITE: 3.28 ms at 3048 MB/sec
-     CL-BINARY-STORE READ : 10.24 ms at 976 MB/sec
+     CL-BINARY-STORE READ : 8.52 ms at 1174 MB/sec     
     CL-STORE
      OUTPUT SIZE: 37.75MB
      CL-STORE WRITE: 638.57 ms at 59 MB/sec
@@ -76,8 +76,8 @@ Double floats are more interesting.  Here cl-binary-store pulls ahead in writing
      HLMEM READ : 18.28 ms at 875 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 10.00 MB
-     CL-BINARY-STORE WRITE: 8.68 ms at 1152 MB/sec
-     CL-BINARY-STORE READ : 16.64 ms at 601 MB/sec
+     CL-BINARY-STORE WRITE: 14.11 ms at 709 MB/sec
+     CL-BINARY-STORE READ : 15.74 ms at 635 MB/sec
     CL-STORE
      OUTPUT SIZE: 48.00MB
      CL-STORE WRITE: 804.85 ms at 60 MB/sec
