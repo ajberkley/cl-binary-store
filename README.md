@@ -28,8 +28,8 @@ I have not cut a first release tag even though the system works well currently b
 
 ## In progress / planned soon
 - [X] Pluggable versioned coding schemes
-  - [ ] optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes)
-  - [ ] optimized for non-referential data (tag bits used for immediate small numbers, small vectors / lists, for example)
+  - [ ] codespace optimized for highly referential data (tag bits mainly used for references instead of 8 bit tag codes) (in progress)
+  - [ ] codespace optimized for non-referential data (tag bits used for immediate small numbers, small vectors / lists, for example)
   - [ ] messagepack (for example)
 - [ ] Support for other Common Lisps aside from sbcl
   - [ ] At least basic slow support
@@ -40,7 +40,8 @@ I have not cut a first release tag even though the system works well currently b
   - [ ] Build compacted hash tables after the reference counting
 - [ ] Parallel restore?  I've given up on parallel store phase.
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)
-- [ ] Always use references for symbols even when *track-references* nil.
+- [X] Always use references for symbols even when *track-references* nil.
+- [ ] small integer immediate storage (in progress)
 
 ## General features
 
@@ -205,6 +206,8 @@ See the example in extensions earlier.
 I suggest just piping the output through gzip.  Otherwise you can use [deoxybyte-gzip](https://github.com/keithj/deoxybyte-gzip) but warning it has a small bug in read-sequence, so use the version [here](https://github.com/ajberkley/deoxybyte-gzip).
 
 ## Benchmarking
+
+> :warning: These are out of date, we write even smaller files now
 
 To make something fast you have to measure it!  In src/benchmarks.lisp you'll see comparisons between CL-STORE, HYPERLUMINAL-MEM, and this package.  For example:
 
