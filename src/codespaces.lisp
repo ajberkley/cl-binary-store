@@ -35,9 +35,10 @@
   (ref-tables (make-hash-table :test 'eql)) ; Maps name -> ref-table
   (store-infos (make-hash-table :test 'equal)) ; Maps type -> `store-info'
   (restore-infos (make-hash-table :test 'eql)) ; Maps code -> `restore-info'
+  (restore-objects-source-code nil) ; the source code that was compiled to restore-objects
+  (store-objects-source-code nil) ; the source code that was compiled to make store-objects
   (restore-objects #'invalid :type function)
-  (store-objects #'invalid :type function)
-  (report-dispatch-counts #'invalid :type function)) ;; not implemented
+  (store-objects #'invalid :type function))
 
 (defun deep-copy-codespace (target source-codespace)
   (setf (codespace-ref-tables target) (codespace-ref-tables source-codespace))
@@ -134,11 +135,11 @@
 		      (store-object2 (obj) ;; inline one deep
 			(let ((store-object #'store-object)
 			      (assign-new-reference-id #'assign-new-reference-id))
-			  (store-object/storage-phase obj)))
+			  ,(build-store-object/storage-phase)))
                       (store-object (obj)
 			(let ((store-object #'store-object2)
 			      (assign-new-reference-id #'assign-new-reference-id))
-			  (store-object/storage-phase obj))))
+			  ,(build-store-object/storage-phase))))
 	       (declare (inline store-object2) (inline assign-new-reference-id))
 	       (when (>= max-ref-id 2048) ;; if we would have to expand the references vector
 		 #+debug-cbs `(format t "Writing total reference count ~A to file~%" (1+ ref-id))
@@ -199,15 +200,18 @@
   (unwind-protect
        (progn
 	 (setf *current-codespace/compile-time* codespace)
-	 (setf (codespace-store-objects codespace)
-	       (compile nil
-			`(lambda (storage &rest stuff)
+	 (let ((store-objects-source-code
+		 `(lambda (storage &rest stuff)
 			   (declare (optimize speed safety) (type storage storage)
 				    (dynamic-extent stuff))
-			   ,(build-store-objects))))
-	 (setf (codespace-restore-objects codespace)
-	       (compile nil `(lambda (storage)
-			       ,(build-restore-objects)))))
+		    ,(build-store-objects))))
+	   (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
+	   (setf (codespace-store-objects codespace) (compile nil store-objects-source-code)))
+	 (let ((restore-objects-source-code
+		 `(lambda (storage) ,(build-restore-objects))))
+	   (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)
+	   (setf (codespace-restore-objects codespace)
+		 (compile nil restore-objects-source-code))))
     (setf *current-codespace/compile-time* nil))
   codespace)
 
@@ -353,34 +357,11 @@
 	  type-dispatch-table)
 	:key #'first)))
   
-(defmacro store-object/storage-phase (obj)
-  (declare (ignorable obj))
-  (assert (string= (symbol-name obj) "OBJ"))
-  (store-object/phase obj 'store-info-storage-phase-code))
+(defun build-store-object/storage-phase ()
+  (store-object/phase 'obj 'store-info-storage-phase-code))
 
-(defmacro store-object/reference-phase (obj)
-  (declare (ignorable obj))
-  (assert (string= (symbol-name obj) "OBJ"))
-  (store-object/phase obj 'store-info-reference-phase-code))
-
-;; NOT IMPLEMENTED YET
-;; #+info-cbs
-;; (declaim (type (simple-array fixnum (256)) *dispatch-counter*))
-;; #+info-cbs
-;; (defparameter *dispatch-counter* (make-array 256 :element-type 'fixnum :initial-element 0))
-;; #+info-cbs
-;; (defun report-dispatch-counts ()
-;;   (let ((res nil))
-;;     (maphash (lambda (dispatch-code restore-info)
-;;                (push (cons (aref *dispatch-counter* dispatch-code)
-;;                            (format nil "#~A (count ~A) ~A"
-;;                                    dispatch-code
-;;                                    (aref *dispatch-counter* dispatch-code)
-;;                                    (restore-info-restore-function-source-code restore-info)))
-;;                      res))
-;;              (codespace-restore-infos *current-codespace/compile-time*))
-;;     (format t "~{~A~%~}" (mapcar #'cdr (sort res #'> :key #'car)))
-;;     (values)))
+(defun build-store-object/reference-phase ()
+  (store-object/phase 'obj 'store-info-reference-phase-code))
 
 (defun make-read-dispatch-table (code-to-dispatch-on)
   ;; Assumes this is in a context where STORAGE, REFERENCES, and RESTORE-OBJECT are defined
