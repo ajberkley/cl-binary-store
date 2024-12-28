@@ -149,6 +149,11 @@
    #:restore-action&
    #:references
    #:+basic-codespace+
-   #:*read-version*))
+   #:*read-version*
+   #:store-symbol
+   #:store-struct
+   #:restore-struct
+   #:restore-symbol
+   #:assign-new-reference-id))
 
 (in-package :cl-binary-store)
