@@ -45,7 +45,7 @@
 	 (storage-write-byte storage +uninterned-symbol-code+)
 	 (store-string/no-refs (symbol-name symbol) storage))))))
 
-(define-condition missing-package (error)
+(define-condition missing-package-during-restore (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
    (package-string :initarg :package-string :reader missing-package-package-string)))
 
@@ -54,19 +54,36 @@
 	  (missing-package-symbol-string obj)
 	  (missing-package-package-string obj)))
 
+(defun ask-for-new-package-name ()
+  (format t "Enter a new package name: ")
+  (let ((read (read)))
+    (list
+     (if (stringp read) read (format nil "~A" read)))))
+
 (defun signal-missing-package (symbol-string package-string)
   (restart-case ;; TODO ADD SOME FEATURES HERE
       (error 'missing-package :symbol-string symbol-string
-			      :package-string package-string)))
+			      :package-string package-string)
+    (create-package () :report "Create package"
+      (make-package package-string :use '("COMMON-LISP"))
+      (assert (find-package package-string))
+      (intern symbol-string package-string))
+    (change-package (new-package-string)
+      :report "Rehome to another package"
+      :interactive ask-for-new-package-name
+      (if (find-package new-package-string)
+	  (intern symbol-string new-package-string)
+	  (signal-missing-package symbol-string package-string)))))
 
 (declaim (inline restore-symbol))
 (defun restore-symbol (storage restore-object)
   "Do not call me directly because if you called store-symbol you may have
  ended up writing a reference to the symbol object instead of the symbol object."
   (let* ((symbol-string (restore-string storage))
-	 (package-string (funcall (the function restore-object)))) ;; might be a reference
-      (if (find-package package-string)
-	  (values (intern symbol-string package-string))
+	 (package-string (funcall (the function restore-object))) ;; might be a reference
+	 (package (find-package package-string)))
+      (if package
+	  (values (intern symbol-string package))
 	  (signal-missing-package symbol-string package-string))))
 
 (defun restore-uninterned-symbol (storage)
