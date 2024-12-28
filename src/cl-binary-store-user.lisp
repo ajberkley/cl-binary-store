@@ -67,6 +67,13 @@
 
    ;; Simple method of modifying object serialization
    #:serializable-slot-info
+
+   ;; Error if symbol package does not exist
+   #:missing-package-during-restore
+   ;; Restarts to recover from the above error
+   #:create-package
+   #:change-package
+
    ))
 
 (in-package #:cl-binary-store-user)

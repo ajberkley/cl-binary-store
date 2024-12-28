@@ -62,8 +62,8 @@
 
 (defun signal-missing-package (symbol-string package-string)
   (restart-case ;; TODO ADD SOME FEATURES HERE
-      (error 'missing-package :symbol-string symbol-string
-			      :package-string package-string)
+      (error 'missing-package-during-restore
+	     :symbol-string symbol-string :package-string package-string)
     (create-package () :report "Create package"
       (make-package package-string :use '("COMMON-LISP"))
       (assert (find-package package-string))
