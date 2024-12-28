@@ -194,10 +194,10 @@
       (#.+simple-string-code+ (restore-simple-string storage)))))
 
 (declaim (notinline store-simple-specialized-vector))
-(defun store-simple-specialized-vector (sv storage)
+(defun store-simple-specialized-vector (sv storage &optional (tag t))
   (declare (optimize speed safety) (type (simple-array * (*)) sv))
   (with-write-storage (storage)
-    (storage-write-byte storage +simple-specialized-vector-code+)
+    (when tag (storage-write-byte storage +simple-specialized-vector-code+))
     (let ((sv-length (length sv)))
       (store-tagged-unsigned-fixnum sv-length storage)
       (multiple-value-bind (bytes-to-write encoded-element-type)
