@@ -247,6 +247,8 @@ We generate the codespace code through a maze of macros and functions in [codesp
 
 ## Benchmarking
 
+For my use case (>1GB of messy data and objects), cl-binary-store is almost 10x faster than CL-STORE on restore, and 2.5x faster for storing.  It's comparable to hyperluminal-mem when not tracking references / circularity.
+
 See [benchmarking.md](benchmarking.md).
 
 ## TODO ideas
