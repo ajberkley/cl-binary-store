@@ -219,7 +219,7 @@ Just a bunch of random crud in long list
 
 ## structure-objects
 
-Here hyperluminal-mem requires writing code to support each new struct, so I'm skipping it in these tests.  We continue to go fast and write small files, which is nice.  Here we are using normal reference-tracking as the structure formats need to be tracked to avoid writing out a description of the structs each time.
+Here hyperluminal-mem requires writing code to support each new struct, so I'm skipping it in these tests.  We continue to go fast and write small files, which is nice.  Here we are using normal reference-tracking as the structure formats need to be tracked to avoid writing out a description of the structs each time.  This means we now are taking advantage of the store/restore asymmetry and so restoration is very fast.
 
     CL-BINARY-STORE> (test-on-data (lots-of-structure-objects) :hlmem nil)
     CL-BINARY-STORE
