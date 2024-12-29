@@ -31,17 +31,19 @@ All number types are supported, with the addition of specialized compact and fas
 
 All array types are supported, with the addition of specialized compact and very fast writers / readers for vectors and arrays of simple-bit-vectors, simple-base-string, single-floats, double-floats, fixnums, sb8, sb16, sb32, sb64, ub2, ub4, ub7, ub8, ub15, ub16, ub31, ub32, ub62, and ub64 (all these being supported by SBCL).
 
-structure-objects and standard-objects have good default serialize/deserializers, and also conditions.
+structure-objects and standard-objects have good default serialize/deserializers, and also conditions can be serialized/deserialized.  The object serialization / deserialization is customizable.
 
 symbols, hash-tables, and pathnames are supported.
 
-Multiply referenced objects are stored as references so equality is preserved across serialization / deserialization and circularity is supported.  If you disable reference tracking serialization is quite fast.
+Multiply referenced objects are stored as references so equality among the restored objects is preserved across serialization / deserialization and circularity is supported.
 
 Large simple-arrays have dedicated (at least on sbcl) serializers / deserializers which should be close to disk/network/memory bandwidth limited.
 
 Support for writing and reading from files, vectors, streams, and raw memory without having to jump through hoops.
 
 A simple versioning scheme is implemented.
+
+If you disable reference tracking, serialization is quite fast.
 
 ## User interface
 ### (store place &rest data)
