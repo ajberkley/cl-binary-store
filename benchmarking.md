@@ -83,7 +83,7 @@ Double floats are more interesting.  Here cl-binary-store pulls ahead in writing
      CL-STORE WRITE: 804.85 ms at 60 MB/sec
      CL-STORE READ : 896.06 ms at 54 MB/sec
 
-Single floats too!
+Single floats go faster on hyperluminal mem.
 
     CL-BINARY-STORE> (test-on-data (long-list-of-random-single-floats))
     HYPERLUMINAL-MEM
