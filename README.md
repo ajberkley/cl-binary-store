@@ -16,7 +16,7 @@ I have not cut a first release tag even though the system works well currently b
 
 ## Focus
 - Speed and compact output
-- Data/objects that has multiple and circular references within them
+- Data/objects that have multiple and circular references within them
   - List circularity and general circular references between objects
   - Preservation of equality amongst the serialized objects (objects are eq de-duplicated and referred to by references in the output)
 - Versioned output
