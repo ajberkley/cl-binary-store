@@ -12,10 +12,6 @@
   "Set this to the magic number you wish to write into the file.  It may
  be queried by serialization routines if desired.")
 
-(defvar *version-being-read* nil
-  "During restore this is bound to any magic number found previous to
- this in the file.")
-
 (defstruct (magic-number (:include action (code +magic-number-action-code+)))
   (number #x0001 :type integer :read-only t))
 

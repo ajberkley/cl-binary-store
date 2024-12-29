@@ -172,12 +172,7 @@ In rare cases if your slot-values will have references back to your object you m
 
 This method should return as two values two functions which will replace the default serialization / deserialization of objects of that type.  If you do this, you probably want to define a new codespace anyway, so you could just do it directly with defstore / defrestore functions, but there is no penalty to doing it this way.
 
-The specialized-serializer function will be called with
-    (lambda (object storage eq-refs store-object assign-new-reference-id))
-which should have the side effect of modifying storage, eq-refs, calling store-object
-and or assign-new-reference-id.
-Correspondingly, the specialized-deserializer function will be called with:
-    (lambda (storage restore-object)
+The specialized-serializer function will be called with parameters (object storage eq-refs store-object assign-new-reference-id) which should have the side effect of modifying storage, eq-refs, calling store-object and or assign-new-reference-id. Correspondingly, the specialized-deserializer function will be called with (storage restore-object)
 
 ### Adding code points to the codespace
 

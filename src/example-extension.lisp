@@ -13,12 +13,15 @@
 ;; serialize one slot and to call initialize-instance on the object
 ;; after restoring it (instead of the default which assumes all slots
 ;; will be populated on loading)
-(defmethod serializable-slot-info (object (type (eql 'blarg)))
-  (make-slot-info
-   :class (find-class 'blarg)
-   :slot-names #(b-serializable)
-   :call-initialize-instance t ;; if nil the "I was initialized!" test below fails
-   :type 'blarg))
+(defmethod serializable-object-info ((type (eql 'blarg)))
+  (values (vector 'b-serializable)))
+
+(defmethod specialized-object-constructor ((type (eql 'blarg)))
+  (lambda (object-info slot-values)
+    (assert (= (length slot-values) 1))
+    (assert (= (length (object-info-slot-names object-info)) 1))
+    (assert (eq (svref (object-info-slot-names object-info) 0) 'b-serializable))
+    (make-instance 'blarg :b-serializable (nth 0 slot-values))))
 
 (defun test-serializable-slot-info ()
   (let* ((b (make-instance 'blarg :b-serializable "asdf"))
@@ -32,10 +35,10 @@
 
 (defconstant +extension-codespace+ #x9999
   "This is our magic number / version number")
-(defconstant +test-code+ 99)
+(defconstant +test-code+ 192) ;; must be in the user space land of 192-255
 
 (defclass something-else ()
-  ((information :initform (format nil "Hi from slot information!~%") :accessor information)))
+  ((information :initform (format nil "Hi from slot information!") :accessor information)))
 
 (defun store-something-else (obj storage store-object)
   (when storage
@@ -46,6 +49,7 @@
   (funcall store-object (information obj)))
 
 (defun restore-something-else (restore-object)
+  (assert (= *version-being-read* +extension-codespace+))
   (assert (= (funcall restore-object) 12345))
   (format t (funcall restore-object))
   (format t (funcall restore-object))
@@ -54,12 +58,12 @@
 
 (defun test-special-serializer/deserializer ()
   ;; Option one write the version number into the stream
-  (format t "Example of writing something completely different for a 'something-else object:~%")
+  (format t "Example of writing something completely different for a 'something-else object:~%~%")
   (format t "First example writing a version number into the stream to switch codespaces~%")
   (let ((*write-version* +extension-codespace+)
 	(*write-magic-number* t))
-    (restore (store nil (make-instance 'something-else))))
-  (format t "Second example forcing the right codespace~%")
+    (print (restore (store nil (make-instance 'something-else)))))
+  (format t "~%~%Second example forcing the right codespace~%")
   ;; Option two just keep track of it yourself
   (let ((*write-version* +extension-codespace+)
 	(*read-version* +extension-codespace+)

@@ -38,8 +38,6 @@
 ;;           "censored"
 ;;           slot-value))))
 
-
-
 ;; Second is `SPECIALIZED-OBJECT-CONSTRUCTOR' which can return a function
 ;; which will be used to build an object from restored slot values.  The
 ;; function will be called with an object-info structure and a dynamic-extent
@@ -53,7 +51,7 @@
 ;;
 ;; (defmethod specialized-object-constructor ((type (eql 'my-type)))
 ;;   (lambda (object-info slot-values)
-;;     (apply #'make-instance (object-info-type object-info)
+;;     (apply #'make-instance 'my-type
 ;;                            (garble (object-info-slot-names object-info) slot-values))))
 
 

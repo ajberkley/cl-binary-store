@@ -56,12 +56,16 @@
  to a `object-nfo' structure.  This is bound locally during operation of store-objects
  and restore-objects.")
 
+(defvar *version-being-read* nil
+  "During restore this is bound to any magic number found previous to
+ this in the file.")
+
 (defun build-restore-objects ()
   "Builds the body of a function that reads tag bytes and dispatches them through a
  big case statement built by make-read-dispatch-table."
   `(let* ((references-vector (make-array 2048 :initial-element nil))
 	  (references (make-references :vector references-vector))
-	  (*version-being-read* nil))
+	  (*version-being-read* (codespace-magic-number *current-codespace*)))
      (declare (dynamic-extent references references-vector))
      (labels ((restore-object2 (&optional (code (restore-ub8 storage)))
 		(let ((restore-object #'restore-object))
