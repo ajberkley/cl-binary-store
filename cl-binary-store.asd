@@ -4,18 +4,19 @@
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :long-name "Fast serialization / deserialization library"
   :pathname "src/"
-  :depends-on (#:flexi-streams #:babel #:cl-ppcre)
+  :depends-on (#:flexi-streams #:babel)
   :components ((:file "features")
 	       (:file "cl-binary-store")
 	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))
 	       (:file "codespaces" :depends-on ("features"))
 	       (:file "sbcl-special-hash-tables")
 	       (:file "type-discrimination")
+	       (:file "object-info")
 	       (:file "actions" :depends-on ("storage" "features"))
 	       (:file "basic-codespace" :depends-on ("sbcl-special-hash-tables"
 						     "type-discrimination"
 						     "features" "codespaces"
-						     "actions"))
+						     "actions" "object-info"))
 	       (:file "storage" :depends-on ("features" "cl-binary-store"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
 							      "basic-codespace"))

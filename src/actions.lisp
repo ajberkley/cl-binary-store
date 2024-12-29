@@ -42,6 +42,7 @@
     (action command storage references restore-object)))
 
 (defun store-action& (action storage store-object)
-  (storage-write-byte storage +action-code+)
-  (storage-write-byte storage (action-code action))
+  (when storage
+    (storage-write-byte storage +action-code+)
+    (storage-write-byte storage (action-code action)))
   (store-action action storage store-object))

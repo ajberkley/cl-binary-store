@@ -134,6 +134,7 @@
 		     collect (cons parent-type (walk (binned-disjoint-types sub-types))))))
       (walk bins))))
 
+#+cl-ppcre
 (defun analyze-discriminators
     (type-specifiers &optional (top-level-type-bins *good-top-levels*))
   "A nice discrimator tree:
