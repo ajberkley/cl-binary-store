@@ -6,11 +6,11 @@ A fast and reasonably customizable serializer/deserializer of Common Lisp object
 
 Currently this is sbcl specific, and I'd like to fix this up to work on other implementations, but it isn't top of mind.
 
-This project works, has some test coverage, but is not finished yet.  I expect it to be polished and 1.0 released mid-January 2025.
-
 ## Status
 
 Everything seems to work well, but I'm not cutting a first release tag until I get some mileage in my production use case.  Once release, backwards compatibility will be guaranteed (the versioned codespaces should make that straightforward enough).
+
+I expect it to be polished and 1.0 released mid-January 2025.
 
 > :warning: This is still very much a work in progress, do not rely on it yet!
 
