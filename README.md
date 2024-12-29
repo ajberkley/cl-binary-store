@@ -16,9 +16,9 @@ I have not cut a first release tag even though the system works well currently b
 
 ## Focus
 - Speed and compact output
-- Data that has multiple and circular references within it
-  - This dominates serialization time (but you can disable this feature to get crazy speeds)
-  - Complex list circularity and references (other than to the head of lists, separately disableable as well)
+- Data/objects that has multiple and circular references within them
+  - List circularity and general circular references between objects
+  - Preservation of equality amongst the serialized objects (objects are eq de-duplicated and referred to by references in the output)
 - Versioned output
 - Extensibility for user data types (with good defaults for 99% of use)
 - Ability to change the coding mechanism straight-forwardly
