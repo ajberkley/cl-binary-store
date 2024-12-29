@@ -8,11 +8,11 @@ Currently this is sbcl specific, and I'd like to fix this up to work on other im
 
 This project works, has some test coverage, but is not finished yet.  I expect it to be polished and 1.0 released mid-January 2025.
 
-> :warning: This is a work in progress, do not rely on it yet!
-
 ## Status
 
-I have not cut a first release tag even though the system works well currently because I'd like to put in the pluggable versioned coding schemes first to always keep backwards compatibility with first release
+Everything seems to work well, but I'm not cutting a first release tag until I get some mileage in my production use case.  Once release, backwards compatibility will be guaranteed (the versioned codespaces should make that straightforward enough).
+
+> :warning: This is still very much a work in progress, do not rely on it yet!
 
 ## Focus
 - Speed and compact output
