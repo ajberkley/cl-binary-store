@@ -268,7 +268,7 @@
   "Store and tag a fixnum; "
   (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
   (when storage
-    (if (> fixnum 0)
+    (if (>= fixnum 0)
         (store-tagged-unsigned-fixnum fixnum storage)
         (if (> fixnum -256)
             (store-sb8 fixnum storage)
