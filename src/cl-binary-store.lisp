@@ -121,9 +121,6 @@
    #:out-of-space-current-offset
    #:out-of-space-wanted-bytes
 
-   ;; Change slot serialization
-   #:serializable-slot-info
-
    ;; Adding a new type
    #:defstore
    #:defrestore
@@ -158,8 +155,39 @@
    #:*eq-refs-table-size*
    #:*double-float-refs-table-size*
    #:*num-eq-refs-table-size*
+
+   ;; Error if symbol package does not exist and handling the case
    #:missing-package-during-restore
    #:change-package
-   #:create-package))
+   #:create-package
+
+   ;; Structure-object or standard-object type does not exist during restore
+   #:object-type-not-found
+   #:object-type-not-found-object-info
+   ;; restarts
+   #:create-structure-object
+   #:create-standard-object
+   #:use-different-class
+
+   ;; Missing slots during restore
+   #:missing-slot
+   #:missing-slot-slot-name
+   #:missing-slot-type
+   #:missing-slot-data-slots
+   #:missing-slot-image-slots
+   ;; Restarts
+   #:discard
+   #:map-to-new-slot-name
+
+   ;; A parameter to specialized-object-constructor is an object-info
+   #:object-info
+   #:object-info-slot-names
+   #:object-info-type
+
+   ;; Extensions for modifying object serialization
+   #:serializable-object-info
+   #:specialized-object-constructor
+   #:specialized-serializer/deserializer))
+
 
 (in-package :cl-binary-store)

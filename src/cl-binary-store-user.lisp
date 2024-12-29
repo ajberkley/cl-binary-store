@@ -65,9 +65,6 @@
    #:*version-being-read*
    #:*write-magic-number*
 
-   ;; Simple method of modifying object serialization
-   #:serializable-slot-info
-
    ;; Error if symbol package does not exist
    #:missing-package-during-restore
    ;; Restarts to recover from the above error
@@ -78,6 +75,34 @@
    #:*eq-refs-table-size*
    #:*num-eq-refs-table-size*
    #:*double-float-refs-table-size*
+
+   ;; Structure-object or standard-object type does not exist during restore
+   #:object-type-not-found
+   #:object-type-not-found-object-info
+   ;; restarts
+   #:create-structure-object
+   #:create-standard-object
+   #:use-different-class
+
+   ;; Missing slots during restore
+   #:missing-slot
+   #:missing-slot-slot-name
+   #:missing-slot-type
+   #:missing-slot-data-slots
+   #:missing-slot-image-slots
+   ;; Restarts
+   #:discard
+   #:map-to-new-slot-name
+
+   ;; A parameter to specialized-object-constructor is an object-info
+   #:object-info
+   #:object-info-slot-names
+   #:object-info-type
+
+   ;; Extensions for modifying object serialization
+   #:serializable-object-info
+   #:specialized-object-constructor
+   #:specialized-serializer/deserializer
    ))
 
 (in-package #:cl-binary-store-user)

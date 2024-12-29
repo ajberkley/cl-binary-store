@@ -61,7 +61,7 @@
      (if (stringp read) read (format nil "~A" read)))))
 
 (defun signal-missing-package (symbol-string package-string)
-  (restart-case ;; TODO ADD SOME FEATURES HERE
+  (restart-case
       (error 'missing-package-during-restore
 	     :symbol-string symbol-string :package-string package-string)
     (create-package () :report "Create package"

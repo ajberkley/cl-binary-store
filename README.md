@@ -15,8 +15,7 @@ This project works, has some test coverage, but is not finished yet.  I expect i
 I have not cut a first release tag even though the system works well currently because I'd like to put in the pluggable versioned coding schemes first to always keep backwards compatibility with first release
 
 ## Focus
-- Speed
-- Compact output
+- Speed and compact output
 - Data that has multiple and circular references within it
   - This dominates serialization time (but you can disable this feature to get crazy speeds)
   - Complex list circularity and references (other than to the head of lists, separately disableable as well)
@@ -102,10 +101,6 @@ Let this to NIL around your calls to store / restore if you have simple data wit
 
 Let this to NIL if you have no list circularity (when it is NIL basic circular lists are supported as the first CONS we see in a list is recorded as a reference, so almost all data will work fine with this NIL; NIL makes this package behave like cl-store which will die / explode if given any complex circularity in a list).  Setting this to NIL is a significant performance improvement if you have list heavy data.
 
-#### \*store-class-slots\* default: NIL
-
-Standard object :class allocated slots will be stored if this is T.
-
 #### \*write-magic-number\* default: NIL
 
 If T we will write out a magic number and the \*write-version\* to the output, which will be used on restore to load the correct codespace (or error if it does not exist).
@@ -122,7 +117,65 @@ If you have a large set of objects you want these tables to be approximately the
 
 ### Changing object slot serialization
 
-For serializing objects, the default behavior is probably good enough for 95% of users.  We provide a simple extension point with a generic function serializable-slot-info which you can change the behavior of, for example to enable calling initialize-instance instead of allocate-instance, or to not save certain slots or transform them before saving.  See comments in [objects.lisp](src/objects.lisp) and the example extension [example-extension.lisp](src/example-extension.lisp) for an example.
+For serializing objects, the default behavior is probably good enough for 95% of users.  There are four further methods of extension provided at with increasing degrees of complexity and control.
+
+#### \*store-class-slots\* default: NIL
+
+Standard object :class allocated slots will be serialized / deserialized if this is T
+
+#### (defmethod SERIALIZABLE-OBJECT-INFO (type))
+
+Must return two values.  The first value must be T or a list of slot-names (symbols) which should be serialized for this object. Warning: if you return T then we will ignore the *store-class-slots* configuration.
+
+The second value may be NIL or a function which will be called with each slot-name and slot-value and should return a serializable object (like nil) for that slot.
+
+For example:
+
+    (defstruct blarg
+      (a-may-contain-sensitive-info)
+      (b-do-not-serialize))
+
+    ;; Just say do not serialize b-do-not-serialize
+    (defmethod serializable-object-info ((type (eql 'blarg)))
+      (values (vector 'a-may-contain-sensitive-info) nil))
+
+    ;; If you use the above technique for a structure-object, you may want
+    ;; to provide a `specialized-object-constructor' too as the
+    ;; unserialized slots are undefined.  For a standard-object they are
+    ;; just unbound which is fine, but for a structure-object it's
+    ;; undefined what they are.
+
+    ;; Or if you want to filter out sensitive information on a per object basis:
+    (defmethod serializable-object-info ((type (eql 'blarg)))
+      (values nil
+        (lambda (slot-name slot-value)
+          (if (sensitive-information-p slot-name slot-value)
+              "censored"
+              slot-value))))
+
+#### (defmethod SPECIALIZED-OBJECT-CONSTRUCTOR (type))
+
+This may return a FUNCTION which will be used to build an object from restored slot values.  The FUNCTION will be called with parameters OBJECT-INFO and SLOT-VALUES.  Object-info is a structure defined in (objects.lisp)[src/objects.lisp]
+
+The default object constructor calls ALLOCATE-INSTANCE and then populates slots with their values.  Perhaps you really want initialize-instance called.  So then you could do:
+
+    (defmethod specialized-object-constructor ((type (eql 'my-type)))
+      (lambda (object-info slot-values)
+        (apply #'make-instance (object-info-type object-info)
+                               (garble (object-info-slot-names object-info) slot-values))))
+
+In rare cases if your slot-values will have references back to your object you may find a slot-value that is a FIXUP object.  See (referrers-and-fixup.lisp)[src/referrers-and-fixup.lisp] restore-object-to for how to deal with this (you have to register a callback for when the object is finally reified to update whatever slot you have).  This will only happen if you have as a slot value a reference to a displaced array which is displaced to an array which has a reference back to your object (the challenge here is one cannot build a displaced array without knowing what it is displaced to).
+
+#### (defmethod SPECIALIZED-SERIALIZER/DESERIALIZER (type))
+
+This method should return as two values two functions which will replace the default serialization / deserialization of objects of that type.  If you do this, you probably want to define a new codespace anyway, so you could just do it directly with defstore / defrestore functions, but there is no penalty to doing it this way.
+
+The specialized-serializer function will be called with
+    (lambda (object storage eq-refs store-object assign-new-reference-id))
+which should have the side effect of modifying storage, eq-refs, calling store-object
+and or assign-new-reference-id.
+Correspondingly, the specialized-deserializer function will be called with:
+    (lambda (storage restore-object)
 
 ### Adding code points to the codespace
 
@@ -207,3 +260,4 @@ See [benchmarking.md](benchmarking.md).
 - [ ] Further discoveries from real world use cases (that is, my use case)
   - [ ] Build compacted hash tables after the reference counting
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
+- [ ] Maybe a metaclass to make it even easier to specify slot serialization stuff

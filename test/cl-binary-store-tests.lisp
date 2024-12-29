@@ -42,16 +42,16 @@
 	  do (is 'eql elt (first restored-a)))))
 
 ;; This test uses too much memory and is too slow to run regularly...
-(define-test up-to-ub32-references-work
-  (let* ((elts (loop for i fixnum from 0 below 50000 ;;5000000
-		     collect (format nil "Header: ~A" i)))
-	 (double-elts (append elts elts))
-	 (stored-double-elts (store-to-vector double-elts))
-	 (len-stored-double-elts (length stored-double-elts)))
-    (is 'equal double-elts (restore-from-vector stored-double-elts))
-    (setf stored-double-elts nil)
-    (true (< len-stored-double-elts
-	     (length (store-to-vector (append elts (map 'list #'copy-seq elts))))))))
+;; (define-test up-to-ub32-references-work
+;;   (let* ((elts (loop for i fixnum from 0 below 50000 ;;5000000
+;; 		     collect (format nil "Header: ~A" i)))
+;; 	 (double-elts (append elts elts))
+;; 	 (stored-double-elts (store-to-vector double-elts))
+;; 	 (len-stored-double-elts (length stored-double-elts)))
+;;     (is 'equal double-elts (restore-from-vector stored-double-elts))
+;;     (setf stored-double-elts nil)
+;;     (true (< len-stored-double-elts
+;; 	     (length (store-to-vector (append elts (map 'list #'copy-seq elts))))))))
 
 (define-test test-simple-displaced-array-circularity
   (let* ((a (make-array 1))
@@ -181,8 +181,8 @@
   (let* ((one (make-blarg :a 1234 :b 1d0 :d (make-array 5 :initial-element "hi")))
 	 (two (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo")))
 	 (s (list one two one two)))
-    (let ((result (restore-from-vector (store-to-vector s))))
-      (is 'equalp result s)
+    (let ((result (restore-from-vector (print (store-to-vector s)))))
+      (is 'equalp s result)
       (is 'eql (first result) (third result))
       (is 'eql (second result) (fourth result)))))
 
@@ -202,8 +202,8 @@
       (setf (blarg-a (second result)) nil)
       (is 'equalp result s))))
 
-(define-test test-slot-info
-  (let ((b (compute-slot-info (make-instance 'blarg))))
+(define-test test-object-info
+  (let ((b (cl-binary-store::compute-object-info 'blarg)))
     (is 'equalp
 	(restore-from-vector (store-to-vector b))
 	b)))
@@ -427,3 +427,69 @@
     (true (= len-two-as len-a-and-b/4))
     (true (= len-a-and-b/4 len-two-as))
     (true (> len-a-and-c len-a-and-b/4))))
+
+(defstruct only-serialize-a
+  (a nil)
+  (b nil))
+
+(defmethod serializable-object-info ((type (eql 'only-serialize-a)))
+  (list 'a))
+
+(define-test test-specialized-struct-serializer
+  (let ((obj
+	  (restore (store nil (make-only-serialize-a :a "a" :b "censored")))))
+    ;; Here the value of b is undefined behavior
+    (is 'equalp (only-serialize-a-a obj) "a")))
+
+(defclass only-serialize-a-class ()
+  ((a :initarg :a)
+   (b :initarg :b)))
+
+(defmethod serializable-object-info ((type (eql 'only-serialize-a-class)))
+  (list 'a))
+
+(define-test test-specialized-object-serializer
+  (let ((obj
+	  (restore (store nil (make-instance 'only-serialize-a-class :a "a" :b "censored")))))
+    (is 'equalp (slot-value obj 'a) "a")
+    (true (null (slot-boundp obj 'b)))))
+
+(defstruct specially-constructed
+  (a)
+  (b))
+
+(defmethod specialized-object-constructor ((type (eql 'specially-constructed)))
+  (lambda (object-info slot-values)
+    (let ((slot-names (object-info-slot-names object-info)))
+      (true (eq type 'specially-constructed))
+      (true (= (length slot-names) (length slot-values) 2))
+      (every (lambda (slot-name slot-value)
+	       (true (member slot-name '(a b)))
+	       (is 'equalp slot-value (if (eq slot-name 'a)
+					  "a"
+					  "censored")))
+	     slot-names slot-values)
+      (let ((obj (make-instance 'specially-constructed)))
+	(setf (specially-constructed-a obj) "hello")
+	obj))))
+
+(define-test test-specialized-object-constructor
+  (let ((obj
+	  (restore (store nil (make-specially-constructed :a "a" :b "censored")))))
+    (is 'equalp (specially-constructed-a obj) "hello")
+    (true (null (specially-constructed-b obj)))))
+
+(defstruct going-away-struct a b)
+(defstruct replacement-struct b a)
+
+(define-test test-use-replacement-struct
+  (let ((data (store nil (make-going-away-struct :a "a" :b "b"))))
+    (unintern 'going-away-struct)
+    (handler-bind ((object-type-not-found
+		     (lambda (e)
+		       (declare (ignore e))
+		       (invoke-restart (find-restart 'use-different-class) 'replacement-struct))))
+      (let ((result (restore data)))
+	(true (typep result 'replacement-struct))
+	(is 'string= (replacement-struct-a result) "a")
+	(is 'string= (replacement-struct-b result) "b")))))

@@ -95,7 +95,7 @@
       (cond
 	((eq ref-idx t)
 	 ;; Assign a reference id
-	 (let ((new-ref-id (funcall assign-new-reference-id)))
+	 (let ((new-ref-id (funcall (the function assign-new-reference-id))))
 	   (declare (type fixnum new-ref-id))
 	   #+dribble-cbs (format t "Storing reference definition (#~A) for next object: ~A~%"
 				 new-ref-id (type-of object))

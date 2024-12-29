@@ -46,7 +46,7 @@
 (defconstant +simple-vector-code+ 23)
 (defconstant +simple-specialized-array-code+ 24)
 (defconstant +array-code+ 25)
-(defconstant +slot-info-code+ 26)
+(defconstant +object-info-code+ 26)
 (defconstant +unbound-code+ 27)
 (defconstant +pathname-code+ 28)
 (defconstant +hash-table-code+ 29)
@@ -161,8 +161,8 @@
   ;; STRUCTURE-OBJECTS (defstruct) and STANDARD-CLASS (defclass)
   (defstore structure-object (store-struct obj storage eq-refs store-object assign-new-reference-id))
   (defstore standard-object (store-standard-object obj storage eq-refs store-object assign-new-reference-id))
-  (defrestore +structure-object-code+ (restore-struct restore-object))
-  (defrestore +standard-object-code+ (restore-standard-object restore-object))
+  (defrestore +structure-object-code+ (restore-struct storage restore-object))
+  (defrestore +standard-object-code+ (restore-standard-object storage restore-object))
 
   ;; REFERENCES
   (defrestore (and (>= code +first-small-unsigned-integer-code+)
@@ -202,8 +202,8 @@
   (defstore array (store-array obj storage eq-refs store-object assign-new-reference-id))
   (defrestore +array-code+ (restore-array storage restore-object))
   
-  (defstore slot-info (store-slot-info obj storage eq-refs store-object assign-new-reference-id))
-  (defrestore +slot-info-code+ (restore-slot-info storage restore-object))
+  (defstore object-info (store-object-info obj storage eq-refs store-object assign-new-reference-id))
+  (defrestore +object-info-code+ (restore-object-info storage restore-object))
   
   ;; UNBOUND MARKER
   (defrestore +unbound-code+ (restore-unbound))
