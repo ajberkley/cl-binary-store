@@ -4,7 +4,7 @@ A fast and reasonably customizable serializer/deserializer of Common Lisp object
 
 > :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for messagepack support.
 
-Currently this is sbcl specific, but I'd like to fix this up to work on other implementations, but it isn't top of mind.
+Currently this is sbcl specific, and I'd like to fix this up to work on other implementations, but it isn't top of mind.
 
 This project works, has some test coverage, but is not finished yet.  I expect it to be polished and 1.0 released mid-January 2025.
 
