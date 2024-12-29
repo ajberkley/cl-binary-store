@@ -244,7 +244,7 @@ See the example in extensions earlier.
 
 ## Compressed output
 
-I suggest just piping the output through gzip if you need the smallest possible files, though the output is reasonably compact as it.  Otherwise you can use [deoxybyte-gzip](https://github.com/keithj/deoxybyte-gzip) but make sure to use the most up to date version.
+I suggest just piping the output through gzip if you need the smallest possible files, though the output is reasonably compact as is.  Otherwise you can use [deoxybyte-gzip](https://github.com/keithj/deoxybyte-gzip) but make sure to use the most up to date version.
 
 ## Debugging
 
@@ -258,7 +258,7 @@ See [benchmarking.md](benchmarking.md).
 - [ ] A codespace for messagepack (for example; for a limited subset of types).  This is mainly as an exercise as cl-messagepack is fine.
 - [ ] Support for other Common Lisps aside from sbcl
   - [ ] At least basic slow support
-  - [ ] Optimized support
+  - [ ] Optimized support: static-vectors would be a good start
 - [ ] Further discoveries from real world use cases (that is, my use case)
   - [ ] Build compacted hash tables after the reference counting
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
