@@ -42,7 +42,6 @@
     (action command storage references restore-object)))
 
 (defun store-action& (action storage store-object)
-  (with-write-storage (storage)
-    (store-ub8 +action-code+ storage nil)
-    (store-ub8 (action-code action) storage nil))
+  (storage-write-byte storage +action-code+)
+  (storage-write-byte storage (action-code action))
   (store-action action storage store-object))

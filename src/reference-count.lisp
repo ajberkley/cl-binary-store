@@ -18,7 +18,7 @@
 
 (defmethod action ((code (eql +set-reference-action-code+)) storage references restore-object)
   (let ((num-refs (funcall restore-object)))
-    #+info-csf(format t "This file has ~A references~%" num-refs)
+    #+info-cbs(format t "This file has ~A references~%" num-refs)
     (values (setf (references-vector references) (make-array num-refs :initial-element nil))
 	    :ignore)))
 

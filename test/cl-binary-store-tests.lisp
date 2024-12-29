@@ -42,16 +42,16 @@
 	  do (is 'eql elt (first restored-a)))))
 
 ;; This test uses too much memory and is too slow to run regularly...
-;; (define-test up-to-ub32-references-work
-;;   (let* ((elts (loop for i fixnum from 0 below 50000 ;;5000000
-;; 		     collect (format nil "Header: ~A" i)))
-;; 	 (double-elts (append elts elts))
-;; 	 (stored-double-elts (store-to-vector double-elts))
-;; 	 (len-stored-double-elts (length stored-double-elts)))
-;;     (is 'equal double-elts (restore-from-vector stored-double-elts))
-;;     (setf stored-double-elts nil)
-;;     (true (< len-stored-double-elts
-;; 	     (length (store-to-vector (append elts (map 'list #'copy-seq elts))))))))
+(define-test up-to-ub32-references-work
+  (let* ((elts (loop for i fixnum from 0 below 2050;; 50000 ;;5000000
+		     collect (format nil "Header: ~A" i)))
+	 (double-elts (append elts elts))
+	 (stored-double-elts (store-to-vector double-elts))
+	 (len-stored-double-elts (length stored-double-elts)))
+    (true (every #'equal double-elts (restore-from-vector stored-double-elts)))
+    (setf stored-double-elts nil)
+    (true (< len-stored-double-elts
+	     (length (store-to-vector (append elts (map 'list #'copy-seq elts))))))))
 
 (define-test test-simple-displaced-array-circularity
   (let* ((a (make-array 1))
