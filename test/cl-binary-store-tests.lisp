@@ -43,8 +43,8 @@
 
 ;; This test uses too much memory and is too slow to run regularly...
 (define-test up-to-ub32-references-work
-  (let* ((elts (loop for i fixnum from 0 below 2050;; 50000 ;;5000000
-		     collect (format nil "Header: ~A" i)))
+  (let* ((elts (loop for i fixnum from 0 below 50000 ;;5000000
+		     collect (format nil "~A" i)))
 	 (double-elts (append elts elts))
 	 (stored-double-elts (store-to-vector double-elts))
 	 (len-stored-double-elts (length stored-double-elts)))
