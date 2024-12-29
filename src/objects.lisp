@@ -293,7 +293,7 @@
 	 (let ((filter (object-info-slot-value-filter-func object-info)))
 	   (loop for name across (object-info-slot-names object-info)
 		 for value = (slot-value struct name)
-		 for filtered-value = (if filter (funcall filter value) value)
+		 for filtered-value = (if filter (funcall filter name value) value)
 		 do (funcall store-object filtered-value))))))))
 
 (defun restore-struct (storage restore-object)

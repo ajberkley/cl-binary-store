@@ -46,16 +46,16 @@ A simple versioning scheme is implemented.
 If you disable reference tracking, serialization is quite fast.
 
 ## User interface
-### (store place &rest data)
+#### (store place &rest data)
 
 **place** can be string or pathname referring to a file, or a stream, or a vector, or NIL (in which case you will be returned a vector of data).
 
-### (restore place)
+#### (restore place)
 
 **place** can be a string or pathname referring to a file, or a stream, or a vector.  For restoring to a system-area-pointer use restore-from-sap as you have to note how much data is available (good for mmap'ed files and large arrays).
 
-### (store-to-sap sap size &rest data)
-### (restore-from-sap sap size)
+#### (store-to-sap sap size &rest data)
+#### (restore-from-sap sap size)
  If you have an mmap'ed file or a raw system-area-pointer, you can store to it and restore from it.
 
  For storing to one, you don't need to know the size in advance as we throw a restartable error allow you to allocate more system memory and continue on.  See tests/cl-binary-store-tests.lisp test-sap-write/read for a silly example of how to use this.  Nominally you'll be updating mmap regions of files or something.
@@ -94,30 +94,11 @@ To run tests you want to do
 
 The package :cl-binary-store-user exports all the user facing interfaces above.  The package :cl-binary-store exports all the symbols needed to add your own extensions.
 
-### Configurable options
-#### \*track-references\* default: T
+## Missing objects, structures, and symbols
 
-Let this to NIL around your calls to store / restore if you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>500MB/sec / > 500 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).
+If you keep files around long enough, eventually you find you have stored stuff you don't remember.  It's nice if you don't get horrible errors while loading the files.  cl-binary-store provides a good set of restarts for missing packages (create-package, rehome symbol) and for missing objects or structures (create them, use a different class) or for changes in slots (discard, change slot name).  The deserialization is extensible enough that you can put in line upgrading of objects.
 
-#### \*support-shared-list-structures\* default: T
-
-Let this to NIL if you have no list circularity (when it is NIL basic circular lists are supported as the first CONS we see in a list is recorded as a reference, so almost all data will work fine with this NIL; NIL makes this package behave like cl-store which will die / explode if given any complex circularity in a list).  Setting this to NIL is a significant performance improvement if you have list heavy data.
-
-#### \*write-magic-number\* default: NIL
-
-If T we will write out a magic number and the \*write-version\* to the output, which will be used on restore to load the correct codespace (or error if it does not exist).
-
-#### \*write-end-marker*\* default: NIL
-
-If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.  It also means you can write multiple chunks of objects to a stream and have restore-objects return between each chunk.
-
-#### \*eq-refs-table-size\*, \*double-float-refs-table-size\*, \*num-eq-refs-table-size\* default 7
-
-If you have a large set of objects you want these tables to be approximately the size of the number of elements that you will have in them to avoid the overhead of a lot of rehashing as the tables grow.  You can ignore this until it shows up in profiling, then you can change it.
-
-## Extensions
-
-### Changing object slot serialization
+## Extending object serialization
 
 For serializing objects, the default behavior is probably good enough for 95% of users.  There are four further methods of extension provided at with increasing degrees of complexity and control.
 
@@ -149,7 +130,8 @@ For example:
 
     ;; Or if you want to filter out sensitive information on a per object basis:
     (defmethod serializable-object-info ((type (eql 'blarg)))
-      (values nil
+      (values
+        (call-next-method) ;; all the slots of 'blarg
         (lambda (slot-name slot-value)
           (if (sensitive-information-p slot-name slot-value)
               "censored"
@@ -173,6 +155,23 @@ In rare cases if your slot-values will have references back to your object you m
 This method should return as two values two functions which will replace the default serialization / deserialization of objects of that type.  If you do this, you probably want to define a new codespace anyway, so you could just do it directly with defstore / defrestore functions, but there is no penalty to doing it this way.
 
 The specialized-serializer function will be called with parameters (object storage eq-refs store-object assign-new-reference-id) which should have the side effect of modifying storage, eq-refs, calling store-object and or assign-new-reference-id. Correspondingly, the specialized-deserializer function will be called with (storage restore-object)
+
+### Configurable options
+#### \*track-references\* default: T
+
+Let this to NIL around your calls to store / restore if you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>500MB/sec / > 500 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).
+
+#### \*support-shared-list-structures\* default: T
+
+Let this to NIL if you have no list circularity (when it is NIL basic circular lists are supported as the first CONS we see in a list is recorded as a reference, so almost all data will work fine with this NIL; NIL makes this package behave like cl-store which will die / explode if given any complex circularity in a list).  Setting this to NIL is a significant performance improvement if you have list heavy data.
+
+#### \*write-magic-number\* default: NIL
+
+If T we will write out a magic number and the \*write-version\* to the output, which will be used on restore to load the correct codespace (or error if it does not exist).
+
+#### \*write-end-marker*\* default: NIL
+
+If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.  It also means you can write multiple chunks of objects to a stream and have restore-objects return between each chunk.
 
 ### Adding code points to the codespace
 
