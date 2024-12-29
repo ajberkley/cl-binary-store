@@ -107,7 +107,7 @@ Standard object :class allocated slots will be serialized / deserialized if this
 
 #### (defmethod SERIALIZABLE-OBJECT-INFO (type))
 
-Must return two values.  The first value must be T or a list of slot-names (symbols) which should be serialized for this object. Warning: if you return T then we will ignore the *store-class-slots* configuration.
+Must return two values.  The first value must be a sequence of slot-names (symbols) which should be serialized for this object.
 
 The second value may be NIL or a function which will be called with each slot-name and slot-value and should return a serializable object (like nil) for that slot.
 
