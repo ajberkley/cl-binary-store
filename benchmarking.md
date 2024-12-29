@@ -25,10 +25,10 @@ Note that here we are writing out 1M conses and 1M small integers in < 10 ms, th
      OUTPUT SIZE: 8.00 MB
      HLMEM WRITE: 2.52 ms at 3175 MB/sec
      HLMEM READ : 5.04 ms at 1587 MB/sec
-    CL-BINARY-STORE
-     OUTPUT SIZE: 2.12 MB  <--- a lot smaller!
-     CL-BINARY-STORE WRITE: 4.08 ms at 521 MB/sec
-     CL-BINARY-STORE READ : 8.08 ms at 263 MB/sec
+     CL-BINARY-STORE
+      OUTPUT SIZE: 2.00 MB  <--- a lot smaller
+      CL-BINARY-STORE WRITE: 3.08 ms at 649 MB/sec
+      CL-BINARY-STORE READ : 6.44 ms at 311 MB/sec
     CL-STORE
      OUTPUT SIZE: 5.00MB
      CL-STORE WRITE: 76.39 ms at 65 MB/sec
