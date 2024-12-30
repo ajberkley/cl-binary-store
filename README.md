@@ -43,7 +43,7 @@ Support for writing and reading from files, vectors, streams, and raw memory wit
 
 A simple versioning scheme is implemented.
 
-If you disable reference tracking, serialization is quite fast.
+If you disable reference tracking, serialization is quite fast, and otherwise serialization is dominated by #'eq hash table performance.
 
 ## User interface
 #### (store place &rest data)
