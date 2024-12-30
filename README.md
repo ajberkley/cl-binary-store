@@ -162,7 +162,7 @@ Let this to NIL around your calls to store / restore if you have simple data wit
 
 #### \*support-shared-list-structures\* default: T
 
-Let this to NIL if you have no list circularity (when it is NIL basic circular lists are supported as the first CONS we see in a list is recorded as a reference, so almost all data will work fine with this NIL; NIL makes this package behave like cl-store which will die / explode if given any complex circularity in a list).  Setting this to NIL is a significant performance improvement if you have list heavy data.
+Let this to NIL if you have no list circularity (when it is NIL basic circular lists are supported as the first CONS we see in a list is recorded as a reference, so almost all data will work fine with this NIL; this is the same as cl-store:\*precise-list-storage\*. Setting this to NIL is a significant performance improvement if you have list heavy data.
 
 #### \*write-magic-number\* default: NIL
 
@@ -217,7 +217,7 @@ I've been using [cl-store](https://cl-store.common-lisp.dev/) forever and it wor
 
 I have also used [hyperluminal-mem](https://github.com/cosmos72/hyperluminal-mem), which is really fast if you meet the restrictions it has.  It does not support delayed object construction or references really, nor a nice default for structures and classes (though you can extend it with manual referencing on a per type basis and with serializers for each structure or class you want).
 
-I will admit when I started this project, I didn't know about cl-conspack.  It is faster than cl-store and generates nice compact output (until you start throwing many instances of structs or classes at it)!  It still requires extending for simple objects and structures and doesn't handle repeated structures efficiently, both of which are problems for me.  It doesn't handle list circularity right (or maybe I didn't wait long enough to find out that it wasn't zooming in circles).
+I will admit when I started this project, I didn't know about cl-conspack.  It is faster than cl-store and generates nice compact output (until you start throwing many instances of structs or classes at it)!  It still requires extending for simple objects and structures and doesn't handle repeated structures efficiently, both of which are problems for me.
 
 They are extensible, but not enough to make them into what I need.
 
