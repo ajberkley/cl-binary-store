@@ -35,7 +35,7 @@
 
 (defconstant +extension-codespace+ #x9999
   "This is our magic number / version number")
-(defconstant +test-code+ 192) ;; must be in the user space land of 192-255
+(defconstant +test-code+ 225) ;; must be in the user space land of [225 255] see basic-codespace-codes.lisp
 
 (defclass something-else ()
   ((information :initform (format nil "Hi from slot information!") :accessor information)))
