@@ -20,5 +20,5 @@
   (specialized-constructor nil :type (or null function))
   (specialized-serializer nil :type (or null function))
   (specialized-deserializer nil :type (or null function))
-  (ref-id (when *eql-refs-ref-id*
+  (ref-id (when *eql-refs-ref-id* ;; ref-id is always negative number
 	    (- (the fixnum (incf (the fixnum *eql-refs-ref-id*))))) :type (or null fixnum)))

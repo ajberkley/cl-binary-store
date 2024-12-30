@@ -1,7 +1,7 @@
 (defpackage :example-extension
   (:use :common-lisp :cl-binary-store)
   (:export #:test-special-serializer/deserializer
-	   #:test-serializable-slot-info))
+	   #:test-serializable-object-info))
 
 (in-package :example-extension)
 
@@ -14,7 +14,7 @@
 ;; after restoring it (instead of the default which assumes all slots
 ;; will be populated on loading)
 (defmethod serializable-object-info ((type (eql 'blarg)))
-  (values (vector 'b-serializable)))
+  (values (list 'b-serializable)))
 
 (defmethod specialized-object-constructor ((type (eql 'blarg)))
   (lambda (object-info slot-values)
@@ -23,7 +23,7 @@
     (assert (eq (svref (object-info-slot-names object-info) 0) 'b-serializable))
     (make-instance 'blarg :b-serializable (nth 0 slot-values))))
 
-(defun test-serializable-slot-info ()
+(defun test-serializable-object-info ()
   (let* ((b (make-instance 'blarg :b-serializable "asdf"))
 	 (b-restored (restore (store nil b))))
     (assert (string= (funcall (slot-value b-restored 'a-not-serializable))

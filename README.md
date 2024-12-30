@@ -107,7 +107,7 @@ Standard object :class allocated slots will be serialized / deserialized if this
 
 #### (defmethod SERIALIZABLE-OBJECT-INFO (type))
 
-Must return two values.  The first value must be a sequence of slot-names (symbols) which should be serialized for this object.
+Must return two values.  The first value must be a list of slot-names (symbols) which should be serialized for this object.
 
 The second value may be NIL or a function which will be called with each slot-name and slot-value and should return a serializable object (like nil) for that slot.
 
@@ -119,7 +119,7 @@ For example:
 
     ;; Just say do not serialize b-do-not-serialize
     (defmethod serializable-object-info ((type (eql 'blarg)))
-      (values (vector 'a-may-contain-sensitive-info) nil))
+      (values (list 'a-may-contain-sensitive-info) nil))
 
     ;; If you use the above technique for a structure-object, you may want
     ;; to provide a `specialized-object-constructor' too as the
@@ -191,7 +191,7 @@ Here we are definining how to store an object of type SOMETHING-ELSE (which is d
 Anyhow, here is the result of running the code
 
     CL-USER> (quicklisp:quickload "example-extension")
-    CL-USER> (example-extension:test-serializable-slot-info)
+    CL-USER> (example-extension:test-serializable-object-info)
     Success!
     CL-USER> (example-extension:test-special-serializer/deserializer)
     Example of writing something completely different for a 'something-else object:

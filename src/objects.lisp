@@ -75,6 +75,8 @@
 ;;  (lambda (storage restore-object)
 
 (defun get-slot-names (class)
+  "Return a list of slot names (symbols) skipping :class allocation slots if
+ *store-class-slots* is t."
   (assert class)
   (loop with store-class-slots = *store-class-slots*
 	with is-structure-object = (subtypep class 'structure-class)
@@ -88,7 +90,7 @@
   (:documentation
    "Must return two values.  The first value must be a
  list of slot-names (symbols) which should be serialized for this
- object.  You may obtain this by (call-next-method)
+ object.
 
  The second value may be NIL or a function which will be
  called with each slot-name and slot-value and should return a
@@ -97,49 +99,32 @@
     (get-slot-names (find-class type))))
 
 (defgeneric specialized-object-constructor (type)
-  (:documentation "May return a function that will be used to construct an object
- (lambda (object-info slot-values) -> object)
- slot-names and slot-values is a simple-vector of values.  Be careful in the case of circular
- references: it may be in that case that a slot-value is a `fixup', in which case
- you have to provide a function to be called back when the object is fully reified.
- See restore-object-to for the logic.")
+  (:documentation "May return a function that will be used to construct an object from
+ an `object-info' structure and a simple vector of slot-values in the same order as
+ (object-info-slot-names object-info):
+  (lambda (object-info slot-values) -> object)
+ Be careful in the case of circular references: it may be in that case that a slot-value
+ is a `fixup', in which case you have to provide a function to be called back when the
+ object is fully reified.  See restore-object-to for the logic.")
   (:method (type)
     nil))
 
 (defgeneric specialized-serializer/deserializer (type)
   (:documentation "Returns two values, the first value is a
-  function (or nil) that will be called as a:
- (lambda (object storage eq-refs store-object assign-new-reference-id))
- and as side effects should write to storage, etc.  The second value 
- should be a function that has a signature (lambda (storage restore-object) -> object)")
+ function (or nil) that will be called as a:
+  (lambda (object storage eq-refs store-object assign-new-reference-id))
+ and as side effects should write to storage, etc.  The second value should be a function
+ that has a signature (lambda (storage restore-object) -> object)")
   (:method (type)
     (values nil nil)))
 
-(defmacro maybe-store-local-reference-instead ((object-info storage eql-refs) &body body)
-  (assert (atom storage))
-  (assert (atom object-info))
-  (assert (atom eql-refs))
-  `(unless (and ,eql-refs storage
-		(cond
-		  ((gethash ,object-info ,eql-refs)
-		   (store-ub8 +object-info-code+ ,storage nil)
-		   (store-fixnum (object-info-ref-id ,object-info) ,storage)
-		   t)
-		  (t
-		   (setf (gethash ,object-info ,eql-refs) t)
-		   nil)))
-     ,@body))
-
-(defun maybe-store-to-reference-table (object-info)
-  (when *eql-refs*
-    (setf (gethash (object-info-ref-id object-info) *eql-refs*) object-info))
-  object-info)
-
 (defun compute-object-info (type)
+  "Takes a symbol denoting the type of an object and returns an `object-info' allowing for
+ the various user methods to override behaviors."
   (declare (optimize speed safety))
   (multiple-value-bind (slot-names slot-value-filter-func)
       (serializable-object-info type)
-    (let* ((slot-names-vector (coerce slot-names 'simple-vector)))
+    (let* ((slot-names-vector (coerce (the list slot-names) 'simple-vector)))
       (multiple-value-bind (specialized-serializer specialized-deserializer)
 	  (specialized-serializer/deserializer type)
 	(make-object-info
@@ -150,6 +135,33 @@
 	 :specialized-constructor (specialized-object-constructor type)
 	 :specialized-serializer specialized-serializer
 	 :specialized-deserializer specialized-deserializer)))))
+
+(defmacro maybe-store-local-reference-instead ((object-info storage eql-refs) &body body)
+  "Called during the serialization / storage phase.  This is a kludged
+ implicit referencing scheme used when the global *track-references*
+ is disabled.  This lets us avoid calculating and writing and reading
+ what each object type is."
+  (assert (atom storage)) ;; or rewrite to use alexandria:once-only
+  (assert (atom object-info))
+  (assert (atom eql-refs))
+  `(unless (and ,eql-refs storage
+		(cond
+		  ((gethash ,object-info ,eql-refs)
+		   ;; We have already stored this object-info, write a reference to it
+		   (store-ub8 +object-info-code+ ,storage nil)
+		   (store-fixnum (object-info-ref-id ,object-info) ,storage)
+		   t)
+		  (t
+		   (setf (gethash ,object-info ,eql-refs) t)
+		   nil)))
+     ,@body))
+
+(defun maybe-store-to-reference-table (object-info)
+  "Called during the deserialization / restore phase.  We store the constructed
+ object-info into our reference hash table using its reference id."
+  (when *eql-refs*
+    (setf (gethash (object-info-ref-id object-info) *eql-refs*) object-info))
+  object-info)
 
 (defun store-object-info (object-info storage eq-refs store-object assign-new-reference-id)
   (declare (optimize speed safety) (type object-info object-info))
@@ -262,8 +274,8 @@
 (defun restore-object-info (storage restore-object)
   (declare (optimize speed safety) (type function restore-object))
   (let* ((num-slots (restore-tagged-fixnum storage)))
-    (if (< num-slots 0)			   ;; local cache should hit
-	(gethash num-slots *eql-refs*) ;; todo use a reference vector for ffs
+    (if (< num-slots 0) ; it's a reference id, look it up in our implicit tracking table
+	(gethash num-slots *eql-refs*)
         (let ((slot-name-vector (make-array num-slots))
 	      (type (funcall restore-object)))
 	  ;; No circularity possible below as these are symbols
@@ -325,12 +337,13 @@
 	(t
 	 (store-object-info object-info storage eq-refs store-object assign-new-reference-id)
 	 (let ((filter (object-info-slot-value-filter-func object-info)))
+	   (declare (type function store-object))
 	   (if is-standard-object
 	       (loop for name across (object-info-slot-names object-info)
 		     do (if (slot-boundp obj name)
 			    (let* ((value (slot-value obj name))
 				   (filtered-value (if filter (funcall filter name value) value)))
-			      (funcall (the function store-object) filtered-value))
+			      (funcall store-object filtered-value))
 			    (when storage (store-unbound storage))))
 	       (loop for name across (object-info-slot-names object-info) ;; structure-object
 		 for value = (slot-value obj name)
