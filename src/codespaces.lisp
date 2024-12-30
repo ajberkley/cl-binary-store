@@ -56,6 +56,15 @@
  to a `object-nfo' structure.  This is bound locally during operation of store-objects
  and restore-objects.")
 
+(defvar *eql-refs* nil
+  "Even when *track-references* is disabled, code can use this hash table to do its own
+ reference tracking.  This is used for object / struct information and for symbols using
+ an implicit reference counting scheme.  This is NIL during store when *track-references*
+ is t")
+
+(defvar *eql-refs-ref-id* nil
+  "A implicit reference id counter for the always on eql-refs table below")
+
 (defvar *version-being-read* nil
   "During restore this is bound to any magic number found previous to
  this in the file.")
@@ -65,8 +74,11 @@
  big case statement built by make-read-dispatch-table."
   `(let* ((references-vector (make-array 2048 :initial-element nil))
 	  (references (make-references :vector references-vector))
-	  (*version-being-read* (codespace-magic-number *current-codespace*)))
-     (declare (dynamic-extent references references-vector))
+	  (*version-being-read* (codespace-magic-number *current-codespace*))
+	  (ht (make-hash-table :test 'eql))
+	  (*eql-refs-ref-id* 0)
+	  (*eql-refs* ht))
+     (declare (dynamic-extent references references-vector ht))
      (labels ((restore-object2 (&optional (code (restore-ub8 storage)))
 		(let ((restore-object #'restore-object))
                   ,(make-read-dispatch-table 'code)))
@@ -92,10 +104,13 @@
 (defun build-store-objects ()
   `(let* ((track-references *track-references*)
 	  (object-info (make-hash-table :test 'eql))
-	  (*object-info* object-info))
-     (declare (dynamic-extent object-info))
+	  (*object-info* object-info)
+	  (ht (unless track-references (make-hash-table :test 'eql)))
+	  (*eql-refs-ref-id* (unless track-references 0))
+	  (*eql-refs* ht))
+     (declare (dynamic-extent object-info ht))
      ,(with-reference-tables 'track-references
-	#+debug-cbs `(format t "Starting reference counting pass on ~A objects~%" (length stuff))
+	#+debug-cbs `(when track-references (format t "Starting reference counting pass on ~A objects~%" (length stuff)))
 	`(labels ((store-object2 (obj)
 		    (let ((store-object #'store-object)
 			  (storage nil)
@@ -110,11 +125,11 @@
 	   (when track-references
 	     (dolist (elt stuff)
 	       (store-object elt))))
-	#+debug-cbs `(format t "Finished reference counting pass~%")
+	#+debug-cbs `(when track-references (format t "Finished reference counting pass~%"))
 	`(when track-references
            ,(build-map-reference-tables ''analyze-references-hash-table)) ;; debugging only
         ;; Now clean up the references table: delete anyone who has no references
-        #+debug-cbs `(format t "Generating real reference hash-table~%")
+        #+debug-cbs `(when track-references (format t "Generating real reference hash-table~%"))
 	;; We do not assign reference ids.  They are assigned as objects are
 	;; written, in order as we are keeping the implicit numbering scheme, on
 	;; reading
@@ -131,10 +146,11 @@
 				(remhash k table)))
 			  table))))
            #+debug-cbs
-           ,(build-map-reference-tables `(lambda (table-name table)
-                                           (format t "~A: there are ~A actual references~%"
-                                           table-name
-                                           (hash-table-count table))))
+	   (when track-references
+             ,(build-map-reference-tables `(lambda (table-name table)
+                                             (format t "~A: there are ~A actual references~%"
+						     table-name
+						     (hash-table-count table)))))
            #+debug-cbs `(format t "Starting actual storage phase~%")
            (let ((ref-id 0))
 	     (declare (type fixnum ref-id))
@@ -309,7 +325,7 @@
                     ,code)
                  code)))
     (loop for param in (cdr store-function-signature)
-          do (unless (or (member param '(obj storage store-object assign-new-reference-id))
+          do (unless (or (member param '(obj storage store-object assign-new-reference-id t nil))
 			 (gethash param (codespace-ref-tables codespace)))
                (error (format nil "While parsing DEFSTORE for ~A, ~A is an unknown parameter of DEFSTORE~%~
                                    it must be one of OBJ, STORAGE, STORE-OBJECT or a reference table name from~%~

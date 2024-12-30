@@ -9,6 +9,7 @@
 		 object-info-specialized-serializer
 		 object-info-specialized-deserializer
 		 object-info-use-initialize-instance
+		 object-info-ref-id
 		 make-object-info))
 (defstruct object-info
   (class (find-class 'structure-object))
@@ -18,4 +19,6 @@
   (use-initialize-instance nil :type boolean)
   (specialized-constructor nil :type (or null function))
   (specialized-serializer nil :type (or null function))
-  (specialized-deserializer nil :type (or null function)))
+  (specialized-deserializer nil :type (or null function))
+  (ref-id (when *eql-refs-ref-id*
+	    (- (the fixnum (incf (the fixnum *eql-refs-ref-id*))))) :type (or null fixnum)))

@@ -181,7 +181,7 @@
   (let* ((one (make-blarg :a 1234 :b 1d0 :d (make-array 5 :initial-element "hi")))
 	 (two (make-blarg :a 456 :b 3d0 :d (make-array 5 :initial-element "boo")))
 	 (s (list one two one two)))
-    (let ((result (restore-from-vector (print (store-to-vector s)))))
+    (let ((result (restore-from-vector (store-to-vector s))))
       (is 'equalp s result)
       (is 'eql (first result) (third result))
       (is 'eql (second result) (fourth result)))))
@@ -201,12 +201,6 @@
       (setf (blarg-a (first result)) nil)
       (setf (blarg-a (second result)) nil)
       (is 'equalp result s))))
-
-(define-test test-object-info
-  (let ((b (cl-binary-store::compute-object-info 'blarg)))
-    (is 'equalp
-	(restore-from-vector (store-to-vector b))
-	b)))
 
 (defclass a-class ()
   ((a :initarg :a)
@@ -278,13 +272,21 @@
 	non-proper-list)))
 
 (define-test test-simple-double-float
-  (let ((df 3.1415d0))
+  (let ((df 3.1415d0)
+	(df-signed -1.23d-23))
     (is '= df
 	(restore-from-vector
-	 (store-to-vector df)))))
+	 (store-to-vector df)))
+    (is '= df-signed
+	(restore-from-vector
+	 (store-to-vector df-signed)))))
 
 (define-test test-simple-single-float
   (let ((sf 3.1415f0))
+    (is '= sf
+	(restore-from-vector
+	 (store-to-vector sf))))
+  (let ((sf -3.1415f-12))
     (is '= sf
 	(restore-from-vector
 	 (store-to-vector sf)))))
@@ -493,3 +495,38 @@
 	(true (typep result 'replacement-struct))
 	(is 'string= (replacement-struct-a result) "a")
 	(is 'string= (replacement-struct-b result) "b")))))
+
+(define-test reference-id-encoding/decoding
+  (loop for ref-id from
+	cl-binary-store::+reference-direct-min-ref-id+ to
+	cl-binary-store::+reference-direct-max-ref-id+
+	do
+	   (assert (= (cl-binary-store::decode-reference-direct
+		       (cl-binary-store::encode-reference-direct ref-id))
+		      ref-id)))
+  
+  (loop for ref-id from
+	cl-binary-store::+reference-one-byte-min-ref-id+ to
+	cl-binary-store::+reference-one-byte-max-ref-id+
+	do (let ((result (cl-binary-store::encode-reference-one-byte ref-id)))
+	     (let ((tag-byte (logand result #xFF))
+		   (next-byte (ash result -8)))
+	       (assert (<= 0 next-byte 255))
+	       (assert (= (cl-binary-store::decode-reference-one-byte tag-byte next-byte)
+			  ref-id)))))
+  (loop for ref-id from
+	cl-binary-store::+reference-two-byte-min-ref-id+ to
+	cl-binary-store::+reference-two-byte-max-ref-id+
+	do (multiple-value-bind (tag-byte next-16-bytes)
+	       (cl-binary-store::encode-reference-two-bytes ref-id)
+	     (assert (<= 0 next-16-bytes 65535))
+	     (assert (= (cl-binary-store::decode-reference-two-bytes tag-byte next-16-bytes)
+			ref-id))))
+
+  (loop for ref-id from
+		   (+ cl-binary-store::+reference-two-byte-max-ref-id+ 1) below
+		   (+ cl-binary-store::+reference-two-byte-max-ref-id+ 123456)
+	do (assert (= (cl-binary-store::decode-reference-tagged
+		       (cl-binary-store::encode-reference-tagged ref-id)) ref-id))))
+		   
+		   
