@@ -19,8 +19,8 @@ I expect it to be polished and 1.0 released mid-January 2025.
 - Data/objects that have multiple and circular references within them
   - List circularity and general circular references between objects
   - Preservation of equality amongst the serialized objects (objects are eq de-duplicated and referred to by references in the output)
+- Should do the right thing out of the box for structure-objects and standard-objects, but be extensible when you want to do more
 - Versioned output
-- Extensibility for user data types (with good defaults for 99% of use)
 - Ability to change the coding mechanism straight-forwardly
 - Should work out of the box without any effort with an easy programmer / user interface
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
