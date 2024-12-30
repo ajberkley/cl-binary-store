@@ -375,9 +375,9 @@
       (t
        (let* ((class (object-info-class object-info))
 	      (obj (allocate-instance class)))
-	 (if (typep class 'structure-object)
+	 (if (typep class 'structure-class)
 	     (loop for name across (object-info-slot-names object-info)
-	       do (restore-object-to (slot-value obj name) restore-object))
+		   do (restore-object-to (slot-value obj name) restore-object))
 	     (loop for name across (object-info-slot-names object-info)
 		   do (restore-object-to (slot-value* obj name) restore-object)))
 	 obj)))))
