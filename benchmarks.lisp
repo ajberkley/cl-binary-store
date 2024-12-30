@@ -1,5 +1,6 @@
 (quicklisp:quickload "cl-store")
 (quicklisp:quickload "hyperluminal-mem")
+(quicklisp:quickload "cl-conspack")
 (require 'sb-sprof)
 
 (in-package :cl-binary-store)
@@ -35,21 +36,70 @@
 
 (defun test-cl-binary-store-on-data
     (data &key (track-references t) (support-shared-list-structures nil) (repeats 100)
-            (read t) (write t))
+            (read t) (write t) (file nil))
   (let* ((cl-binary-store:*support-shared-list-structures* support-shared-list-structures)
 	 (cl-binary-store:*track-references* track-references)
-	 (size (length (cl-binary-store:store nil data)))
-         (output-size-MB (/ size 1e6))
-         (store (make-array size :element-type '(unsigned-byte 8))))
+	 (store (coerce
+		 (cl-binary-store:store nil data)
+		 '(simple-array (unsigned-byte 8) (*))))
+	 (size (length store))
+         (output-size-MB (/ size 1e6)))
     (format t "CL-BINARY-STORE~%")
     (format t " OUTPUT SIZE: ~,2f MB~%" output-size-MB)
-    (if write
+    (when write
 	(timed (" CL-BINARY-STORE WRITE:" repeats output-size-MB)
 	  (dotimes (x repeats) (cl-binary-store:store store data)))
-	(cl-binary-store:store store data))
+	(when file
+	  (timed (" CL-BINARY-STORE FILE WRITE:" repeats output-size-MB)
+	    (dotimes (x repeats)
+	      (with-open-file (str "blarg.bin" :if-exists :supersede :if-does-not-exist :create
+					       :direction :output :element-type '(unsigned-byte 8))
+		(cl-binary-store:store str data))))))
     (when read
       (timed (" CL-BINARY-STORE READ :" repeats output-size-MB)
-        (dotimes (x repeats) (cl-binary-store:restore store))))
+        (dotimes (x repeats) (cl-binary-store:restore store)))
+      (when file
+	(timed (" CL-BINARY-STORE FILE READ:" repeats output-size-MB)
+	  (dotimes (x repeats)
+	    (with-open-file (str "blarg.bin" :direction :input :element-type '(unsigned-byte 8))
+	      (cl-binary-store:restore str))))))
+    (values)))
+
+(defun test-conspack-on-data (data &key (repeats 10) (read t) (write t) (to-file nil)
+				     (track-references t))
+  (format t "CL-CONSPACK~%")
+  (let* ((encoded-data (conspack:encode data))
+	 (output-size-MB (/ (length encoded-data) 1e6)))
+    (format t " OUTPUT SIZE: ~,2fMB~%" output-size-MB)
+    (when write
+      (when to-file
+	(timed (" CONSPACK FILE WRITE:" repeats output-size-MB)
+	  (dotimes (x repeats)
+	    (with-open-file (str "blarg.bin" :if-exists :supersede :if-does-not-exist :create
+					     :direction :output :element-type '(unsigned-byte 8))
+	      (if track-references
+		  (conspack:tracking-refs ()
+		    (conspack:encode data :stream str))
+		  (conspack:encode data :stream str))))))
+      (timed (" CONSPACK WRITE:" repeats output-size-MB)
+	(dotimes (x repeats)
+	  (conspack:encode data))))
+    (when read
+      (when to-file
+	(timed (" CONSPACK FILE READ:" repeats output-size-MB)
+	  (dotimes (x repeats)
+	    (with-open-file (str "blarg.bin" :element-type '(unsigned-byte 8))
+	      (if track-references
+		  (conspack:tracking-refs ()
+		    (conspack:decode-stream str))
+		  (conspack:decode-stream str))))))
+      (timed (" CONSPACK READ:" repeats output-size-MB)
+	(if track-references
+	    (dotimes (x repeats)
+	      (conspack:tracking-refs ()
+		(conspack:decode encoded-data)))
+	    (dotimes (x repeats)
+	      (conspack:decode encoded-data)))))
     (values)))
 
 (defun test-cl-store-on-data
@@ -69,13 +119,15 @@
         (timed (" CL-STORE READ :" repeats output-size-MB)
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
-(defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t))
+(defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
   (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
     (test-cl-binary-store-on-data data :track-references (not hlmem)
                                        :support-shared-list-structures (and (not hlmem)
                                                                             (not cl-store))))
+  (when conspack
+    (test-conspack-on-data data :track-references (not hlmem)))
   (when cl-store
     (test-cl-store-on-data data :check-for-circs (not hlmem))))
 
@@ -146,6 +198,11 @@
 					       ;; (random 1f0) slows cl-store crazily
 					       #()))))))
 
+(defun lots-of-the-same-string ()
+  (let ((string (coerce "asdf" 'simple-base-string)))
+    (loop for i fixnum from 0 below 1000000
+	  collect string)))
+
 (defun lots-of-keywords ()
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'keyword)))
@@ -154,13 +211,28 @@
   (loop for i fixnum from 0 below 100000
 	collect (intern (format nil "~A" (random 250000)) 'cl-user)))
 
-(defstruct blarg
+(defstruct bench-blarg
   a
   b)
 
+(conspack:defencoding bench-blarg
+  a b)
+
+(defmethod hyperluminal-mem:msize-object ((b bench-blarg) index)
+  (hyperluminal-mem:msize* index (bench-blarg-a b) (bench-blarg-b b)))
+
+(defmethod hyperluminal-mem:mwrite-object ((b bench-blarg) ptr index end-index)
+  (hyperluminal-mem:mwrite* ptr index end-index (bench-blarg-a b) (bench-blarg-b b)))
+
+(defmethod hyperluminal-mem:mread-object ((type (eql 'bench-blarg)) ptr index end-index &key)
+  (hyperluminal-mem:with-mread* (a b new-index) (ptr index end-index)
+    (values
+     (make-bench-blarg :a a :b b)
+     new-index)))))
+
 (defun lots-of-structure-objects ()
   (loop for i below 100000
-        collect (make-blarg :a (random 1d0) :b (format nil "~A" (random 100)))))
+        collect (make-bench-blarg :a (random 1d0) :b (coerce (format nil "~A" (random 100)) 'simple-base-string))))
 
 (defclass c-blarg
     ()

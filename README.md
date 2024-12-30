@@ -2,7 +2,7 @@
 
 A fast and reasonably customizable serializer/deserializer of Common Lisp objects to/from a binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.
 
-> :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for messagepack support.
+> :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for messagepack support.
 
 Currently this is sbcl specific, and I'd like to fix this up to work on other implementations, but it isn't top of mind.
 
@@ -217,7 +217,9 @@ I've been using [cl-store](https://cl-store.common-lisp.dev/) forever and it wor
 
 I have also used [hyperluminal-mem](https://github.com/cosmos72/hyperluminal-mem), which is really fast if you meet the restrictions it has.  It does not support delayed object construction or references really, nor a nice default for structures and classes (though you can extend it with manual referencing on a per type basis and with serializers for each structure or class you want).
 
-They are extensible, but not enough --- you cannot completely change the coding mechanism.
+I will admit when I started this project, I didn't know about cl-conspack.  It is faster than cl-store and generates nice compact output!  It still requires extending for simple objects and structures and doesn't handle repeated structures at high efficiency, both of which are problems for me.  It doesn't handle list circularity right (or maybe I didn't wait long enough to find out that it wasn't zooming in circles).
+
+They are extensible, but not enough to make them into what I need.
 
 ## What is different here?
 
