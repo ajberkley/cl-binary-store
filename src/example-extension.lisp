@@ -1,7 +1,8 @@
 (defpackage :example-extension
   (:use :common-lisp :cl-binary-store)
   (:export #:test-special-serializer/deserializer
-	   #:test-serializable-object-info))
+	   #:test-serializable-object-info
+	   #:test-unable-to-restore-double-floats))
 
 (in-package :example-extension)
 

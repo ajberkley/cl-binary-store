@@ -181,10 +181,12 @@ The notion we have for extension and versioning is a "codespace", that is a set 
 For an example, look at [example-extension.lisp](src/example-extension.lisp) and [example-extension-codespace.lisp](src/example-extension-codespace.lisp) which I reproduce here:
 
     (define-codespace ("extension-codespace" +extension-codespace+ :inherits-from +basic-codespace+)
+      ;; Disable storing and loading of double-floats because we hate them or something
+      (delete-store double-float)
+      (delete-restore cl-binary-store::+double-float-code+)
+      ;; Add low level support for something-else objects
       (defstore something-else (store-something-else obj storage store-object))
       (defrestore +test-code+ (restore-something-else restore-object)))
-
-Note that you can also define local reference tracking hash-tables with register-references.
 
 Here we are definining how to store an object of type SOMETHING-ELSE (which is defined in [example-extension.lisp](src/example-extension.lisp)).  We define our type *tag* +test-code+ and we write it out in #'store-something-else along with whatever else we feel like.  Then on restore we call (restore-something-else restore-object) when we see +test-code+.  restore-object is a function we can call to restore further objects from the data stream.  See [basic-codespace.lisp](src/basic-codespace.lisp) for lots of examples.
 
@@ -207,6 +209,13 @@ Anyhow, here is the result of running the code
     "And here is a bonus thing returned to you"
 
 The codespace can nominally be changed multiple times in a file if needed.
+
+As a further example, we decided to disable double-float storing and restoration because we think they are dangerous and too precise for normal human brains to handle.  In the example-extension file there is an example:
+
+    CL-USER> (example-extension:test-unable-to-restore-double-floats)
+    Successfully denied codespace switching!
+    Error was: Switching codespace away from #x9999 (extension-codespace) is DISALLOWED
+    Successfully read double-float when we were allowed to!
 
 ## Why?
 
