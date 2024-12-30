@@ -2,14 +2,12 @@
 
 What's the fun of writing fast code if you cannot show it off?
 
-The comparables are: CL-STORE, HYPERLUMINAL-MEM, and CL-CONSPACK.  In terms of feature comparable, cl-store has the best behavior out of the box.  cl-conspack 
+The comparables sorted by fastest to slowest: HYPERLUMINAL-MEM, CL-CONSPACK and CL-STORE. 
 
-In the running here is hyperluminal-mem, a very optimized binary serializer made to
-write to SAP buffers directly.  Somewhat extensible, but does not do reference or circularity
-tracking at all.  Currently broken in quicklisp unfortunately, but you can still load it
-by accepting the compilation errors (it's problems in stm library).  It's my benchmark for
-zippy raw data serialization.  We are almost as fast as it in many cases, faster in others,
-slower in others.
+hyperluminal-mem is currently broken in quicklisp (though you can hit accept a couple times to
+get it compiled and running).
+
+In terms of feature comparable, cl-store has the best behavior out of the box without requiring anything of the user.  cl-conspack is really nice too, but has some different goals, mainly being focused on interacting with other systems and it requires adding specialized serializers for each structure or object you use).  It is faster than cl-store which is nice, but not fast enough, and doesn't work well with data containing many instances of structures or classes.  Hyperluminal-mem is a very optimized binary serializer made to write to SAP buffers directly.  It is somewhat extensible and again requires writing code for every struct or object you want to serialize.  It does not do reference or circularity tracking at all.  Hyperluminal-mem is currently broken in quicklisp unfortunately, but you can still load it by accepting the compilation errors (it's problems in stm library).  It's my benchmark for zippy raw data serialization.  We are almost as fast as it in many cases, faster in others, slower in others.
 
 ## Reference tracking disabled
 
@@ -303,6 +301,12 @@ Now with reference tracking.  cl-conspack does not seem to do the right thing he
      CL-STORE WRITE: 260.40 ms at 26 MB/sec
      CL-STORE READ : 184.80 ms at 36 MB/sec
 
+OK, cl-conspack comes with some cool explain tool that lets you analyze the output.  For each structure it writes out the slot names and the structure symbol.  Here is a bit of the output.  It's a typed-map.  (:ref 0) is the slot name of the first struct slot and (:ref 1) is the slot name of the second struct slot.  So, yeah, it just isn't aggressive enough about reference tracking.
+
+   (:TMAP 2
+    ((:SYMBOL BENCH-BLARG) (:REF 0) (:STRING "57") (:REF 1)
+     (:NUMBER :DOUBLE-FLOAT 0.21916813954917602d0)))
+
 ## Lots of the same string
 
 Because cl-conspack behaves badly above for structures, here I am making sure that it is working.  It does (really well).  I don't understand why cl-binary-store is so slow at writing
@@ -337,7 +341,7 @@ Again I did not feel like writing an extension for hyperluminal-mem or cl-conspa
 
 ## A pile of tangled conses
 
-Here hyperluminal mem explodes because no circularity detection. Notice the asymmetry between store and restore (and also the nice small file).  The faster restore is nice.  Note that this will eventually blow the stack if you don't have it big enough.  We follow CDRs without recursion, but we do CAR following with recursive calls, so...
+Here hyperluminal mem and cl-conspack explodes because of no circularity detection and it appears broken circularity detection in the second case. Notice the asymmetry between store and restore (and also the nice small file).  The faster restore is nice.  Note that this will eventually blow the stack if you don't have it big enough.  We follow CDRs without recursion, but we do CAR following with recursive calls, so...
 
     CL-BINARY-STORE> (defparameter *blarg* (a-pile-of-tangled-conses))
     CL-BINARY-STORE> (test-cl-binary-store-on-data *blarg* :support-shared-list-structures t)
