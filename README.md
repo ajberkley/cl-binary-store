@@ -259,3 +259,5 @@ See [benchmarking.md](benchmarking.md).
 - [ ] Further discoveries from real world use cases (that is, my use case)
   - [ ] Build compacted hash tables after the reference counting
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
+- [X] Always track references for object info
+- [ ] Always track references for symbols

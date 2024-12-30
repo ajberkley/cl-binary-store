@@ -28,10 +28,10 @@
     (format t "HYPERLUMINAL-MEM~%")
     (format t " OUTPUT SIZE: ~,2f MB~%" output-size)
     (sb-sys:with-pinned-objects (a-store)
-      (timed (" HLMEM WRITE:" repeats output-size)
+      (timed (" WRITE:" repeats output-size)
         (dotimes (x repeats) (hyperluminal-mem::mwrite (sb-sys:vector-sap a-store) 0 words data)))
       ;; returns words
-      (timed (" HLMEM READ :" repeats output-size)
+      (timed (" READ :" repeats output-size)
         (dotimes (x repeats) (hyperluminal-mem:mread (sb-sys:vector-sap a-store) 0 words))))))
 
 (defun test-cl-binary-store-on-data
@@ -47,19 +47,19 @@
     (format t "CL-BINARY-STORE~%")
     (format t " OUTPUT SIZE: ~,2f MB~%" output-size-MB)
     (when write
-	(timed (" CL-BINARY-STORE WRITE:" repeats output-size-MB)
+	(timed (" WRITE:" repeats output-size-MB)
 	  (dotimes (x repeats) (cl-binary-store:store store data)))
 	(when file
-	  (timed (" CL-BINARY-STORE FILE WRITE:" repeats output-size-MB)
+	  (timed (" FILE WRITE:" repeats output-size-MB)
 	    (dotimes (x repeats)
 	      (with-open-file (str "blarg.bin" :if-exists :supersede :if-does-not-exist :create
 					       :direction :output :element-type '(unsigned-byte 8))
 		(cl-binary-store:store str data))))))
     (when read
-      (timed (" CL-BINARY-STORE READ :" repeats output-size-MB)
+      (timed (" READ :" repeats output-size-MB)
         (dotimes (x repeats) (cl-binary-store:restore store)))
       (when file
-	(timed (" CL-BINARY-STORE FILE READ:" repeats output-size-MB)
+	(timed (" FILE READ :" repeats output-size-MB)
 	  (dotimes (x repeats)
 	    (with-open-file (str "blarg.bin" :direction :input :element-type '(unsigned-byte 8))
 	      (cl-binary-store:restore str))))))
@@ -68,12 +68,15 @@
 (defun test-conspack-on-data (data &key (repeats 10) (read t) (write t) (to-file nil)
 				     (track-references t))
   (format t "CL-CONSPACK~%")
-  (let* ((encoded-data (conspack:encode data))
+  (let* ((encoded-data (if track-references
+			   (conspack:tracking-refs ()
+			     (conspack:encode data))
+			   (conspack:encode data)))
 	 (output-size-MB (/ (length encoded-data) 1e6)))
     (format t " OUTPUT SIZE: ~,2fMB~%" output-size-MB)
     (when write
       (when to-file
-	(timed (" CONSPACK FILE WRITE:" repeats output-size-MB)
+	(timed (" FILE WRITE:" repeats output-size-MB)
 	  (dotimes (x repeats)
 	    (with-open-file (str "blarg.bin" :if-exists :supersede :if-does-not-exist :create
 					     :direction :output :element-type '(unsigned-byte 8))
@@ -81,19 +84,22 @@
 		  (conspack:tracking-refs ()
 		    (conspack:encode data :stream str))
 		  (conspack:encode data :stream str))))))
-      (timed (" CONSPACK WRITE:" repeats output-size-MB)
+      (timed (" WRITE:" repeats output-size-MB)
 	(dotimes (x repeats)
-	  (conspack:encode data))))
+	  (if track-references
+	      (conspack:tracking-refs ()
+		(conspack:encode data))
+	      (conspack:encode data)))))
     (when read
       (when to-file
-	(timed (" CONSPACK FILE READ:" repeats output-size-MB)
+	(timed (" FILE READ :" repeats output-size-MB)
 	  (dotimes (x repeats)
 	    (with-open-file (str "blarg.bin" :element-type '(unsigned-byte 8))
 	      (if track-references
 		  (conspack:tracking-refs ()
 		    (conspack:decode-stream str))
 		  (conspack:decode-stream str))))))
-      (timed (" CONSPACK READ:" repeats output-size-MB)
+      (timed (" READ :" repeats output-size-MB)
 	(if track-references
 	    (dotimes (x repeats)
 	      (conspack:tracking-refs ()
@@ -103,9 +109,11 @@
     (values)))
 
 (defun test-cl-store-on-data
-    (data &key (check-for-circs nil) (repeats 10) (read t) (write t))
+    (data &key (check-for-circs nil) (repeats 10) (read t) (write t)
+	    (precise-list-storage nil))
   ;; if you try and dump it to a flexi-streams sequence it's 4x slower than this!
-  (let ((cl-store:*check-for-circs* check-for-circs))
+  (let ((cl-store:*check-for-circs* check-for-circs)
+	(cl-store:*precise-list-storage* precise-list-storage))
     (format t "CL-STORE~%")
     (cl-store:store data "blarg.bin")
     (let ((output-size-MB
@@ -113,10 +121,10 @@
               (/ (file-length str) 1e6))))
       (format t " OUTPUT SIZE: ~,2fMB~%" output-size-MB)
       (when write
-        (timed (" CL-STORE WRITE:" repeats output-size-MB)
+        (timed (" WRITE:" repeats output-size-MB)
           (dotimes (x repeats) (cl-store:store data "blarg.bin"))))
       (when read
-        (timed (" CL-STORE READ :" repeats output-size-MB)
+        (timed (" READ :" repeats output-size-MB)
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
 (defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
@@ -133,7 +141,7 @@
 
 ;; Data to test on
 (defun long-list-of-tiny-integers (&optional (n 1000000))
-  (loop repeat n collect (random 8)))
+  (loop repeat n collect (- (random 33) 16)))
 
 (defun long-list-of-not-tiny-integers (&optional (n 1000000))
   (make-list n :initial-element (random 256)))
@@ -194,7 +202,7 @@
 				       (if (> (random 100) 50)
 					   (cons (random 30) 2)
 					   (if (= (random 2) 1)
-					       "hello"
+					       (complex 1d0 1d0)
 					       ;; (random 1f0) slows cl-store crazily
 					       #()))))))
 
@@ -228,7 +236,7 @@
   (hyperluminal-mem:with-mread* (a b new-index) (ptr index end-index)
     (values
      (make-bench-blarg :a a :b b)
-     new-index)))))
+     new-index)))
 
 (defun lots-of-structure-objects ()
   (loop for i below 100000

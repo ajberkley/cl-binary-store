@@ -235,44 +235,6 @@
        (progn
 	 ,@body)))
 
-(defconstant +reference-direct-max-ref-id+
-  (- +last-direct-reference-id-code+ +first-direct-reference-id-code+ -1))
-(defconstant +reference-one-byte-min-ref-id+
-  (+ +reference-direct-max-ref-id+ 1))
-(defconstant +reference-one-byte-max-ref-id+
-  (+ 16383 +reference-direct-max-ref-id+))
-(defconstant +reference-two-byte-max-ref-id+
-  (- (expt 2 22) 1))
-
-(declaim (inline encode-reference-direct))
-(defun encode-reference-direct (ref-index)
-  "reference indicies start a 1, so we subtract one here."
-  ;;(assert (<= 1 ref-index +reference-direct-max-ref-id+))
-  (let ((encoded (+ (- +first-direct-reference-id-code+ 1)
-		    ref-index)))
-    ;; (assert (and (>= encoded +first-direct-reference-id-code+)
-    ;; 		 (<= encoded +last-direct-reference-id-code+)))
-    encoded))
-
-;; Little endian, least significant byte first
-(declaim (inline encode-reference-one-byte))
-(defun encode-reference-one-byte (ref-index)
-  "Returns a 16 bit value"
-  ;;(assert (< +reference-direct-max-ref-id+ ref-index (+ 1 +reference-one-byte-max-ref-id+)))
-  (let* ((shifted-ref-index
-	   (- ref-index +reference-direct-max-ref-id+))
-	 (tag-byte (+ #x40 (logand shifted-ref-index #x3F))))
-    (+ tag-byte (ash (logand shifted-ref-index #xFFC0) 2))))
-
-(declaim (inline encode-reference-two-bytes))
-(defun encode-reference-two-bytes (ref-index)
-  ;;(assert (< +reference-one-byte-max-ref-id+ ref-index (+ 1 +reference-two-byte-max-ref-id+)))
-  (let ((shifted-ref-index
-	  (- ref-index (+ 16384 (- +last-direct-reference-id-code+
-				   +first-direct-reference-id-code+ -1)))))
-    (values (+ #x80 (logand shifted-ref-index #x3F))
-	    (ash shifted-ref-index -6))))
-
 (declaim (inline store-new-reference-indicator))
 (defun store-new-reference-indicator (storage)
   "Write an indicator that we should assign a reference id to the next object; that is place
@@ -297,7 +259,7 @@
   (when storage
     #+dribble-cbs (format t "Writing reference ~A~%" ref-index)
     (cond
-      ((<= 1 ref-index +reference-direct-max-ref-id+)
+      ((<= +reference-direct-min-ref-id+ ref-index +reference-direct-max-ref-id+)
        (storage-write-byte storage (encode-reference-direct ref-index)))
       ((<= ref-index +reference-one-byte-max-ref-id+)
        (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
@@ -313,7 +275,7 @@
 	      (storage-write-ub16! storage second-two-bytes :sap sap :offset (incf offset)))))
       (t
        (storage-write-byte storage +tagged-reference-code+)
-       (store-tagged-unsigned-integer ref-index storage)))))
+       (store-tagged-unsigned-integer (encode-reference-tagged ref-index) storage)))))
 
 (declaim (inline restore-reference))
 (defun restore-reference (ref-id references)

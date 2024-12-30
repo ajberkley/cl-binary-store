@@ -115,6 +115,26 @@
   (:method (type)
     (values nil nil)))
 
+(defmacro maybe-store-local-reference-instead ((object-info storage eql-refs) &body body)
+  (assert (atom storage))
+  (assert (atom object-info))
+  (assert (atom eql-refs))
+  `(unless (and ,eql-refs storage
+		(cond
+		  ((gethash ,object-info ,eql-refs)
+		   (store-ub8 +object-info-code+ ,storage nil)
+		   (store-fixnum (object-info-ref-id ,object-info) ,storage)
+		   t)
+		  (t
+		   (setf (gethash ,object-info ,eql-refs) t)
+		   nil)))
+     ,@body))
+
+(defun maybe-store-to-reference-table (object-info)
+  (when *eql-refs*
+    (setf (gethash (object-info-ref-id object-info) *eql-refs*) object-info))
+  object-info)
+
 (defun compute-object-info (type)
   (declare (optimize speed safety))
   (multiple-value-bind (slot-names slot-value-filter-func)
@@ -134,14 +154,15 @@
 (defun store-object-info (object-info storage eq-refs store-object assign-new-reference-id)
   (declare (optimize speed safety) (type object-info object-info))
   (maybe-store-reference-instead (object-info storage eq-refs assign-new-reference-id)
-    (let ((slot-names (object-info-slot-names object-info)))
-      (when storage
-	(store-ub8 +object-info-code+ storage nil)
-	(store-tagged-unsigned-fixnum (length slot-names) storage))
-      (store-symbol (object-info-type object-info) storage eq-refs store-object
-		    assign-new-reference-id)
-      (loop for name across slot-names
-	    do (store-symbol name storage eq-refs store-object assign-new-reference-id)))))
+    (maybe-store-local-reference-instead (object-info storage *eql-refs*)
+      (let ((slot-names (object-info-slot-names object-info)))
+	(when storage
+	  (store-ub8 +object-info-code+ storage nil)
+	  (store-tagged-unsigned-fixnum (length slot-names) storage))
+	(store-symbol (object-info-type object-info) storage eq-refs store-object
+		      assign-new-reference-id)
+	(loop for name across slot-names
+	      do (store-symbol name storage eq-refs store-object assign-new-reference-id))))))
 
 (define-condition object-type-not-found (error)
   ((object-info :initarg :object-info :reader object-type-not-found-object-info)))
@@ -240,86 +261,46 @@
 
 (defun restore-object-info (storage restore-object)
   (declare (optimize speed safety) (type function restore-object))
-  (let* ((num-slots (restore-tagged-unsigned-fixnum storage))
-         (slot-name-vector (make-array num-slots))
-         (type (funcall restore-object)))
-    ;; No circularity possible below as these are symbols
-    (loop for idx fixnum from 0 below num-slots
-	  do (setf (svref slot-name-vector idx) (funcall restore-object)))
-    (multiple-value-bind (specialized-serializer specialized-deserializer)
-	(specialized-serializer/deserializer type)
-      (declare (ignore specialized-serializer))
-      (let ((specialized-constructor (specialized-object-constructor type)))
-	(cond
-	  ((or specialized-constructor specialized-deserializer)
-	   (make-object-info :class nil :type type
-			     :specialized-constructor specialized-constructor
-			     :specialized-deserializer specialized-deserializer
-			     :slot-names slot-name-vector))
-	  (t
-	   (let* ((si (make-object-info :type type :slot-names slot-name-vector))
-		  (class (really-find-class si)))
-	     (setf (object-info-class si) class)
-	     (setf (object-info-type si) (class-name class))
-	     (let ((image-slot-names (get-slot-names class)))
-	       ;; Now validate that the slot-names we restored are a subset of
-	       ;; those in the current image object	    
-	       (setf (object-info-specialized-constructor si)
-		     (validate-slot-names type slot-name-vector image-slot-names))
-	       ;; The order of slot names may be different, use the order
-	       ;; stored in the file!
-	       (setf (object-info-slot-names si) slot-name-vector))
-	     si)))))))
+  (let* ((num-slots (restore-tagged-fixnum storage)))
+    (if (< num-slots 0)			   ;; local cache should hit
+	(gethash num-slots *eql-refs*) ;; todo use a reference vector for ffs
+        (let ((slot-name-vector (make-array num-slots))
+	      (type (funcall restore-object)))
+	  ;; No circularity possible below as these are symbols
+	  (loop for idx fixnum from 0 below num-slots
+		do (setf (svref slot-name-vector idx) (funcall restore-object)))
+	  (multiple-value-bind (specialized-serializer specialized-deserializer)
+	      (specialized-serializer/deserializer type)
+	    (declare (ignore specialized-serializer))
+	    (let ((specialized-constructor (specialized-object-constructor type)))
+	      (cond
+		((or specialized-constructor specialized-deserializer)
+		 (maybe-store-to-reference-table
+		  (make-object-info :class nil :type type
+				    :specialized-constructor specialized-constructor
+				    :specialized-deserializer specialized-deserializer
+				    :slot-names slot-name-vector)))
+		(t
+		 (let* ((si (maybe-store-to-reference-table
+			     (make-object-info :type type :slot-names slot-name-vector)))
+			(class (really-find-class si)))
+		   (setf (object-info-class si) class)
+		   (setf (object-info-type si) (class-name class))
+		   (let ((image-slot-names (get-slot-names class)))
+		     ;; Now validate that the slot-names we restored are a subset of
+		     ;; those in the current image object	    
+		     (setf (object-info-specialized-constructor si)
+			   (validate-slot-names type slot-name-vector image-slot-names))
+		     ;; The order of slot names may be different, use the order
+		     ;; stored in the file!
+		     (setf (object-info-slot-names si) slot-name-vector))
+		   si)))))))))
 	
 (defun get-object-info (object)
   (let ((type (type-of object)))
     (or (gethash type *object-info*)
 	(setf (gethash type *object-info*)
 	      (compute-object-info type)))))
-
-(defun store-struct (struct storage eq-refs store-object assign-new-reference-id)
-  (declare (optimize speed safety) (type structure-object struct) (type function store-object))
-  (maybe-store-reference-instead (struct storage eq-refs assign-new-reference-id)
-    (let* ((object-info (get-object-info struct))
-	   (object-info-specialized-serializer (object-info-specialized-serializer object-info)))
-      (when storage
-	(store-ub8 +structure-object-code+ storage nil))
-      (cond
-	(object-info-specialized-serializer
-	 (funcall object-info-specialized-serializer
-		  struct storage eq-refs store-object assign-new-reference-id))
-	(t
-	 (store-object-info object-info storage eq-refs store-object assign-new-reference-id)
-	 (let ((filter (object-info-slot-value-filter-func object-info)))
-	   (loop for name across (object-info-slot-names object-info)
-		 for value = (slot-value struct name)
-		 for filtered-value = (if filter (funcall filter name value) value)
-		 do (funcall store-object filtered-value))))))))
-
-(defun restore-struct (storage restore-object)
-  (declare (type function restore-object) (ignorable storage) (optimize speed safety))
-  (let* ((object-info (funcall restore-object))
-	 (specialized-deserializer (object-info-specialized-deserializer object-info))
-	 (constructor (object-info-specialized-constructor object-info)))
-    (cond
-      (specialized-deserializer
-       (funcall specialized-deserializer storage restore-object))
-      (constructor
-       (let* ((slot-names (object-info-slot-names object-info))
-	      (num-slots (length slot-names))
-	      (slot-values (make-list num-slots)))
-	 (declare (dynamic-extent slot-values) (type (unsigned-byte 16) num-slots))
-	 (loop for value on slot-values
-	       do (setf (car value) (funcall restore-object)))
-	 (funcall constructor object-info slot-values)))
-      (t
-       (let* ((class (object-info-class object-info))
-	      (obj (allocate-instance class)))
-	 (loop for name across (object-info-slot-names object-info)
-	       do (restore-object-to (slot-value obj name) restore-object))
-	 obj)))))
-
-;; We use the same methods as structure-objects, but must deal with unbound slots
 
 (declaim (inline store-unbound))
 (defun store-unbound (storage)
@@ -329,17 +310,32 @@
 (defun restore-unbound ()
   'unbound-slot)
 
-(defun store-standard-object (obj storage eq-refs store-object assign-new-reference-id)
-  (declare (optimize speed safety) (type (or standard-object condition) obj))
+(defun store-standard/structure-object
+    (obj storage eq-refs store-object assign-new-reference-id is-standard-object)
+  (declare (optimize speed safety) (type (or structure-object standard-object condition) obj))
   (maybe-store-reference-instead (obj storage eq-refs assign-new-reference-id)
     (when storage
-      (store-ub8 +standard-object-code+ storage nil))
-    (let ((object-info (get-object-info obj)))
-      (store-object-info object-info storage eq-refs store-object assign-new-reference-id)
-      (loop for name across (object-info-slot-names object-info)
-	    do (if (slot-boundp obj name)
-		   (funcall (the function store-object) (slot-value obj name))
-		   (when storage (store-unbound storage)))))))
+      (store-ub8 +standard/structure-object-code+ storage nil))
+    (let* ((object-info (get-object-info obj))
+	   (object-info-specialized-serializer (object-info-specialized-serializer object-info)))
+      (cond
+	(object-info-specialized-serializer
+	 (funcall object-info-specialized-serializer
+		  obj storage eq-refs store-object assign-new-reference-id))
+	(t
+	 (store-object-info object-info storage eq-refs store-object assign-new-reference-id)
+	 (let ((filter (object-info-slot-value-filter-func object-info)))
+	   (if is-standard-object
+	       (loop for name across (object-info-slot-names object-info)
+		     do (if (slot-boundp obj name)
+			    (let* ((value (slot-value obj name))
+				   (filtered-value (if filter (funcall filter name value) value)))
+			      (funcall (the function store-object) filtered-value))
+			    (when storage (store-unbound storage))))
+	       (loop for name across (object-info-slot-names object-info) ;; structure-object
+		 for value = (slot-value obj name)
+		 for filtered-value = (if filter (funcall filter name value) value)
+		 do (funcall store-object filtered-value)))))))))
 
 (defun (setf slot-value*) (value object name)
   "Handle internal 'unbound-slot value"
@@ -347,9 +343,7 @@
       (slot-makunbound object name)
       (setf (slot-value object name) value)))
 
-;; TODO this is identical to restore-struct-object except slot-value* usage
-;; clean this up
-(defun restore-standard-object (storage restore-object)
+(defun restore-standard/structure-object (storage restore-object)
   (declare (type function restore-object) (ignorable storage) (optimize speed safety))
   (let* ((object-info (funcall restore-object))
 	 (specialized-deserializer (object-info-specialized-deserializer object-info))
@@ -368,6 +362,9 @@
       (t
        (let* ((class (object-info-class object-info))
 	      (obj (allocate-instance class)))
-	 (loop for name across (object-info-slot-names object-info)
-	       do (restore-object-to (slot-value* obj name) restore-object))
+	 (if (typep class 'structure-object)
+	     (loop for name across (object-info-slot-names object-info)
+	       do (restore-object-to (slot-value obj name) restore-object))
+	     (loop for name across (object-info-slot-names object-info)
+		   do (restore-object-to (slot-value* obj name) restore-object)))
 	 obj)))))

@@ -12,11 +12,15 @@
 	       (:file "sbcl-special-hash-tables")
 	       (:file "type-discrimination")
 	       (:file "object-info")
-	       (:file "actions" :depends-on ("storage" "features"))
+	       (:file "basic-codespace-codes")
+	       (:file "reference-coding" :depends-on ("basic-codespace-codes"))
+	       (:file "actions" :depends-on ("storage" "features" "basic-codespace-codes"))
 	       (:file "basic-codespace" :depends-on ("sbcl-special-hash-tables"
 						     "type-discrimination"
 						     "features" "codespaces"
-						     "actions" "object-info"))
+						     "actions" "object-info"
+						     "basic-codespace-codes"
+						     "reference-coding"))
 	       (:file "storage" :depends-on ("features" "cl-binary-store"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
 							      "basic-codespace"))

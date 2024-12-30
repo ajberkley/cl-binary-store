@@ -98,23 +98,16 @@
   (let ((offset (storage-offset storage))
         (sap (storage-sap storage)))
     (setf (storage-offset storage) (+ 4 offset))
-    (let ((a (make-array 1 :element-type 'single-float)))
-      (declare (dynamic-extent a))
-      (with-pinned-objects (a)
-        (copy-sap (vector-sap a) 0 sap offset 4)
-      (aref a 0)))))
+    (sb-kernel:make-single-float (signed-sap-ref-32 sap offset))))
 
 (declaim (inline store-single-float))
 (defun store-single-float (single-float storage &optional (tag t))
   (declare (optimize speed safety) (type single-float single-float))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 5 4) :sap sap)
-    (let ((temp (make-array 1 :element-type 'single-float :initial-element single-float)))
-      (declare (dynamic-extent temp))
-      (when tag
-	(storage-write-byte! storage +single-float-code+ :offset offset :sap sap)
-	(incf offset))
-      (with-pinned-objects (temp)
-	(copy-sap sap offset (vector-sap temp) 0 8)))))
+    (when tag
+      (storage-write-byte! storage +single-float-code+ :offset offset :sap sap)
+      (incf offset))
+    (setf (signed-sap-ref-32 sap offset) (sb-kernel:single-float-bits single-float))))
 
 (declaim (inline restore-double-float))
 (defun restore-double-float (storage)
@@ -123,11 +116,9 @@
   (let ((offset (storage-offset storage))
         (sap (storage-sap storage)))
     (setf (storage-offset storage) (+ 8 offset))
-    (let ((a (make-array 1 :element-type 'double-float)))
-      (declare (dynamic-extent a))
-      (with-pinned-objects (a)
-        (copy-sap (vector-sap a) 0 sap offset 8))
-      (aref a 0))))
+    (let ((lo (sap-ref-32 sap offset))
+	  (hi (signed-sap-ref-32 sap (+ 4 offset))))
+      (sb-kernel:make-double-float hi lo))))
 
 (declaim (inline restore-double-float-zero))
 (defun restore-double-float-zero ()
@@ -142,13 +133,11 @@
      (let ((offset (storage-offset ,storage))
            (sap (storage-sap ,storage)))
        (setf (storage-offset ,storage) (+ 8 offset))
-       (let ((a (make-array 1 :element-type 'double-float)))
-         (declare (dynamic-extent a))
-         (with-pinned-objects (a)
-           (copy-sap a 0 sap offset 8))
-         (setf ,slot (aref a 0))))))
+       (let* ((lo& (sap-ref-32 sap offset))
+	      (hi& (signed-sap-ref-32 sap (+ 4 offset))))
+	 (setf ,slot (sb-kernel:make-double-float hi& lo&))))))
 
-(declaim (notinline store-double-float))
+(declaim (inline store-double-float))
 (defun store-double-float (double-float storage double-float-refs assign-new-reference-id
 			   &optional (tag t))
   (declare (optimize speed safety) (type double-float double-float))
@@ -164,10 +153,9 @@
           (when tag
 	    (storage-write-byte! storage +double-float-code+ :offset offset :sap sap)
 	    (incf offset))
-          (let ((temp (make-array 1 :element-type 'double-float :initial-element double-float)))
-	    (declare (dynamic-extent temp))
-	    (with-pinned-objects (temp)
-	      (copy-sap sap offset (vector-sap temp) 0 8)))))))
+	  (setf (sap-ref-32 sap offset) (sb-kernel:double-float-low-bits double-float))
+	  (setf (signed-sap-ref-32 sap (+ 4 offset))
+		(sb-kernel:double-float-high-bits double-float))))))
 
 (defun restore-ratio (restore-object)
   (declare (optimize speed safety) (type function restore-object))
@@ -235,6 +223,11 @@
   (store-single-float (realpart complex-single-float) storage nil)
   (store-single-float (imagpart complex-single-float) storage nil))
 
+(defconstant +maximum-untagged-unsigned-integer+ (- +last-small-integer-code+
+						    +small-integer-zero-code+))
+(defconstant +minimum-untagged-signed-integer+ (- +first-small-integer-code+
+						  +small-integer-zero-code+))
+
 (declaim (inline store-tagged-unsigned-fixnum))
 (defun store-tagged-unsigned-fixnum (fixnum storage)
   "Store and tag a number from 0 to max-positive-fixnum.
@@ -242,7 +235,7 @@
   (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
   (when storage
     (if (<= fixnum +maximum-untagged-unsigned-integer+)
-	(store-ub8 (+ fixnum +first-small-unsigned-integer-code+) storage nil)
+	(store-ub8 (+ fixnum +small-integer-zero-code+) storage nil)
 	(if (< fixnum 256)
             (store-ub8 fixnum storage)
             (if (< fixnum 65536)
@@ -255,13 +248,28 @@
 (defun restore-tagged-unsigned-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
   (let ((tag (restore-ub8 storage)))
-    (if (<= +first-small-unsigned-integer-code+ tag +last-small-unsigned-integer-code+)
-	(- tag +first-small-unsigned-integer-code+)
+    (if (<= +small-integer-zero-code+ tag +last-small-integer-code+)
+	(- tag +small-integer-zero-code+)
 	(ecase tag
 	  (#.+ub8-code+ (restore-ub8 storage))
 	  (#.+ub16-code+ (restore-ub16 storage))
 	  (#.+ub32-code+ (restore-ub32 storage))
 	  (#.+fixnum-code+ (restore-fixnum storage))))))
+
+(declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-fixnum))
+(defun restore-tagged-fixnum (storage)
+  "Read back a number written by `store-tagged-unsigned-fixnum'."
+  (let ((tag (restore-ub8 storage)))
+    (if (<= +first-small-integer-code+ tag +last-small-integer-code+)
+	(- tag +small-integer-zero-code+)
+	(ecase tag
+	  (#.+ub8-code+ (restore-ub8 storage))
+	  (#.+ub16-code+ (restore-ub16 storage))
+	  (#.+ub32-code+ (restore-ub32 storage))
+	  (#.+fixnum-code+ (restore-fixnum storage))
+	  (#.+sb8-code+ (restore-sb8 storage))
+	  (#.+sb16-code+ (restore-sb16 storage))
+	  (#.+sb32-code+ (restore-sb32 storage))))))
 
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage)
@@ -270,13 +278,15 @@
   (when storage
     (if (>= fixnum 0)
         (store-tagged-unsigned-fixnum fixnum storage)
-        (if (> fixnum -256)
-            (store-sb8 fixnum storage)
-            (if (> fixnum -65536)
-                (store-sb16 fixnum storage)
-                (if (> fixnum #.(- (expt 2 32)))
-                    (store-sb32 fixnum storage)
-                    (store-only-fixnum fixnum storage)))))))
+	(if (>= fixnum +minimum-untagged-signed-integer+)
+	    (store-ub8 (+ fixnum +small-integer-zero-code+) storage nil)
+            (if (> fixnum -256)
+		(store-sb8 fixnum storage)
+		(if (> fixnum -65536)
+                    (store-sb16 fixnum storage)
+                    (if (> fixnum #.(- (expt 2 32)))
+			(store-sb32 fixnum storage)
+			(store-only-fixnum fixnum storage))))))))
 
 (declaim (inline store-tagged-unsigned-integer))
 (defun store-tagged-unsigned-integer (integer storage)

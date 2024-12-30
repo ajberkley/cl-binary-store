@@ -77,6 +77,15 @@
 	    (ash (aref sap (+ 6 offset)) 48)
 	    (ash (aref sap (+ 7 offset)) 56)))
 
+(declaim (inline signed-sap-ref-32 (setf signed-sap-ref-32)))
+(defun signed-sap-ref-32 (sap offset)
+  #+sbcl (sb-sys:signed-sap-ref-32 sap offset)
+  #-sbcl (error ""))
+
+(defun (setf signed-sap-ref-32) (value sap offset)
+  #+sbcl (setf (sb-sys:signed-sap-ref-32 sap offset) value)
+  #-sbcl (error ""))
+
 (defun signed-sap-ref-64 (sap offset)
   #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
   #-sbcl (error "imple me"))
