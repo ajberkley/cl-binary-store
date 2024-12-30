@@ -69,3 +69,33 @@
 	(*read-version* +extension-codespace+)
 	(*write-magic-number* nil))
     (restore (store nil (make-instance 'something-else)))))
+
+;; Note that in extension-codespace we have explicitly deleted support for double-floats
+;; let's verify that.
+
+(defun test-unable-to-restore-double-floats ()
+  (let ((bad-output
+	  (let ((*write-version* +basic-codespace+)
+		(*write-magic-number* t))
+	    (store nil 1.23d0))))
+    (let ((*read-version* +extension-codespace+)
+	  (*allow-codespace-switching* nil))
+      (handler-case
+	  (restore bad-output)
+	(error (e)
+	  (format t "Successfully denied codespace switching!~%Error was: ~A~%" e))))
+    (let ((output-with-double-float
+	    (let ((*write-version* +basic-codespace+)
+		  (*write-magic-number* nil))
+	      (store nil 1.23d0))))
+      (handler-case
+	  (let ((*read-version* +extension-codespace+))
+	    (restore output-with-double-float))
+	(error (e)
+	  (format t "Interpreting of double-float not supported in our codespace!~%Error was: ~A~%" e)))
+      (let ((*read-version* +basic-codespace+))
+	(let ((restored (restore output-with-double-float)))
+	  (if (= restored 1.23d0)
+	      (format t "Successfully read double-float when we were allowed to!~%")
+	      (format t "COULD NOT READ DOUBLE FLOAT BUG BUG BUG!~%")))))))
+    

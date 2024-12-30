@@ -345,6 +345,20 @@
         (cerror "REPLACE IT" (format nil "Replacing already existing store code for type ~A" type)))
       (setf (gethash type store-info) si))))
 
+(defmacro delete-restore (code)
+  "In define-codespace that has inherited another codespace, delete restore capability for a tag"
+  `(remhash ,code *current-codespace/compile-time*))
+
+(defmacro delete-restore (code)
+  "In define-codespace that has inherited another codespace, delete store capability for a type"
+  `(remhash ',code (codespace-restore-infos *current-codespace/compile-time*)))
+
+(defmacro delete-store (type)
+  `(remhash ',type (codespace-store-infos *current-codespace/compile-time*)))
+
+(defun delete-codespace (codespace)
+  (remhash codespace *codespaces*))
+
 (defmacro defstore
     (type store-function-signature
      &key (call-during-reference-phase nil call-during-reference-phase-provided-p)

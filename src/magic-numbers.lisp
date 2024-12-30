@@ -12,12 +12,15 @@
   "Set this to the magic number you wish to write into the file.  It may
  be queried by serialization routines if desired.")
 
+(defvar *allow-codespace-switching* t
+  "Set this to NIL if you want to specify the format of file you want to load and
+ not allow it to be set automatically based on the data format of the file.")
+
 (defstruct (magic-number (:include action (code +magic-number-action-code+)))
   (number #x0001 :type integer :read-only t))
 
 (defmethod action ((code (eql +magic-number-action-code+)) storage references restore-object)
   (let ((magic-number (funcall restore-object)))
-    (setf *version-being-read* magic-number)
     (let ((codespace (gethash magic-number *codespaces*)))
       (unless codespace
 	(error "Unsupported codespace version #x~X, we have ~{~x~X~^ ~}~%"
@@ -25,16 +28,24 @@
 				  collect key)))
       (cond
 	((not (eq *current-codespace* codespace))
-	 (format t "Switching codespace from ~A to #x~X (~A)~%"
-		 (codespace-name *current-codespace*)
-		 magic-number
-		 (codespace-name codespace))
-	 (setf *current-codespace* codespace)
-	 (restore-objects storage))
+	 (cond
+	   (*allow-codespace-switching*
+	    (format t "Switching codespace from ~A to #x~X (~A)~%"
+		    (codespace-name *current-codespace*)
+		    magic-number
+		    (codespace-name codespace))
+	    (setf *current-codespace* codespace)
+	    (setf *version-being-read* magic-number)
+	    (restore-objects storage))
+	   (t
+	    (error "Switching codespace away from #x~X (~A) is DISALLOWED"
+		   (codespace-magic-number *current-codespace*)
+		   (codespace-name *current-codespace*)))))
 	(t
+	 (setf *version-being-read* magic-number)
 	 (format t "Deserializing from version #x~X (~A)~%"
 		 magic-number (codespace-name codespace))
-	 (values "hi" :ignore))))))
+	 (values nil :ignore))))))
 
 (defmethod store-action ((action magic-number) storage store-object)
   (store-fixnum (magic-number-number action) storage))
