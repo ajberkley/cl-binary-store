@@ -61,10 +61,8 @@
    #:store-simple-vector
    #:restore-simple-vector
 
-   #:store-standard-object
-   #:restore-standard-object
-   #:store-structure-object
-   #:restore-structure-object
+   #:store-standard/structure-object
+   #:restore-standard/structure-object
 
    #:slot-info
    #:slot-info-class
