@@ -528,5 +528,22 @@
 		   (+ cl-binary-store::+reference-two-byte-max-ref-id+ 123456)
 	do (assert (= (cl-binary-store::decode-reference-tagged
 		       (cl-binary-store::encode-reference-tagged ref-id)) ref-id))))
+
+
+(defclass blarg-test-object ()
+  ((a :initarg :a :reader blarg-test-object-a)
+   (b :initarg :b :reader blarg-test-object-b)))
 		   
-		   
+(define-test test-standard-object
+  (let* ((one (make-instance 'blarg-test-object :a 1234 :b 1d0))
+	 (two (make-instance 'blarg-test-object :a 456 :b #(1 2 3)))
+	 (s (list one two one two)))
+    (let ((result (restore-from-vector (store-to-vector s))))
+      (true (every (lambda (o r)
+		     (and (equalp (blarg-test-object-a o)
+				  (blarg-test-object-a r))
+			  (equalp (blarg-test-object-b o)
+				  (blarg-test-object-b r))))
+		   s result))
+      (is 'eql (first result) (third result))
+      (is 'eql (second result) (fourth result)))))
