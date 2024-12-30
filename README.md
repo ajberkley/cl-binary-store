@@ -158,7 +158,7 @@ The specialized-serializer function will be called with parameters (object stora
 ### Configurable options
 #### \*track-references\* default: T
 
-Let this to NIL around your calls to store / restore if you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>500MB/sec / > 500 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).
+Let this to NIL around your calls to store / restore if you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>200MB/sec / > 200 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).
 
 #### \*support-shared-list-structures\* default: T
 
@@ -231,7 +231,7 @@ To make deserialization fast, we break the symmetry of store and restore by usin
 
 Performance during serialization is dominated by the reference hash table building and use.  This is quite hard to improve as the hash table is an eq table, so I can't just plug something else in.  You can hint the size of your data to save a lot of hash table growing and resizing if you have a large data set.
 
-If your data does not contain multiple references or repeated objects (in particular, repeated symbols will have their names and packages stored repeatedly!), then you can let \*track-references\* to NIL and you can hit hundreds of MB/sec depending on your data (unicode strings are currently a bit slow as we are not using a fast utf-8 encoder) and 500M cons+integer objects per second.  It's about 10-30x faster than cl-store in this mode.  This package is between 3x faster and 3x slower than hyperluminal-mem depending on data patterns both on store and restore.  If you are storing simple arrays / matrices, you want to use cl-binary-store.
+If your data does not contain multiple references or repeated objects (in particular, repeated symbols will have their names and packages stored repeatedly!), then you can let \*track-references\* to NIL and you can hit hundreds of MB/sec depending on your data (unicode strings are currently a bit slow as we are not using a fast utf-8 encoder) and 200+M cons+integer objects per second.  It's about 10-30x faster than cl-store in this mode.  This package is between 100x faster and 3x slower than hyperluminal-mem depending on data patterns both on store and restore.  If you are storing simple arrays / matrices, you want to use cl-binary-store.
 
 ### Easily versionable and extensible
 
