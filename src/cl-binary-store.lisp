@@ -146,8 +146,6 @@
    #:+basic-codespace+
    #:*read-version*
    #:store-symbol
-   #:store-struct
-   #:restore-struct
    #:restore-symbol
    #:assign-new-reference-id
    #:*eq-refs-table-size*
