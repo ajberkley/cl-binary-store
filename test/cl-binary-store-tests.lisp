@@ -109,7 +109,7 @@
 				     (case elt-type
 				       (bit (random 1))
 				       (fixnum #+ccl
-					       (random (- (expt 2 32) (expt 2 31)))
+					       (random (- (expt 2 59) (expt 2 58)))
 					       #-ccl
 					       (random (- (expt 2 62) (expt 2 61))))
 				       (base-char #\a)
