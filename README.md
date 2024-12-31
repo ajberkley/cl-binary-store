@@ -4,7 +4,7 @@ A fast and customizable serializer/deserializer of Common Lisp objects to/from a
 
 > :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for messagepack support.
 
-Currently this runs on SBCL, ECL, and CCL.  The SBCL implementation is the fast one.  On ECL and CCL there are no fast serializers / deserializers for simple-arrays.
+Currently this runs on SBCL, ECL, and CCL.  The SBCL implementation is the fast one.  On ECL and CCL there are no fast serializers / deserializers for simple-arrays.  Neither ABCL, Allegro, nor Lispworks works yet.
 
 ## Status
 
