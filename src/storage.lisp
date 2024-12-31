@@ -239,7 +239,9 @@
  which is guaranteed to be >8192 bytes."
   (declare #-debug-cbs (optimize (speed 3) (safety 0) (debug 0))
            (type (and fixnum (integer 0)) bytes))
-  (or (<= (sb-ext:truly-the fixnum (+ (storage-offset storage) bytes)) (storage-max storage))
+  (or (<= #+sbcl (sb-ext:truly-the fixnum (+ (storage-offset storage) bytes))
+	  #-sbcl (the fixnum (+ (storage-offset storage) bytes))
+	  (storage-max storage))
       (refill-read-storage storage bytes return-nil-on-eof)))
 
 (declaim (notinline flush-write-storage))
@@ -280,7 +282,9 @@
   "Ensure that we have room to write BYTES to STORAGE.  Returns storage offset."
   (declare (optimize (speed 3) (safety 0)) (type fixnum bytes))
   (let ((offset (storage-offset storage)))
-    (if (< (sb-ext:truly-the fixnum (+ offset bytes)) (storage-max storage))
+    (if (< #+sbcl (sb-ext:truly-the fixnum (+ offset bytes))
+	   #-sbcl (the fixnum (+ offset bytes))
+	   (storage-max storage))
 	offset
 	(flush-write-storage storage bytes))))
 
