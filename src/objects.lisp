@@ -79,7 +79,8 @@
  *store-class-slots* is t."
   (assert class)
   (loop with store-class-slots = *store-class-slots*
-	with is-structure-object = (subtypep class 'structure-class)
+	with is-structure-object = (or (typep class 'structure-class) ;; allegro work around
+				       (subtypep class 'structure-class))
 	for slot in (class-slots class)
 	when (or is-structure-object
 		 store-class-slots
