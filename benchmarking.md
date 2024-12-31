@@ -8,7 +8,7 @@ hyperluminal-mem is currently broken in quicklisp (though you can hit accept a c
 
 In terms of feature comparable, cl-store has the best behavior out of the box without requiring anything of the user.  cl-conspack is really nice too, but has some different goals, and it requires adding specialized serializers for each structure or object you use.  It is faster than cl-store which is nice, but not fast enough, and as noted earlier doesn't work well with data containing many instances of structures or classes.  Hyperluminal-mem is a very optimized binary serializer made to write to SAP buffers directly.  It is somewhat extensible and again requires writing code for every struct or object you want to serialize.  It does not do reference or circularity tracking at all.  Hyperluminal-mem is currently broken in quicklisp unfortunately, but you can still load it by accepting the compilation errors (it's problems in stm library).  It's my benchmark for zippy raw data serialization.  We are almost as fast as it in many cases, faster in others, slower in others.
 
-All the tests here are using SBCL.  There is a section at the end where I run some on ECL and CCL which are... slow.
+All the tests here are using SBCL.  There is a section at the end where I run some on ECL, CCL, and Allegro which are... slow (currently).  I think at least Allegro could be sped up quite a lot.
 
 ## Reference tracking disabled
 
@@ -368,12 +368,24 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
      WRITE: 15.20 ms at 14 MB/sec
      READ : 2218.00 ms at 0 MB/sec <-- I don't know what is going on here
 
-## ECL and CCL
+## ECL, CCL, Allegro
 
-Neither is recommended for speed.
+None are recommended for speed, they are about 100x slower than the sbcl version (which is really bonkers --- I think this could easily be fixed, especially Allegro can be made very zippy I am sure).  I couldn't test hyperluminal mem on Allegro as it does not load.
 
     ;; Using a 100x shorter list for this test because its slow (and no reference tracking)
     CL-BINARY-STORE> (test-on-data (long-list-of-tiny-integers 10000))
+    ALLEGRO CL-BINARY-STORE
+     OUTPUT SIZE: 0.02 MB
+     WRITE: 5.20 ms at 4 MB/sec
+     READ : 1.03 ms at 19 MB/sec
+    ALLEGRO CL-CONSPACK
+     OUTPUT SIZE: 0.02MB
+     WRITE: 0.90 ms at 22 MB/sec
+     READ : 1.50 ms at 13 MB/sec
+    ALLEGRO CL-STORE
+     OUTPUT SIZE: 0.05MB
+     WRITE: 3.10 ms at 16 MB/sec
+     READ : 1.90 ms at 26 MB/sec    
     ECL HYPERLUMINAL-MEM
      OUTPUT SIZE: 0.08 MB
      WRITE: 4.80 ms at 17 MB/sec
@@ -399,9 +411,21 @@ Neither is recommended for speed.
      WRITE: 5.56 ms at 4 MB/sec
      READ : 0.68 ms at 29 MB/sec
 
-It's not quite so terrible at double floats... on ECL and CCL
+It's not quite so terrible at double floats... on ECL and CCL and Allegro
 
     CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats 10000))
+    ALLEGRO CL-BINARY-STORE
+     OUTPUT SIZE: 0.10 MB
+     WRITE: 2.53 ms at 40 MB/sec
+     READ : 4.35 ms at 23 MB/sec
+    ALLEGRO CL-CONSPACK
+     OUTPUT SIZE: 0.09MB
+     WRITE: 8.30 ms at 11 MB/sec
+     READ : 16.60 ms at 5 MB/sec
+    ALLEGRO CL-STORE
+     OUTPUT SIZE: 0.48MB
+     WRITE: 12.50 ms at 38 MB/sec
+     READ : 19.20 ms at 25 MB/sec    
     ECL HYPERLUMINAL-MEM
      OUTPUT SIZE: 0.16 MB
      WRITE: 13.96 ms at 11 MB/sec

@@ -1,5 +1,5 @@
 (quicklisp:quickload "cl-store")
-(quicklisp:quickload "hyperluminal-mem")
+#-allegro(quicklisp:quickload "hyperluminal-mem")
 (quicklisp:quickload "cl-conspack")
 #+sbcl (require 'sb-sprof)
 
@@ -21,7 +21,7 @@
                         "")))))))
 
 
-(defun test-hlmem-on-data (data &key (repeats 100))
+#-allegro(defun test-hlmem-on-data (data &key (repeats 100))
   (let* ((words (hyperluminal-mem:msize 0 data))
          (output-size (/ (* 8 words) 1e6)))
     (format t "HYPERLUMINAL-MEM~%")
@@ -129,7 +129,7 @@
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
 (defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
-  (when hlmem
+  #-allegro(when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
     (test-cl-binary-store-on-data data :track-references (not hlmem)
@@ -259,7 +259,9 @@
 
 (defun simple-strings ()
   (loop for i below 100000
-        collect (format nil "~A~A" (random 1000000) #\U+03b1)))
+        collect (format nil "~A~A" (random 1000000)
+			#+allegro (code-char #x03b1)
+			#-allegro #\U+03b1)))
 
 (defun a-pile-of-tangled-conses (&optional (number 20000))
   (let ((a (make-array number)))
