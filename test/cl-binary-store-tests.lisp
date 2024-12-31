@@ -364,7 +364,7 @@
     (is 'equalp (simple-condition-format-control a) (simple-condition-format-control b))
     (is 'equal (simple-condition-format-arguments a) (simple-condition-format-arguments b))))
 
-(define-test test-sap-write/read
+#+sbcl (define-test test-sap-write/read
   ;; Normal use
   (let ((a (make-array 24 :element-type '(unsigned-byte 8) :initial-element 0))
         (input (list 1 2)))
