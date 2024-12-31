@@ -1,10 +1,13 @@
 (in-package :cl-binary-store)
 
+#+sbcl
 (declaim (ftype (function (t &optional (unsigned-byte 58))
 			  (values (unsigned-byte 50) (unsigned-byte 8) &optional))
 		sbcl-specialized-array-element-size/bits))
 
+#+sbcl
 (declaim (inline sbcl-specialized-array-element-size/bits))
+#+sbcl
 (defun sbcl-specialized-array-element-size/bits (array &optional (length (length array)))
   "Returns (values bits/elt ub8-encoded-array-type)"
   (declare (optimize speed safety) (type (unsigned-byte 58) length))
@@ -43,8 +46,9 @@
 					    (the fixnum (or actual-bits (second upgraded)))))
 			     8)
 		  encoded-value))))))))
-
+#+sbcl
 (declaim (inline sbcl-make-simple-array-from-encoded-element-type))
+#+sbcl
 (defun sbcl-make-simple-array-from-encoded-element-type (encoded-element-type num-elts &optional array-dimensions)
   "Returns (values new-array array-bytes)"
   (declare (optimize speed safety) (type (unsigned-byte 8) encoded-element-type)
@@ -82,6 +86,7 @@
 				 (the (integer 0 64) (or actual-bits (second type)))))
 			 8)))))
 
+#+sbcl
 (defun write-sap-data-to-storage (sap num-bytes storage)
   (let ((storage-size (storage-max storage)))
     (declare (type (and (integer 1) fixnum) storage-size))
@@ -108,9 +113,13 @@
 	       (storage-write-byte storage +simple-base-string-code+)
 	       (let ((string-length (length string)))
 		 (store-tagged-unsigned-fixnum string-length storage)
-		 (with-pinned-objects (string)
-		   (write-sap-data-to-storage (vector-sap string)
-					      string-length storage))))))
+		 #+sbcl (with-pinned-objects (string)
+			  (write-sap-data-to-storage (vector-sap string)
+						     string-length storage))
+		 #-sbcl (loop for char of-type base-char across string
+			      for string-offset from 0 below string-length
+			      for sap-offset from offset
+			      do (setf (cffi:mem-ref sap :char sap-offset) char))))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -125,8 +134,12 @@
     (ensure-enough-data storage num-bytes)
     (let ((offset (storage-offset storage))
 	  (sap (storage-sap storage)))
-      (with-pinned-objects (string)
-        (copy-sap (vector-sap string) 0 sap offset num-bytes))
+      #+sbcl (with-pinned-objects (string)
+               (copy-sap (vector-sap string) 0 sap offset num-bytes))
+      #-sbcl (loop for string-offset from 0 below num-bytes
+		   for sap-offset from offset
+		   do (setf (aref string string-offset)
+			    (cffi:mem-ref sap :uint8 sap-offset))) 
       (setf (storage-offset storage) (+ num-bytes offset))
       string)))
 
@@ -135,17 +148,23 @@
   (declare (optimize speed safety) (type simple-string string))
   (labels ((write-it ()
 	     (with-write-storage (storage)
-	       #+sb-unicode
+	       #+(or (and sbcl sb-unicode))
 	       ;; Ideally we'd avoid this copy
-	       (let* ((output (sb-ext:string-to-octets string :external-format :utf-8))
+	       (let* ((output #+sbcl (sb-ext:string-to-octets string :external-format :utf-8)
+			      #-sbcl (babel:string-to-octets string :encoding :utf-8))
 		      (num-bytes (length output)))
 		 (storage-write-byte storage +simple-string-code+)
 		 (store-tagged-unsigned-fixnum num-bytes storage)
 		 (let ((offset (ensure-enough-room-to-write storage num-bytes)))
-                   (with-pinned-objects (output)
+                   #+sbcl
+		   (with-pinned-objects (output)
                      (copy-sap (storage-sap storage) offset (vector-sap output) 0 num-bytes))
+		   #-sbcl
+		   (loop for uint8 across output
+			 for sap-offset from offset
+			 do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
 		   (setf (storage-offset storage) (+ offset num-bytes))))
-	       #-sb-unicode (store-simple-base-string string storage nil))))
+	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -166,10 +185,12 @@
 				         :end (the fixnum (+ offset num-bytes)))
           (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
             (declare (dynamic-extent a))
-            (with-pinned-objects (a)
-              (copy-sap (vector-sap a) 0 sap offset num-bytes))
-            (babel:octets-to-string a :encoding :utf-8 :start 0
-                                     :end num-bytes))))))
+            #+sbcl (with-pinned-objects (a)
+		     (copy-sap (vector-sap a) 0 sap offset num-bytes))
+	    #-sbcl (loop for sap-offset from offset
+			 for string-offset from 0 below num-bytes
+			 do (setf (aref a offset) (cffi:mem-ref sap :uint8 sap-offset)))
+            (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes))))))
 
 (declaim (notinline store-string))
 (defun store-string (string storage references assign-new-reference-id)
@@ -193,7 +214,10 @@
       (#.+simple-base-string-code+ (restore-simple-base-string storage))
       (#.+simple-string-code+ (restore-simple-string storage)))))
 
-(declaim (notinline store-simple-specialized-vector))
+#-sbcl
+(defun store-simple-specialized-vector (sv storage &optional (tag t))
+  (error "implement me"))
+#+sbcl
 (defun store-simple-specialized-vector (sv storage &optional (tag t))
   (declare (optimize speed safety) (type (simple-array * (*)) sv))
   (with-write-storage (storage)
@@ -209,7 +233,7 @@
 	  (write-sap-data-to-storage
 	   (sb-sys:vector-sap sv) bytes-to-write storage))))))
 
-(declaim (notinline read-chunked))
+#+sbcl
 (defun read-chunked (target-sap storage num-bytes-remaining)
   (declare (optimize speed safety) (type fixnum num-bytes-remaining))
   (loop
@@ -247,6 +271,10 @@
           (read-chunked (vector-sap sv) storage num-bytes))
         sv))))
 
+#-sbcl
+(defun store-simple-specialized-array (sa storage)
+  (error "write me"))
+#+sbcl
 (defun store-simple-specialized-array (sa storage)
   (declare (optimize speed safety)
 	   (type (simple-array * *) sa))
@@ -270,6 +298,7 @@
 				       storage)))
 	(values)))))
 
+#+sbcl
 (defun restore-simple-specialized-array (storage)
   (declare (optimize speed safety))
   ;; sbcl gets confused with restore-ub8 because of the error path

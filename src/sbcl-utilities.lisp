@@ -22,12 +22,9 @@
      (setf (sap-ref-64 target-sap target-offset)
 	   (sap-ref-64 source-sap source-offset)))
     (t
-     #+sbcl
      (memcpy (sb-sys:sap+ target-sap target-offset)
 	     (sb-sys:sap+ source-sap source-offset)
-	     n)
-     #-sbcl
-     (error "not implemented"))))
+	     n))))
 
 (declaim (inline copy-n-bytes))
 (defun copy-n-bytes (target target-offset source source-offset n)

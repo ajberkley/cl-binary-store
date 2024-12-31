@@ -38,7 +38,7 @@
 	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"
 								"features"))
 	       (:file "sbcl-utilities" :if-feature :sbcl :depends-on ("features"))
-	       (:file "simple-array-sbcl" :if-feature :sbcl
+	       (:file "simple-array"
 		:depends-on ("referrers-and-fixup" "numbers" "features" "sap-ref"))
 	       (:file "simple-vector" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 								    "features" "numbers"))
