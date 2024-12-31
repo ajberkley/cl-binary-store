@@ -490,9 +490,7 @@
 					  "a"
 					  "censored")))
 	     slot-names slot-values)
-      (let ((obj (make-instance 'specially-constructed)))
-	(setf (specially-constructed-a obj) "hello")
-	obj))))
+      (make-specially-constructed :a "hello"))))
 
 (define-test test-specialized-object-constructor
   (let ((obj
