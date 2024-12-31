@@ -81,7 +81,7 @@
 
 (define-test test-simple-arrays
     (let* ((elt-types
-	     '(bit fixnum base-char character single-float
+	     #+sbcl'(bit fixnum base-char character single-float
 	       double-float (signed-byte 8) (signed-byte 16)
 	       (signed-byte 32) (signed-byte 64)
 	       (unsigned-byte 2)
@@ -93,7 +93,9 @@
 	       (unsigned-byte 31)
 	       (unsigned-byte 32)
 	       (unsigned-byte 62)
-	       (unsigned-byte 64)))
+		     (unsigned-byte 64))
+	     #-sbcl '(bit fixnum base-char character single-float
+		      double-float (unsigned-byte 8)))
 	   (sizes
 	     (loop repeat (length elt-types)
 		   collect (+ 1 (random 10))))
@@ -104,7 +106,10 @@
 		   (loop repeat size collect
 				     (case elt-type
 				       (bit (random 1))
-				       (fixnum (random (- (expt 2 62) (expt 2 61))))
+				       (fixnum #+ccl
+					       (random (- (expt 2 32) (expt 2 31)))
+					       #-ccl
+					       (random (- (expt 2 62) (expt 2 61))))
 				       (base-char #\a)
 				       (character #\b)
 				       (single-float (random 1f0))
