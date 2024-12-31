@@ -8,7 +8,7 @@ hyperluminal-mem is currently broken in quicklisp (though you can hit accept a c
 
 In terms of feature comparable, cl-store has the best behavior out of the box without requiring anything of the user.  cl-conspack is really nice too, but has some different goals, and it requires adding specialized serializers for each structure or object you use.  It is faster than cl-store which is nice, but not fast enough, and as noted earlier doesn't work well with data containing many instances of structures or classes.  Hyperluminal-mem is a very optimized binary serializer made to write to SAP buffers directly.  It is somewhat extensible and again requires writing code for every struct or object you want to serialize.  It does not do reference or circularity tracking at all.  Hyperluminal-mem is currently broken in quicklisp unfortunately, but you can still load it by accepting the compilation errors (it's problems in stm library).  It's my benchmark for zippy raw data serialization.  We are almost as fast as it in many cases, faster in others, slower in others.
 
-All the tests here are using SBCL.  There is a section at the end where I tried it on CCL
+All the tests here are using SBCL.  There is a section at the end where I run some on ECL and CCL which are... slow.
 
 ## Reference tracking disabled
 
