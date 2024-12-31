@@ -59,13 +59,17 @@
 	     (is-adjustable
 	      (make-write-into-adjustable-ub8-vector vector))
 	     (t
-	       (lambda (storage)
-		 (assert (> (- vector-len offset)
+	      (lambda (storage)
+		#+dribble-cbs(format t "Flusher called with vector-len ~A, offset ~A and write-storage-offset ~A~%" vector-len offset (write-storage-offset storage))
+		 (assert (>= (- vector-len offset)
 			    (write-storage-offset storage))
 			 nil
 			 'out-of-space
 			 :current-offset offset
 			 :wanted-bytes (write-storage-offset storage))
+		 #+dribble-cbs(format t "Copying into storage vector from temp array~%")
+		 #+dribble-cbs(format t "Storage-vector being written from ~A to ~A from write-storage-store of ~A to ~A~%"
+			 offset (+ offset (write-storage-offset storage)) 0 (write-storage-offset storage))
 		 (replace vector (write-storage-store storage)
 			  :start1 offset :start2 0
 			  :end2 (write-storage-offset storage))
