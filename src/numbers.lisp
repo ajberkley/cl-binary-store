@@ -47,7 +47,7 @@
 (declaim (inline store-only-fixnum))
 (defun store-only-fixnum (fixnum storage &optional (tag +fixnum-code+))
   (declare #-debug-cbs (optimize (speed 3) (safety 0)) (type fixnum fixnum)
-	   (type (or null storage) storage))
+	   (type (or null write-storage) storage))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
     (when tag
       (storage-write-byte! storage tag :offset offset :sap sap)
@@ -95,9 +95,9 @@
 (defun restore-single-float (storage)
   (declare (optimize speed safety))
   (ensure-enough-data storage 4)
-  (let ((offset (storage-offset storage))
-        (sap (storage-sap storage)))
-    (setf (storage-offset storage) (+ 4 offset))
+  (let ((offset (read-storage-offset storage))
+        (sap (read-storage-sap storage)))
+    (setf (read-storage-offset storage) (+ 4 offset))
     (sap-ref-single sap offset)))
 
 (declaim (inline store-single-float))
@@ -113,9 +113,9 @@
 (defun restore-double-float (storage)
   (declare (optimize speed safety))
   (ensure-enough-data storage 8)
-  (let ((offset (storage-offset storage))
-        (sap (storage-sap storage)))
-    (setf (storage-offset storage) (+ 8 offset))
+  (let ((offset (read-storage-offset storage))
+        (sap (read-storage-sap storage)))
+    (setf (read-storage-offset storage) (+ 8 offset))
     (sap-ref-double sap offset)))
 
 (declaim (inline restore-double-float-zero))
@@ -128,9 +128,9 @@
   (assert (atom storage))
   `(progn
      (ensure-enough-data ,storage 8)
-     (let ((offset (storage-offset ,storage))
-           (sap (storage-sap ,storage)))
-       (setf (storage-offset ,storage) (+ 8 offset))
+     (let ((offset (read-storage-offset ,storage))
+           (sap (read-storage-sap ,storage)))
+       (setf (read-storage-offset ,storage) (+ 8 offset))
        (setf ,slot (sap-ref-double sap offset)))))
 
 (declaim (inline store-double-float))
@@ -176,7 +176,7 @@
 	   (funcall restore-object)))
 
 (defun store-complex (complex storage store-object)
-  (declare (type complex complex) (type (or null storage) storage))
+  (declare (type complex complex) (type (or null write-storage) storage))
   (typecase complex
     ;; We do not try to match double-floats in complex numbers to others... (except 0d0)
     ((complex double-float) (store-complex-double-float complex storage))
@@ -226,7 +226,7 @@
 (defun store-tagged-unsigned-fixnum (fixnum storage)
   "Store and tag a number from 0 to max-positive-fixnum.
  You can call `restore-tagged-unsigned-fixnum' to restore it (or restore-object)"
-  (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
+  (declare (type fixnum fixnum) (optimize speed safety) (type (or null write-storage) storage))
   (when storage
     (if (<= fixnum +maximum-untagged-unsigned-integer+)
 	(store-ub8 (+ fixnum +small-integer-zero-code+) storage nil)
@@ -238,7 +238,7 @@
 	            (store-ub32 fixnum storage)
 	            (store-only-fixnum fixnum storage)))))))
 
-(declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
+(declaim (ftype (function (read-storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
 (defun restore-tagged-unsigned-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
   (let ((tag (restore-ub8 storage)))
@@ -250,7 +250,7 @@
 	  (#.+ub32-code+ (restore-ub32 storage))
 	  (#.+fixnum-code+ (restore-fixnum storage))))))
 
-(declaim (ftype (function (storage) (values fixnum &optional)) restore-tagged-fixnum))
+(declaim (ftype (function (read-storage) (values fixnum &optional)) restore-tagged-fixnum))
 (defun restore-tagged-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
   (let ((tag (restore-ub8 storage)))
@@ -268,7 +268,7 @@
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage)
   "Store and tag a fixnum; "
-  (declare (type fixnum fixnum) (optimize speed safety) (type (or null storage) storage))
+  (declare (type fixnum fixnum) (optimize speed safety) (type (or null write-storage) storage))
   (when storage
     (if (>= fixnum 0)
         (store-tagged-unsigned-fixnum fixnum storage)

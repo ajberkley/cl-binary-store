@@ -88,7 +88,7 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
 
 To run tests you want to do
 
-    CL-USER> (quicklisp:quickload "cl-store-binary-tests")
+    CL-USER> (quicklisp:quickload "cl-store-binary/tests")
     CL-USER> (parachute:test 'cl-store-binary-tests)
 
 The package :cl-binary-store-user exports all the user facing interfaces above.  The package :cl-binary-store exports all the symbols needed to add your own extensions.

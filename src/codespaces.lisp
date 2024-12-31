@@ -92,7 +92,7 @@
 		 for code = (maybe-restore-ub8 storage)
 		 while code
 		 do #+debug-cbs (format t "Read code ~A (offset ~A max ~A)~%" code
-					(storage-offset storage) (storage-max storage))
+					(read-storage-offset storage) (read-storage-max storage))
                     (setf (values object ignore/eof) (restore-object code))
 		 #+debug-cbs (format t "Got object type ~A, ignore/eof ~S~%" (type-of object)
 				     ignore/eof)
@@ -228,7 +228,7 @@
 	 (setf *current-codespace/compile-time* codespace)
 	 (let ((store-objects-source-code
 		 `(lambda (storage &rest stuff)
-			   (declare (optimize speed safety) (type storage storage)
+			   (declare (optimize speed safety) (type write-storage storage)
 				    (dynamic-extent stuff))
 		    ,(build-store-objects))))
 	   (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
@@ -426,7 +426,7 @@
   "Store all the objects in stuff to storage.  Do not call this directly without let'ing
  *current-codespace* to a valid entry in *codespaces*.  Prefer the functions in user.lisp
  which do this for you based on *write-version* and *read-version*."
-  (declare (dynamic-extent stuff) (type storage storage))
+  (declare (dynamic-extent stuff) (type write-storage storage))
   (let ((codespace *current-codespace*))
     (assert codespace nil "Unknown codespace to store with... is *write-version* not correct?")
     (apply (codespace-store-objects codespace) storage stuff)))
@@ -436,7 +436,7 @@
  If you want to call this directly, you should let *current-codespace* to a codespace, as is
  done in the user facing functions in user.lisp which choose it based on *write-version* and
  *read-version*."
-  (declare (type storage storage))
+  (declare (type read-storage storage))
   (let ((codespace *current-codespace*))
     (assert codespace nil
 	    "Unknown codespace to restore objects with... is *read-version* not correct?")

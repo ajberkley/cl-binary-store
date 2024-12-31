@@ -16,7 +16,7 @@
 (defun store-to-stream (stream &rest elements)
   (declare (dynamic-extent elements) (optimize speed safety))
   (let ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
-    (with-storage (storage :flusher (make-write-into-storage/stream stream))
+    (with-storage/write (storage :flusher (make-write-into-storage/stream stream))
       (apply #'store-objects storage elements)
       (flush-write-storage storage)
       (values))))
@@ -24,7 +24,7 @@
 (defun restore-from-stream (stream)
   (declare (optimize speed safety))
   (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
-    (with-storage (storage :flusher (make-read-into-storage/stream stream) :max 0 :buffer-size 32768)
+    (with-storage/read (storage :flusher (make-read-into-storage/stream stream) :max 0 :buffer-size 32768)
       (restore-objects storage))))
 
 ;;; UB8 VECTORS
@@ -35,7 +35,7 @@
   (let* ((output-vector (make-array 16 :element-type '(unsigned-byte 8) :fill-pointer 0
 				       :adjustable t))
 	 (*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
-    (with-storage (storage :flusher (make-write-into-adjustable-ub8-vector output-vector))
+    (with-storage/write (storage :flusher (make-write-into-adjustable-ub8-vector output-vector))
       (apply #'store-objects storage elements)
       (flush-write-storage storage)
       output-vector)))
@@ -44,7 +44,8 @@
   (declare (optimize speed safety))
   (let* ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*)))
 	 (offset 0)
-	 (is-simple-octet-array (typep vector '(simple-array (unsigned-byte 8) (*))))
+	 ;; We cannot pin objects on other lisps, so copy in those cases
+	 (is-simple-octet-array #+sbcl (typep vector '(simple-array (unsigned-byte 8) (*))) #-sbcl nil)
 	 (is-adjustable (adjustable-array-p vector))
 	 (temp-vector
 	   (if is-simple-octet-array
@@ -54,45 +55,46 @@
 	 (flusher
 	   (cond
 	     (is-simple-octet-array
-	      (lambda (storage) (storage-offset storage)))
+	      (lambda (storage) (write-storage-offset storage)))
 	     (is-adjustable
 	      (make-write-into-adjustable-ub8-vector vector))
 	     (t
 	       (lambda (storage)
 		 (assert (> (- vector-len offset)
-			    (storage-offset storage))
+			    (write-storage-offset storage))
 			 nil
 			 'out-of-space
 			 :current-offset offset
-			 :wanted-bytes (storage-offset storage))
-		 (replace vector (storage-store storage)
+			 :wanted-bytes (write-storage-offset storage))
+		 (replace vector (write-storage-store storage)
 			  :start1 offset :start2 0
-			  :end2 (storage-offset storage))
-		 (incf offset (storage-offset storage))
-		 (setf (storage-offset storage) 0))))))
+			  :end2 (write-storage-offset storage))
+		 (incf offset (write-storage-offset storage))
+		 (setf (write-storage-offset storage) 0))))))
     (declare (dynamic-extent temp-vector flusher) (type fixnum vector-len offset))
-    (with-pinned-objects (temp-vector)
-      (with-storage (storage :flusher flusher :store temp-vector)
+    (with-pinned-objects (temp-vector) ;; does nothing on #-sbcl
+      (with-storage/write (storage :flusher flusher :store temp-vector)
 	(declare (type fixnum offset))
 	(apply #'store-objects storage data)
 	(if is-simple-octet-array
-	    (storage-offset storage)
+	    (write-storage-offset storage)
 	    offset)))))
 
 (defun restore-from-vector (vector)
   (declare (optimize speed safety))
   #+debug-cbs(format t "Restoring from a vector with ~A bytes in it~%" (length vector))
   (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
-    (if (typep vector '(simple-array (unsigned-byte 8) (*)))
-	(with-storage (storage
-		       :flusher
-		       (lambda (storage)
-			 (the fixnum (- (storage-max storage)
-					(storage-offset storage))))
-		       :store vector :max (length vector))
+    ;; Cannot read/write
+    (if #+sbcl (typep vector '(simple-array (unsigned-byte 8) (*))) #-sbcl nil
+	(with-storage/read (storage
+			    :flusher
+			    (lambda (storage)
+			      (the fixnum (- (read-storage-max storage)
+					     (read-storage-offset storage))))
+			    :store vector :max (length vector))
 	  (restore-objects storage))
 	(flexi-streams:with-input-from-sequence (str vector)
-	  (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0)
+	  (with-storage/read (storage :flusher (make-read-into-storage/stream str) :max 0)
 	    (restore-objects storage))))))
 
 ;;; SAP vectors
@@ -114,21 +116,21 @@
   (let ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*)))
 	(store (make-array 0 :element-type '(unsigned-byte 8))))
     (declare (dynamic-extent store))
-    (with-storage (storage :flusher (lambda (storage) (storage-offset storage))
+    (with-storage/write (storage :flusher (lambda (storage) (write-storage-offset storage))
                            :sap sap :store store :max size :buffer-size nil)
       (apply #'store-objects storage data)
-      (storage-offset storage))))
+      (write-storage-offset storage))))
 
 (defun restore-from-sap (sap size)
   (declare (optimize speed safety))
   (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*)))
 	(store (make-array 0 :element-type '(unsigned-byte 8))))
     (declare (dynamic-extent store))
-    (with-storage (storage :flusher
-		   (lambda (storage)
-                     (the fixnum (- (storage-max storage)
-				    (storage-offset storage))))
-	                   :sap sap :max size :store store :buffer-size nil)
+    (with-storage/read (storage :flusher
+			(lambda (storage)
+			  (the fixnum (- (read-storage-max storage)
+					 (read-storage-offset storage))))
+				:sap sap :max size :store store :buffer-size nil :size 0)
       (values (restore-objects storage)))))
 
 ;;; FILES
@@ -139,7 +141,7 @@
     (with-open-file (str filename :direction :output
 				  :if-exists :supersede
 				  :element-type '(unsigned-byte 8))
-      (with-storage (storage :flusher (make-write-into-storage/stream str))
+      (with-storage/write (storage :flusher (make-write-into-storage/stream str))
 	(apply #'store-objects storage elements)))
     filename))
 
@@ -147,7 +149,7 @@
   (declare (optimize speed safety))
   (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
     (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
-      (with-storage (storage :flusher (make-read-into-storage/stream str) :max 0
+      (with-storage/read (storage :flusher (make-read-into-storage/stream str) :max 0
 			     :stream str)
 	(restore-objects storage)))))
 

@@ -88,22 +88,22 @@
 
 #+sbcl
 (defun write-sap-data-to-storage (sap num-bytes storage)
-  (let ((storage-size (storage-max storage)))
+  (let ((storage-size (write-storage-max storage)))
     (declare (type (and (integer 1) fixnum) storage-size))
     (loop
       with num-bytes-remaining fixnum = num-bytes
       with sap-offset fixnum = 0
-      for storage-offset = (storage-offset storage)
+      for storage-offset = (write-storage-offset storage)
       while (> num-bytes-remaining 0)
       do
 	 (let ((write-length (min storage-size num-bytes-remaining)))
 	   (ensure-enough-room-to-write storage write-length)
-	   (let ((offset (storage-offset storage)))
-	     (copy-sap (storage-sap storage) offset sap sap-offset write-length)
+	   (let ((offset (write-storage-offset storage)))
+	     (copy-sap (write-storage-sap storage) offset sap sap-offset write-length)
 	     (incf sap-offset write-length)
 	     (decf num-bytes-remaining write-length)
 	     (assert (>= num-bytes-remaining 0))
-	     (setf (storage-offset storage) (+ offset write-length)))))))
+	     (setf (write-storage-offset storage) (+ offset write-length)))))))
 
 (declaim (notinline store-simple-base-string))
 (defun store-simple-base-string (string storage &optional references assign-new-reference-id)
@@ -117,12 +117,12 @@
 			  (write-sap-data-to-storage (vector-sap string)
 						     string-length storage))
 		 #-sbcl (loop
-			  with sap = (storage-sap storage)
+			  with sap = (write-storage-sap storage)
 			  for char of-type base-char across string
 			  for string-offset from 0 below string-length
-			  for sap-offset from (storage-offset storage)
+			  for sap-offset from (write-storage-offset storage)
 			  do (setf (cffi:mem-ref sap :uint8 sap-offset) (char-code char))
-			  finally (incf (storage-offset storage) string-length))))))
+			  finally (incf (write-storage-offset storage) string-length))))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -135,15 +135,15 @@
   (let* ((num-bytes (restore-tagged-unsigned-fixnum storage))
 	 (string (make-string num-bytes :element-type 'base-char)))
     (ensure-enough-data storage num-bytes)
-    (let ((offset (storage-offset storage))
-	  (sap (storage-sap storage)))
+    (let ((offset (read-storage-offset storage))
+	  (sap (read-storage-sap storage)))
       #+sbcl (with-pinned-objects (string)
                (copy-sap (vector-sap string) 0 sap offset num-bytes))
       #-sbcl (loop for string-offset from 0 below num-bytes
 		   for sap-offset from offset
 		   do (setf (aref string string-offset)
 			    (code-char (cffi:mem-ref sap :uint8 sap-offset))))
-      (setf (storage-offset storage) (+ num-bytes offset))
+      (setf (read-storage-offset storage) (+ num-bytes offset))
       string)))
 
 (declaim (notinline store-simple-string))
@@ -161,14 +161,14 @@
 		 (let ((offset (ensure-enough-room-to-write storage num-bytes)))
                    #+sbcl
 		   (with-pinned-objects (output)
-                     (copy-sap (storage-sap storage) offset (vector-sap output) 0 num-bytes))
+                     (copy-sap (write-storage-sap storage) offset (vector-sap output) 0 num-bytes))
 		   #-sbcl
 		   (loop
 		     with sap = (storage-sap storage)
 		     for uint8 across output
 		     for sap-offset from offset
 		     do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
-		   (setf (storage-offset storage) (+ offset num-bytes))))
+		   (setf (write-storage-offset storage) (+ offset num-bytes))))
 	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil))))
     (declare (inline write-it))
     (if references
@@ -181,10 +181,10 @@
   (declare (optimize speed safety))
   (let* ((num-bytes (restore-tagged-unsigned-fixnum storage)))
     (ensure-enough-data storage num-bytes)
-    (let ((offset (storage-offset storage))
-          (store (storage-store storage))
-	  (sap (storage-sap storage)))
-      (setf (storage-offset storage) (+ num-bytes offset))
+    (let ((offset (read-storage-offset storage))
+          (store (read-storage-store storage))
+	  (sap (read-storage-sap storage)))
+      (setf (read-storage-offset storage) (+ num-bytes offset))
       (if (> (length store) 0)
           (babel:octets-to-string store :encoding :utf-8 :start offset
 				         :end (the fixnum (+ offset num-bytes)))
@@ -242,23 +242,23 @@
 (defun read-chunked (target-sap storage num-bytes-remaining)
   (declare (optimize speed safety) (type fixnum num-bytes-remaining))
   (loop
-    with storage-size = (storage-size storage)
-    with sap = (storage-sap storage)
+    with storage-size = (read-storage-size storage)
+    with sap = (read-storage-sap storage)
     with num-bytes-read fixnum = 0
     while (> num-bytes-remaining 0)
-    for bytes-to-read fixnum = (if (/= (storage-offset storage) (storage-max storage))
-                                   (min (the fixnum (- (storage-max storage) (storage-offset storage)))
+    for bytes-to-read fixnum = (if (/= (read-storage-offset storage) (read-storage-max storage))
+                                   (min (the fixnum (- (read-storage-max storage) (read-storage-offset storage)))
                                         num-bytes-remaining)
                                    (min storage-size num-bytes-remaining))
     do
        #+debug-cbs(format t "At storage offset ~A and storage-max ~A, asking for ~A bytes to read, ~A bytes remaining~%"
-               (storage-offset storage) (storage-max storage) bytes-to-read num-bytes-remaining)
+               (read-storage-offset storage) (read-storage-max storage) bytes-to-read num-bytes-remaining)
        (ensure-enough-data storage bytes-to-read)
-       (let ((offset (storage-offset storage)))
+       (let ((offset (read-storage-offset storage)))
          (copy-sap target-sap num-bytes-read sap offset bytes-to-read)
          (incf num-bytes-read bytes-to-read)
          (decf num-bytes-remaining bytes-to-read)
-	 (setf (storage-offset storage) (+ bytes-to-read offset)))))
+	 (setf (read-storage-offset storage) (+ bytes-to-read offset)))))
 
 #-sbcl
 (defun restore-simple-specialized-vector (storage)

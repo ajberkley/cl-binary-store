@@ -54,7 +54,7 @@
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))
 
-(defsystem #:cl-binary-store-tests
+(defsystem #:cl-binary-store/tests
   :description "Unit tests for CL-BINARY-STORE"
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :license :BSD-3

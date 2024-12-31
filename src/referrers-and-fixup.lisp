@@ -85,7 +85,7 @@
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
  Otherwise returns NIL.  This should *ONLY* be called during the actual storage phase,
  not the reference counting phase."
-  (declare (type storage storage) (optimize speed safety))
+  (declare (type write-storage storage) (optimize speed safety))
   (when references
     (let ((ref-idx (gethash object references)))
       ;; When ref-idx is positive, it's a note that we have already written out the
