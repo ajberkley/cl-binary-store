@@ -76,6 +76,11 @@
   "During restore this is bound to any magic number found previous to
  this in the file.")
 
+(defvar *write-end-marker* nil
+  "If T, once all objects are stored an end marker will be written to the output.
+ This will trigger the end of restore (for use in cases where there
+ isn't an obvious end of file)")
+
 (defun build-restore-objects ()
   "Builds the body of a function that reads tag bytes and dispatches them through a
  big case statement built by make-read-dispatch-table."
