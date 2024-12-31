@@ -24,6 +24,10 @@
   #+sbcl (setf (sb-sys:sap-ref-64 sap offset) ub64)
   #-sbcl (setf (cffi:mem-ref sap :uint64 offset) ub64))
 
+(defun (setf signed-sap-ref-32) (value sap offset)
+  #+sbcl (setf (sb-sys:signed-sap-ref-32 sap offset) value)
+  #-sbcl (setf (cffi:mem-ref sap :int32 offset) value))
+
 (defun (setf signed-sap-ref-64) (sb64 sap offset)
   #+sbcl (setf (sb-sys:signed-sap-ref-64 sap offset) sb64)
   #-sbcl (setf (cffi:mem-ref sap :int64 offset) sb64))
@@ -64,13 +68,9 @@
   #+sbcl (sb-sys:signed-sap-ref-32 sap offset)
   #-sbcl (cffi:mem-ref sap :int32 offset))
 
-(defun (setf signed-sap-ref-32) (value sap offset)
-  #+sbcl (setf (sb-sys:signed-sap-ref-32 sap offset) value)
-  #-sbcl (setf (cffi:mem-ref sap :int32 offset) value))
-
 (defun signed-sap-ref-64 (sap offset)
   #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
-  #-sbcl (cffi:mem-ref sap :uint64 offset))
+  #-sbcl (cffi:mem-ref sap :int64 offset))
 
 (defmacro array-sap (array)
   "Return a SAP referring to the backing store of array-sap (on sbcl) otherwise the
