@@ -374,18 +374,22 @@ Neither is recommended for speed.
 
     ;; Using a 100x shorter list for this test because its slow (and no reference tracking)
     CL-BINARY-STORE> (test-on-data (long-list-of-tiny-integers 10000))
+    ECL HYPERLUMINAL-MEM
+     OUTPUT SIZE: 0.08 MB
+     WRITE: 4.80 ms at 17 MB/sec
+     READ : 5.55 ms at 14 MB/sec
     ECL CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
-     WRITE: 6.39 ms at 3 MB/sec
+     WRITE: 6.34 ms at 3 MB/sec
      READ : 7.71 ms at 3 MB/sec
     ECL CL-CONSPACK
      OUTPUT SIZE: 0.02MB
-     WRITE: 4.90 ms at 4 MB/sec
-     READ : 4.58 ms at 4 MB/sec
+     WRITE: 5.04 ms at 4 MB/sec
+     READ : 4.66 ms at 4 MB/sec
     ECL CL-STORE
      OUTPUT SIZE: 0.05MB
-     WRITE: 6.72 ms at 7 MB/sec
-     READ : 6.59 ms at 8 MB/sec
+     WRITE: 6.62 ms at 8 MB/sec
+     READ : 10.79 ms at 5 MB/sec
     CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
      WRITE: 27.11 ms at 1 MB/sec
@@ -395,22 +399,25 @@ Neither is recommended for speed.
      WRITE: 5.56 ms at 4 MB/sec
      READ : 0.68 ms at 29 MB/sec
 
-It's not quite so terrible at double floats...
+It's not quite so terrible at double floats... on ECL and CCL
 
     CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats 10000) :hlmem nil :cl-store nil)
-
+    ECL HYPERLUMINAL-MEM
+     OUTPUT SIZE: 0.16 MB
+     WRITE: 13.96 ms at 11 MB/sec
+     READ : 11.62 ms at 14 MB/sec
     ECL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
-     WRITE: 16.23 ms at 6 MB/sec
-     READ : 22.89 ms at 4 MB/sec
+     WRITE: 12.30 ms at 8 MB/sec
+     READ : 23.30 ms at 4 MB/sec
     ECL CL-CONSPACK
      OUTPUT SIZE: 0.09MB
-     WRITE: 34.35 ms at 3 MB/sec
-     READ : 28.41 ms at 3 MB/sec
+     WRITE: 25.91 ms at 3 MB/sec
+     READ : 29.86 ms at 3 MB/sec
     ECL CL-STORE
      OUTPUT SIZE: 0.48MB
-     WRITE: 62.19 ms at 8 MB/sec
-     READ : 77.81 ms at 6 MB/sec
+     WRITE: 70.37 ms at 7 MB/sec
+     READ : 62.12 ms at 8 MB/sec
     CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
      WRITE: 19.08 ms at 5 MB/sec

@@ -1,5 +1,5 @@
 (quicklisp:quickload "cl-store")
-#+sbcl(quicklisp:quickload "hyperluminal-mem")
+(quicklisp:quickload "hyperluminal-mem")
 (quicklisp:quickload "cl-conspack")
 #+sbcl (require 'sb-sprof)
 
@@ -21,19 +21,19 @@
                         "")))))))
 
 
-#+sbcl
 (defun test-hlmem-on-data (data &key (repeats 100))
   (let* ((words (hyperluminal-mem:msize 0 data))
-	 (a-store (make-array words :element-type '(unsigned-byte 64)))
          (output-size (/ (* 8 words) 1e6)))
     (format t "HYPERLUMINAL-MEM~%")
     (format t " OUTPUT SIZE: ~,2f MB~%" output-size)
-    (sb-sys:with-pinned-objects (a-store)
+    (static-vectors:with-static-vector (a-store (* 8 words))
       (timed (" WRITE:" repeats output-size)
-        (dotimes (x repeats) (hyperluminal-mem::mwrite (sb-sys:vector-sap a-store) 0 words data)))
+        (dotimes (x repeats)
+	  (hyperluminal-mem::mwrite (static-vectors:static-vector-pointer a-store) 0 words data)))
       ;; returns words
       (timed (" READ :" repeats output-size)
-        (dotimes (x repeats) (hyperluminal-mem:mread (sb-sys:vector-sap a-store) 0 words))))))
+        (dotimes (x repeats)
+	  (hyperluminal-mem:mread (static-vectors:static-vector-pointer a-store) 0 words))))))
 
 (defun test-cl-binary-store-on-data
     (data &key (track-references t) (support-shared-list-structures nil) (repeats 100)
@@ -128,9 +128,8 @@
         (timed (" READ :" repeats output-size-MB)
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
-(defun test-on-data (data &key (hlmem #+sbcl t #-sbcl nil)
-			    (cl-store t) (cl-binary-store t) (conspack t))
-  #+sbcl (when hlmem
+(defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
+  (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
     (test-cl-binary-store-on-data data :track-references (not hlmem)
@@ -229,15 +228,12 @@
 (conspack:defencoding bench-blarg
   a b)
 
-#+sbcl
 (defmethod hyperluminal-mem:msize-object ((b bench-blarg) index)
   (hyperluminal-mem:msize* index (bench-blarg-a b) (bench-blarg-b b)))
 
-#+sbcl
 (defmethod hyperluminal-mem:mwrite-object ((b bench-blarg) ptr index end-index)
   (hyperluminal-mem:mwrite* ptr index end-index (bench-blarg-a b) (bench-blarg-b b)))
 
-#+sbcl
 (defmethod hyperluminal-mem:mread-object ((type (eql 'bench-blarg)) ptr index end-index &key)
   (hyperluminal-mem:with-mread* (a b new-index) (ptr index end-index)
     (values
