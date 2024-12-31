@@ -41,16 +41,12 @@
       output-vector)))
 
 (defun store-to-extant-vector (vector &rest data)
-  (declare (optimize speed safety))
+  (declare (optimize (debug 3))) ;;speed safety))
   (let* ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*)))
 	 (offset 0)
 	 ;; We cannot pin objects on other lisps, so copy in those cases
 	 (is-simple-octet-array #+sbcl (typep vector '(simple-array (unsigned-byte 8) (*))) #-sbcl nil)
 	 (is-adjustable (adjustable-array-p vector))
-	 (temp-vector
-	   (if is-simple-octet-array
-	       vector
-	       nil))
 	 (vector-len (length vector))
 	 (flusher
 	   (cond
@@ -75,14 +71,20 @@
 			  :end2 (write-storage-offset storage))
 		 (incf offset (write-storage-offset storage))
 		 (setf (write-storage-offset storage) 0))))))
-    (declare (dynamic-extent temp-vector flusher) (type fixnum vector-len offset))
-    (with-pinned-objects (temp-vector) ;; does nothing on #-sbcl
-      (with-storage/write (storage :flusher flusher :store temp-vector)
-	(declare (type fixnum offset))
-	(apply #'store-objects storage data)
-	(if is-simple-octet-array
-	    (write-storage-offset storage)
-	    offset)))))
+    (declare (dynamic-extent flusher) (type fixnum vector-len offset))
+    (labels ((store (storage)
+	       (apply #'store-objects storage data)
+	       (if is-simple-octet-array
+		   (write-storage-offset storage)
+		   offset)))
+      (cond
+	(is-simple-octet-array
+	 (with-pinned-objects (vector) ;; does nothing on #-sbcl
+	   (with-storage/write (storage :flusher flusher :store vector)
+	     (store storage))))
+	(t
+	 (with-storage/write (storage :flusher flusher)
+	   (store storage)))))))
 
 (defun restore-from-vector (vector)
   (declare (optimize speed safety))
