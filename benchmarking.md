@@ -368,30 +368,54 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
      WRITE: 15.20 ms at 14 MB/sec
      READ : 2218.00 ms at 0 MB/sec <-- I don't know what is going on here
 
-## ECL
+## ECL and CCL
 
-## CCL
+Neither is recommended for speed.
 
-For reference here is behavior on CCL, not recommended for speed, (on a list that is 100x shorter):
-
+    ;; Using a 100x shorter list for this test because its slow (and no reference tracking)
     CL-BINARY-STORE> (test-on-data (long-list-of-tiny-integers 10000))
-    CL-BINARY-STORE
+    ECL CL-BINARY-STORE
+     OUTPUT SIZE: 0.02 MB
+     WRITE: 6.39 ms at 3 MB/sec
+     READ : 7.71 ms at 3 MB/sec
+    ECL CL-CONSPACK
+     OUTPUT SIZE: 0.02MB
+     WRITE: 4.90 ms at 4 MB/sec
+     READ : 4.58 ms at 4 MB/sec
+    ECL CL-STORE
+     OUTPUT SIZE: 0.05MB
+     WRITE: 6.72 ms at 7 MB/sec
+     READ : 6.59 ms at 8 MB/sec
+    CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
      WRITE: 27.11 ms at 1 MB/sec
      READ : 0.23 ms at 87 MB/sec
-    CL-CONSPACK
+    CCL CL-CONSPACK
      OUTPUT SIZE: 0.02MB
      WRITE: 5.56 ms at 4 MB/sec
      READ : 0.68 ms at 29 MB/sec
 
-It's not quite so terrible at double floats... I'm not sure what is going wrong on the writing side.  Likely the typecase dispatch needs some tweaking?  Read side works great!
+It's not quite so terrible at double floats...
 
     CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats 10000) :hlmem nil :cl-store nil)
-    CL-BINARY-STORE
+
+    ECL CL-BINARY-STORE
+     OUTPUT SIZE: 0.10 MB
+     WRITE: 16.23 ms at 6 MB/sec
+     READ : 22.89 ms at 4 MB/sec
+    ECL CL-CONSPACK
+     OUTPUT SIZE: 0.09MB
+     WRITE: 34.35 ms at 3 MB/sec
+     READ : 28.41 ms at 3 MB/sec
+    ECL CL-STORE
+     OUTPUT SIZE: 0.48MB
+     WRITE: 62.19 ms at 8 MB/sec
+     READ : 77.81 ms at 6 MB/sec
+    CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
      WRITE: 19.08 ms at 5 MB/sec
-     READ : 0.35 ms at 288 MB/sec
-    CL-CONSPACK
+     READ : 0.35 ms at 288 MB/sec  <-- this is interesting, a sweet spot for CCL
+    CCL CL-CONSPACK
      OUTPUT SIZE: 0.09MB
      WRITE: 14.69 ms at 6 MB/sec
      READ : 12.18 ms at 7 MB/sec

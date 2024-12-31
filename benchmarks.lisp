@@ -130,7 +130,7 @@
 
 (defun test-on-data (data &key (hlmem #+sbcl t #-sbcl nil)
 			    (cl-store t) (cl-binary-store t) (conspack t))
-  (when hlmem
+  #+sbcl (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
     (test-cl-binary-store-on-data data :track-references (not hlmem)
@@ -229,12 +229,15 @@
 (conspack:defencoding bench-blarg
   a b)
 
+#+sbcl
 (defmethod hyperluminal-mem:msize-object ((b bench-blarg) index)
   (hyperluminal-mem:msize* index (bench-blarg-a b) (bench-blarg-b b)))
 
+#+sbcl
 (defmethod hyperluminal-mem:mwrite-object ((b bench-blarg) ptr index end-index)
   (hyperluminal-mem:mwrite* ptr index end-index (bench-blarg-a b) (bench-blarg-b b)))
 
+#+sbcl
 (defmethod hyperluminal-mem:mread-object ((type (eql 'bench-blarg)) ptr index end-index &key)
   (hyperluminal-mem:with-mread* (a b new-index) (ptr index end-index)
     (values
