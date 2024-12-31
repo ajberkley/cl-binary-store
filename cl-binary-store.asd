@@ -12,7 +12,7 @@
 	       (:file "cl-binary-store")
 	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))
 	       (:file "codespaces" :depends-on ("features"))
-	       (:file "sbcl-special-hash-tables")
+	       (:file "sbcl-special-hash-tables" :if-feature :sbcl)
 	       (:file "type-discrimination")
 	       (:file "object-info")
 	       (:file "basic-codespace-codes")

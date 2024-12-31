@@ -14,7 +14,7 @@
 (define-codespace ("basic codespace" +basic-codespace+)
   (register-references num-eq-refs (make-hash-table :test #'eq :size *num-eq-refs-table-size*))
   (register-references double-float-refs
-                       (make-hash-table :test #'double-float-= :size *double-float-refs-table-size*))
+                       (make-hash-table :test #+sbcl #'double-float-= #-sbcl #'eql :size *double-float-refs-table-size*))
   (register-references eq-refs (make-hash-table :test #'eq :size *eq-refs-table-size*))
 
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
