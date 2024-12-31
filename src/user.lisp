@@ -50,7 +50,7 @@
 	 (temp-vector
 	   (if is-simple-octet-array
 	       vector
-	       (make-array (min 8192 (length vector)) :element-type '(unsigned-byte 8))))
+	       nil))
 	 (vector-len (length vector))
 	 (flusher
 	   (cond
