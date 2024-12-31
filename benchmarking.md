@@ -401,7 +401,7 @@ Neither is recommended for speed.
 
 It's not quite so terrible at double floats... on ECL and CCL
 
-    CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats 10000) :hlmem nil :cl-store nil)
+    CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats 10000))
     ECL HYPERLUMINAL-MEM
      OUTPUT SIZE: 0.16 MB
      WRITE: 13.96 ms at 11 MB/sec
