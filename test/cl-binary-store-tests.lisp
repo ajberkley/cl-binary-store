@@ -547,3 +547,8 @@
 		   s result))
       (is 'eql (first result) (third result))
       (is 'eql (second result) (fourth result)))))
+
+(define-test test-bignum
+  (is '= (expt 2 64) (restore (store nil (expt 2 64))))
+  (is '= 12345678901234567890 (restore (store nil 12345678901234567890)))
+  (is '= -12345678901234567890 (restore (store nil -12345678901234567890))))
