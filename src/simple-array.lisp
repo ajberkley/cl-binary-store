@@ -116,17 +116,20 @@
 		 #+sbcl (with-pinned-objects (string)
 			  (write-sap-data-to-storage (vector-sap string)
 						     string-length storage))
-		 #-sbcl (loop for char of-type base-char across string
-			      for string-offset from 0 below string-length
-			      for sap-offset from offset
-			      do (setf (cffi:mem-ref sap :char sap-offset) char))))))
+		 #-sbcl (loop
+			  with sap = (storage-sap storage)
+			  for char of-type base-char across string
+			  for string-offset from 0 below string-length
+			  for sap-offset from (storage-offset storage)
+			  do (setf (cffi:mem-ref sap :uint8 sap-offset) (char-code char))
+			  finally (incf (storage-offset storage) string-length))))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
 	  (write-it))
 	(write-it))))
 
-(declaim (inline restore-simple-base-string))
+(declaim (notinline restore-simple-base-string))
 (defun restore-simple-base-string (storage)
   (declare (optimize speed safety))
   (let* ((num-bytes (restore-tagged-unsigned-fixnum storage))
@@ -139,7 +142,7 @@
       #-sbcl (loop for string-offset from 0 below num-bytes
 		   for sap-offset from offset
 		   do (setf (aref string string-offset)
-			    (cffi:mem-ref sap :uint8 sap-offset))) 
+			    (code-char (cffi:mem-ref sap :uint8 sap-offset))))
       (setf (storage-offset storage) (+ num-bytes offset))
       string)))
 
@@ -160,9 +163,11 @@
 		   (with-pinned-objects (output)
                      (copy-sap (storage-sap storage) offset (vector-sap output) 0 num-bytes))
 		   #-sbcl
-		   (loop for uint8 across output
-			 for sap-offset from offset
-			 do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
+		   (loop
+		     with sap = (storage-sap storage)
+		     for uint8 across output
+		     for sap-offset from offset
+		     do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
 		   (setf (storage-offset storage) (+ offset num-bytes))))
 	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil))))
     (declare (inline write-it))
@@ -189,7 +194,7 @@
 		     (copy-sap (vector-sap a) 0 sap offset num-bytes))
 	    #-sbcl (loop for sap-offset from offset
 			 for string-offset from 0 below num-bytes
-			 do (setf (aref a offset) (cffi:mem-ref sap :uint8 sap-offset)))
+			 do (setf (aref a string-offset) (cffi:mem-ref sap :uint8 sap-offset)))
             (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes))))))
 
 (declaim (notinline store-string))
