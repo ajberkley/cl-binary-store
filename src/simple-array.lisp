@@ -151,7 +151,7 @@
   (declare (optimize speed safety) (type simple-string string))
   (labels ((write-it ()
 	     (with-write-storage (storage)
-	       #+(or (and sbcl sb-unicode))
+	       #+(or (not sbcl) (and sbcl sb-unicode))
 	       ;; Ideally we'd avoid this copy
 	       (let* ((output #+sbcl (sb-ext:string-to-octets string :external-format :utf-8)
 			      #-sbcl (babel:string-to-octets string :encoding :utf-8))
