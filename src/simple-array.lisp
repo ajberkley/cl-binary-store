@@ -221,6 +221,7 @@
 
 #-sbcl
 (defun store-simple-specialized-vector (sv storage &optional (tag t))
+  (declare (ignorable sv storage tag))
   (error "implement me"))
 #+sbcl
 (defun store-simple-specialized-vector (sv storage &optional (tag t))
@@ -262,6 +263,7 @@
 
 #-sbcl
 (defun restore-simple-specialized-vector (storage)
+  (declare (ignorable storage))
   (error "write me"))
 #+sbcl
 (defun restore-simple-specialized-vector (storage)
@@ -278,6 +280,7 @@
 
 #-sbcl
 (defun store-simple-specialized-array (sa storage)
+  (declare (ignorable sa storage))
   (error "write me"))
 #+sbcl
 (defun store-simple-specialized-array (sa storage)
