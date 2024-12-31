@@ -51,7 +51,7 @@
 	   (if is-simple-octet-array
 	       vector
 	       (make-array (min 8192 (length vector)) :element-type '(unsigned-byte 8))))
-	 (vector-len (length temp-vector))
+	 (vector-len (length vector))
 	 (flusher
 	   (cond
 	     (is-simple-octet-array

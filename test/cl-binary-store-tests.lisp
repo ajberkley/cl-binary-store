@@ -573,14 +573,16 @@
   (is '= -12345678901234567890 (restore (store nil -12345678901234567890))))
 
 (define-test test-write-into-extant-vector
-  (let* ((data (make-list 100 :initial-element 1))
-	 (result (coerce (store nil data) '(simple-array (unsigned-byte 8) (*))))
-	 (restored-result (restore result))
-	 (restored-result-2 (progn
-			      (fill result 0)
-			      (store result data)
-			      (restore result))))
-    (is '= (length restored-result) 100)
-    (is '= (length restored-result-2) 100)
-    (is 'equal data restored-result)
-    (is 'equal data restored-result-2)))
+  (loop for length in '(100 50000)
+	do
+	   (let* ((data (make-list length :initial-element 1))
+		  (result (coerce (store nil data) '(simple-array (unsigned-byte 8) (*))))
+		  (restored-result (restore result))
+		  (restored-result-2 (progn
+				       (fill result 0)
+				       (store result data)
+				       (restore result))))
+	     (is '= (length restored-result) length)
+	     (is '= (length restored-result-2) length)
+	     (is 'equal data restored-result)
+	     (is 'equal data restored-result-2))))
