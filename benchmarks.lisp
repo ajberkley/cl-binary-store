@@ -1,5 +1,5 @@
 (quicklisp:quickload "cl-store")
-(quicklisp:quickload "hyperluminal-mem")
+#+sbcl(quicklisp:quickload "hyperluminal-mem")
 (quicklisp:quickload "cl-conspack")
 #+sbcl (require 'sb-sprof)
 
@@ -21,6 +21,7 @@
                         "")))))))
 
 
+#+sbcl
 (defun test-hlmem-on-data (data &key (repeats 100))
   (let* ((words (hyperluminal-mem:msize 0 data))
 	 (a-store (make-array words :element-type '(unsigned-byte 64)))
@@ -127,7 +128,8 @@
         (timed (" READ :" repeats output-size-MB)
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
-(defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
+(defun test-on-data (data &key (hlmem #+sbcl t #-sbcl nil)
+			    (cl-store t) (cl-binary-store t) (conspack t))
   (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
