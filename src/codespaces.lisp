@@ -136,15 +136,13 @@
 	`(let ((max-ref-id 0))
 	   (declare (type fixnum max-ref-id))
            (when track-references
-	     ,(build-map-reference-tables
-	      `(lambda (table-name table)
-		 (declare (ignore table-name))
-		 (maphash (lambda (k v)
-        	            (if (> (the fixnum v) 1)
-        			(progn (setf (gethash k table) t) ; signal it needs assigning
-				       (the fixnum (incf max-ref-id)))
-				(remhash k table)))
-			  table))))
+	     ,(replacing-reference-tables
+	       'table-name 'old-ht 'new-ht
+	       `(maphash (lambda (k v)
+			   (when (> (the fixnum v) 1)
+			     (setf (gethash k new-ht) t)
+			     (the fixnum (incf max-ref-id))))
+			 old-ht)))
            #+debug-cbs
 	   (when track-references
              ,(build-map-reference-tables `(lambda (table-name table)
@@ -299,7 +297,7 @@
     `(let (,@let-bindings)
        (declare (dynamic-extent ,@(mapcar #'first let-bindings)))
        ,@body)))
-  
+
 (defun build-map-reference-tables (func)
   (let ((code nil))
     (maphash (lambda (table-name ref-table)
@@ -308,6 +306,19 @@
              (codespace-ref-tables *current-codespace/compile-time*))
     `(progn ,@code)))
 
+(defun replacing-reference-tables (name old-ht new-ht body)
+  (let ((code nil))
+    (maphash (lambda (table-name ref-table)
+               (push `(setf ,table-name
+			    (let ((,name ',table-name)
+				  (,old-ht ,table-name)
+				  (,new-ht ,(ref-table-construction-code ref-table)))
+			      (progn ,body
+				     ,new-ht)))
+		     code))
+             (codespace-ref-tables *current-codespace/compile-time*))
+    `(progn ,@code)))
+  
 (defun update-store-info
     (codespace type store-function-signature
      &key (call-during-reference-phase nil call-during-reference-phase-provided-p)

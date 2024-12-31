@@ -140,7 +140,6 @@ Complex double float numbers.  cl-binary-store goes fast.  Same for complex sing
      WRITE: 1537.60 ms at 62 MB/sec
      READ : 1882.00 ms at 51 MB/sec    
 
-
 ## Specialized vectors and arrays
 
 cl-binary-store does good work on specialized vectors.  It's just blitting the underlying store to whatever your target is, so hard to beat.  This is on my laptop, so.
@@ -292,8 +291,8 @@ Now with reference tracking.  cl-conspack output size improves, but not a huge a
 
     CL-BINARY-STORE
      OUTPUT SIZE: 1.59 MB
-     WRITE: 51.72 ms at 31 MB/sec
-     READ : 11.24 ms at 141 MB/sec
+     WRITE: 46.28 ms at 34 MB/sec
+     READ : 11.08 ms at 144 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 4.89MB
      WRITE: 182.80 ms at 27 MB/sec
