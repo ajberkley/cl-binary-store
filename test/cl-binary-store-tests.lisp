@@ -571,3 +571,16 @@
   (is '= (expt 2 64) (restore (store nil (expt 2 64))))
   (is '= 12345678901234567890 (restore (store nil 12345678901234567890)))
   (is '= -12345678901234567890 (restore (store nil -12345678901234567890))))
+
+(define-test test-write-into-extant-vector
+  (let* ((data (make-list 100 :initial-element 1))
+	 (result (coerce (store nil data) '(simple-array (unsigned-byte 8) (*))))
+	 (restored-result (restore result))
+	 (restored-result-2 (progn
+			      (fill result 0)
+			      (store result data)
+			      (restore result))))
+    (is '= (length restored-result) 100)
+    (is '= (length restored-result-2) 100)
+    (is 'equal data restored-result)
+    (is 'equal data restored-result-2)))
