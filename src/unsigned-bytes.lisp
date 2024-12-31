@@ -1,5 +1,10 @@
 (in-package :cl-binary-store)
 
+(defmacro truly-the (type &body body)
+  #+sbcl `(sb-ext:truly-the ,type ,@body)
+  #-sbcl `(the ,type ,@body))
+    
+
 (declaim (#-debug-cbs inline #+debug-cbs notinline maybe-restore-ub8))
 (defun maybe-restore-ub8 (storage)
   "Maybe restore an (unsigned-byte 8) value from storage that has previously
@@ -7,7 +12,7 @@
   (declare #-debug-cbs(optimize (speed 3) (safety 0) (debug 0))) ;; this is called all the time!
   (and (ensure-enough-data storage 1 t)
        (let ((offset (read-storage-offset storage)))
-	 (setf (read-storage-offset storage) (1+ offset))
+	 (setf (read-storage-offset storage) (truly-the fixnum (1+ offset)))
          (sap-ref-8 (read-storage-sap storage) offset))))
 
 (declaim (#-debug-cbs inline #+debug-cbs notinline restore-ub8))
@@ -19,7 +24,7 @@
   (let ((offset (read-storage-offset storage)))
     (prog1
 	(sap-ref-8 (read-storage-sap storage) offset)
-      (setf (read-storage-offset storage) (+ 1 offset)))))
+      (setf (read-storage-offset storage) (truly-the fixnum (+ 1 offset))))))
 
 (declaim (inline restore-ub16))
 (defun restore-ub16 (storage)
@@ -29,7 +34,7 @@
   (ensure-enough-data storage 2)
   (let ((offset (read-storage-offset storage))
         (sap (read-storage-sap storage)))
-    (setf (read-storage-offset storage) (+ 2 offset))
+    (setf (read-storage-offset storage) (truly-the fixnum (+ 2 offset)))
     (sap-ref-16 sap offset)))
 
 (declaim (inline restore-ub32))
@@ -40,7 +45,7 @@
   (ensure-enough-data storage 4)
   (let ((offset (read-storage-offset storage))
         (sap (read-storage-sap storage)))
-    (setf (read-storage-offset storage) (+ 4 offset))
+    (setf (read-storage-offset storage) (truly-the fixnum (+ 4 offset)))
     (sap-ref-32 sap offset)))
 
 (declaim (inline store-ub8))

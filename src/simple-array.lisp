@@ -103,7 +103,7 @@
 	     (incf sap-offset write-length)
 	     (decf num-bytes-remaining write-length)
 	     (assert (>= num-bytes-remaining 0))
-	     (setf (write-storage-offset storage) (+ offset write-length)))))))
+	     (setf (write-storage-offset storage) (truly-the fixnum (+ offset write-length))))))))
 
 (declaim (notinline store-simple-base-string))
 (defun store-simple-base-string (string storage &optional references assign-new-reference-id)
@@ -143,7 +143,7 @@
 		   for sap-offset from offset
 		   do (setf (aref string string-offset)
 			    (code-char (cffi:mem-ref sap :uint8 sap-offset))))
-      (setf (read-storage-offset storage) (+ num-bytes offset))
+      (setf (read-storage-offset storage) (truly-the fixnum (+ num-bytes offset)))
       string)))
 
 (declaim (notinline store-simple-string))
@@ -168,7 +168,7 @@
 		     for uint8 across output
 		     for sap-offset from offset
 		     do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
-		   (setf (write-storage-offset storage) (+ offset num-bytes))))
+		   (setf (write-storage-offset storage) (truly-the fixnum (+ offset num-bytes)))))
 	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil))))
     (declare (inline write-it))
     (if references
@@ -184,7 +184,7 @@
     (let ((offset (read-storage-offset storage))
           (store (read-storage-store storage))
 	  (sap (read-storage-sap storage)))
-      (setf (read-storage-offset storage) (+ num-bytes offset))
+      (setf (read-storage-offset storage) (truly-the fixnum (+ num-bytes offset)))
       (if (> (length store) 0)
           (babel:octets-to-string store :encoding :utf-8 :start offset
 				         :end (the fixnum (+ offset num-bytes)))
@@ -258,7 +258,7 @@
          (copy-sap target-sap num-bytes-read sap offset bytes-to-read)
          (incf num-bytes-read bytes-to-read)
          (decf num-bytes-remaining bytes-to-read)
-	 (setf (read-storage-offset storage) (+ bytes-to-read offset)))))
+	 (setf (read-storage-offset storage) (truly-the fixnum (+ bytes-to-read offset))))))
 
 #-sbcl
 (defun restore-simple-specialized-vector (storage)

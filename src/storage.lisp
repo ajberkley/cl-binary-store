@@ -50,41 +50,43 @@
 					   (offset nil offset-provided-p))
   "store will be a sap on sbcl or just a ub8 array otherwise.
  If you pass in offset, then you are responsible for incrementing it."
+  (declare (optimize (speed 3) (safety 0) (debug 0)))
   (let ((offset (or offset (write-storage-offset storage))))
     (setf (sap-ref-8 sap offset) ub8)
-    (unless offset-provided-p (setf (write-storage-offset storage) (+ 1 offset)))))
+    (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 1 offset))))))
 
 (defun storage-write-ub16! (storage ub16 &key (sap (write-storage-sap storage))
 					   (offset nil offset-provided-p))
   (let ((offset (or offset (write-storage-offset storage))))
     (setf (sap-ref-16 sap offset) ub16)
-    (unless offset-provided-p (setf (write-storage-offset storage) (+ 2 offset)))))
+    (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 2 offset))))))
 
 (defun storage-write-ub32! (storage ub32 &key (sap (write-storage-sap storage))
 					   (offset nil offset-provided-p))
   (let ((offset (or offset (write-storage-offset storage))))
     (setf (sap-ref-32 sap offset) ub32)
-    (unless offset-provided-p (setf (write-storage-offset storage) (+ 4 offset)))))
+    (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 4 offset))))))
 
 (defun storage-write-ub64! (storage ub64 &key (sap (write-storage-sap storage))
 					   (offset nil offset-provided-p))
   (let ((offset (or offset (write-storage-offset storage))))
     (setf (sap-ref-64 sap offset) ub64)
-    (unless offset-provided-p (setf (write-storage-offset storage) (+ 8 offset)))))
+    (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 8 offset))))))
 
 (defun storage-write-sb64! (storage sb64 &key (sap (write-storage-sap storage))
 					   (offset nil offset-provided-p))
   (let ((offset (or offset (write-storage-offset storage))))
     (setf (signed-sap-ref-64 sap offset) sb64)
-    (unless offset-provided-p (setf (write-storage-offset storage) (+ 8 offset)))))
+    (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 8 offset))))))
 
 (declaim (inline storage-read-sb64))
 (defun storage-read-sb64 (storage)
+  (declare (optimize (speed 3) (safety 0)))
   (ensure-enough-data storage 8)
   (let ((offset (read-storage-offset storage)))
     (prog1
 	(signed-sap-ref-64 (read-storage-sap storage) offset)
-      (setf (read-storage-offset storage) (+ offset 8)))))
+      (setf (read-storage-offset storage) (truly-the fixnum (+ offset 8))))))
 
 (declaim (inline storage-write-byte))
 (defun storage-write-byte (storage byte)
@@ -108,7 +110,7 @@
 	 (declare (ignorable ,original-offset))
 	 (progn ,@body
 		,(when reserve-bytes
-		   `(setf (write-storage-offset ,storage) (+ ,original-offset ,reserve-bytes-sym))))))))
+		   `(setf (write-storage-offset ,storage) (truly-the fixnum (+ ,original-offset ,reserve-bytes-sym)))))))))
 
 (defmethod print-object ((s write-storage) stream)
   (print-unreadable-object (s stream :type t :identity t)

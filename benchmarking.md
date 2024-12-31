@@ -69,8 +69,8 @@ OK, now onto fixnums.  Still not doing shabbily.  I am not sure why the read dis
      READ : 4.88 ms at 1639 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 10.00 MB
-     WRITE: 3.32 ms at 3012 MB/sec
-     READ : 8.64 ms at 1157 MB/sec
+     WRITE: 3.28 ms at 3049 MB/sec
+     READ : 5.96 ms at 1678 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 9.00MB <-- cute, must be detecting proper lists and eliding cons tags
      WRITE: 58.80 ms at 153 MB/sec
@@ -88,9 +88,9 @@ Double floats are more interesting.  Here cl-binary-store pulls ahead in writing
      WRITE: 32.44 ms at 493 MB/sec
      READ : 17.92 ms at 893 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 10.00 MB <-- 8MB of double-floats and 2MB of cons tags
-     WRITE: 4.56 ms at 2193 MB/sec
-     READ : 13.36 ms at 749 MB/sec
+     OUTPUT SIZE: 10.00 MB  <-- 8MB of double-floats and 2MB of cons tags
+     WRITE: 4.16 ms at 2404 MB/sec
+     READ : 11.88 ms at 842 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 9.00MB
      WRITE: 100.80 ms at 89 MB/sec
@@ -109,8 +109,8 @@ Single floats go very fast, no boxing required on restore
      READ : 6.52 ms at 1227 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 6.00 MB
-     WRITE: 3.72 ms at 1613 MB/sec
-     READ : 7.88 ms at 761 MB/sec
+     WRITE: 3.40 ms at 1765 MB/sec
+     READ : 6.60 ms at 909 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 5.00MB
      WRITE: 70.80 ms at 71 MB/sec
@@ -129,8 +129,8 @@ Complex double float numbers.  cl-binary-store goes fast.  Same for complex sing
      READ : 21.92 ms at 1095 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 18.00 MB
-     WRITE: 14.00 ms at 1286 MB/sec
-     READ : 21.72 ms at 829 MB/sec
+     WRITE: 12.32 ms at 1461 MB/sec
+     READ : 16.28 ms at 1106 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 19.00MB
      WRITE: 214.80 ms at 88 MB/sec
@@ -252,20 +252,20 @@ Just a bunch of random crud in long list just to average out dispatch stuff.
     CL-BINARY-STORE> (test-on-data (long-complex-list))
     HYPERLUMINAL-MEM
      OUTPUT SIZE: 20.49 MB
-     WRITE: 35.92 ms at 570 MB/sec
-     READ : 30.80 ms at 665 MB/sec
+     WRITE: 34.04 ms at 602 MB/sec
+     READ : 29.92 ms at 685 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 7.49 MB
-     WRITE: 20.00 ms at 374 MB/sec
-     READ : 49.44 ms at 151 MB/sec
+     OUTPUT SIZE: 8.14 MB
+     WRITE: 18.64 ms at 437 MB/sec
+     READ : 39.44 ms at 207 MB/sec
     CL-CONSPACK
-     OUTPUT SIZE: 6.69MB
-     WRITE: 136.00 ms at 49 MB/sec
-     READ : 70.00 ms at 96 MB/sec
+     OUTPUT SIZE: 7.47MB
+     WRITE: 132.80 ms at 56 MB/sec
+     READ : 72.00 ms at 104 MB/sec
     CL-STORE
-     OUTPUT SIZE: 27.79MB
-     WRITE: 477.20 ms at 58 MB/sec
-     READ : 414.40 ms at 67 MB/sec
+     OUTPUT SIZE: 33.48MB
+     WRITE: 539.59 ms at 62 MB/sec
+     READ : 489.60 ms at 68 MB/sec
 
 ## structure-objects
 
@@ -273,20 +273,20 @@ Both hyperluminal-mem and cl-conspack requires writing code to support each new 
 
     HYPERLUMINAL-MEM
      OUTPUT SIZE: 10.40 MB
-     WRITE: 27.64 ms at 376 MB/sec
-     READ : 25.36 ms at 410 MB/sec
+     WRITE: 26.88 ms at 387 MB/sec
+     READ : 25.56 ms at 407 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 1.69 MB
-     WRITE: 8.96 ms at 189 MB/sec
-     READ : 13.16 ms at 128 MB/sec
+     WRITE: 8.56 ms at 197 MB/sec
+     READ : 11.36 ms at 149 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 9.09MB
-     WRITE: 179.20 ms at 51 MB/sec
-     READ : 139.20 ms at 65 MB/sec
+     WRITE: 186.40 ms at 49 MB/sec
+     READ : 134.80 ms at 67 MB/sec
     CL-STORE
      OUTPUT SIZE: 13.69MB
-     WRITE: 427.60 ms at 32 MB/sec
-     READ : 242.80 ms at 56 MB/sec
+     WRITE: 272.40 ms at 50 MB/sec
+     READ : 237.20 ms at 58 MB/sec
 
 Now with reference tracking.  cl-conspack output size improves, but not a huge amount.
 
@@ -323,16 +323,16 @@ Because cl-conspack behaves badly above for structures, here I am making sure th
     CL-BINARY-STORE> (test-on-data (lots-of-the-same-string) :hlmem nil)
     CL-BINARY-STORE
      OUTPUT SIZE: 2.00 MB
-     WRITE: 36.00 ms at 56 MB/sec
-     READ : 7.56 ms at 265 MB/sec
+     WRITE: 36.16 ms at 55 MB/sec
+     READ : 5.56 ms at 360 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 1.00MB
-     WRITE: 130.40 ms at 8 MB/sec
-     READ : 22.00 ms at 45 MB/sec
+     WRITE: 208.40 ms at 5 MB/sec
+     READ : 24.00 ms at 42 MB/sec
     CL-STORE
      OUTPUT SIZE: 4.00MB
-     WRITE: 91.60 ms at 44 MB/sec
-     READ : 68.40 ms at 58 MB/sec
+     WRITE: 90.80 ms at 44 MB/sec
+     READ : 82.00 ms at 49 MB/sec
  
 ## standard-objects
 

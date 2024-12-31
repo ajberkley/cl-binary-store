@@ -39,7 +39,7 @@
  been stored by STORE-UB32."
   (- (restore-ub32 storage)))
 
-(declaim (notinline restore-fixnum))
+(declaim (inline restore-fixnum))
 (defun restore-fixnum (storage)
   (declare (optimize (speed 3) (safety 0)))
   (the (values fixnum &optional) (storage-read-sb64 storage)))
@@ -97,7 +97,7 @@
   (ensure-enough-data storage 4)
   (let ((offset (read-storage-offset storage))
         (sap (read-storage-sap storage)))
-    (setf (read-storage-offset storage) (+ 4 offset))
+    (setf (read-storage-offset storage) (truly-the fixnum (+ 4 offset)))
     (sap-ref-single sap offset)))
 
 (declaim (inline store-single-float))
@@ -115,7 +115,7 @@
   (ensure-enough-data storage 8)
   (let ((offset (read-storage-offset storage))
         (sap (read-storage-sap storage)))
-    (setf (read-storage-offset storage) (+ 8 offset))
+    (setf (read-storage-offset storage) (truly-the fixnum (+ 8 offset)))
     (sap-ref-double sap offset)))
 
 (declaim (inline restore-double-float-zero))
@@ -130,7 +130,7 @@
      (ensure-enough-data ,storage 8)
      (let ((offset (read-storage-offset ,storage))
            (sap (read-storage-sap ,storage)))
-       (setf (read-storage-offset ,storage) (+ 8 offset))
+       (setf (read-storage-offset ,storage) (truly-the fixnum (+ 8 offset)))
        (setf ,slot (sap-ref-double sap offset)))))
 
 (declaim (inline store-double-float))
@@ -241,6 +241,7 @@
 (declaim (ftype (function (read-storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
 (defun restore-tagged-unsigned-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
+  (declare (optimize speed safety))
   (let ((tag (restore-ub8 storage)))
     (if (<= +small-integer-zero-code+ tag +last-small-integer-code+)
 	(- tag +small-integer-zero-code+)
