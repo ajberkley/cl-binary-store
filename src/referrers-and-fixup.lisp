@@ -36,13 +36,6 @@
 ;; constructed to resolve the object.  This allows circular list building
 ;; among other things.  See `restore-object-to'.
 
-(defvar *track-references* t
-  "If you let this to NIL, then every object will be stored anew, and
- there will be no circular reference detection.  It's a huge
- performance win (you can hit hundreds of MB/sec instead of 10s of
- MB/sec, but you need to make sure your data is safe to serialize and
- you don't care about EQL checks of data.")
-
 (declaim (inline references-vector make-references references-ref-id))
 (defstruct references
   "During deserialization this array contains all the references we

@@ -51,6 +51,13 @@
 ;; Or just inspect *codespaces*, the source code stored in the -source-code slots
 ;; can be put into a file and compiled and then you have full debuggability.
 
+(defvar *track-references* t
+  "If you let this to NIL, then every object will be stored anew, and
+ there will be no circular reference detection.  It's a huge
+ performance win (you can hit hundreds of MB/sec instead of 10s of
+ MB/sec, but you need to make sure your data is safe to serialize and
+ you don't care about EQL checks of data.")
+
 (defvar *object-info* nil
   "An eql hash table which maps from structure-object or standard-class type name
  to a `object-nfo' structure.  This is bound locally during operation of store-objects
