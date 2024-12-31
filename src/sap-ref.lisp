@@ -128,8 +128,8 @@
   #+allegro (mask-signed (sap-ref-64 sap offset) 64))
 
 (defun (setf signed-sap-ref-64) (value sap offset)
-  #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
-  #-(or sbcl allegro) (cffi:mem-ref sap :int64 offset)
+  #+sbcl (setf (sb-sys:signed-sap-ref-64 sap offset) value)
+  #-(or sbcl allegro) (setf (cffi:mem-ref sap :int64 offset) value)
   #+allegro
   (setf (sap-ref-64 sap offset)
 	(if (< value 0)
