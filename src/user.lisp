@@ -32,7 +32,8 @@
 (defun store-to-vector (&rest elements)
   (declare (dynamic-extent elements) (optimize speed safety))
   "Returns an (array (unsigned-byte 8) (*)) with the data"
-  (let* ((output-vector (make-array 16 :element-type '(unsigned-byte 8) :fill-pointer 0))
+  (let* ((output-vector (make-array 16 :element-type '(unsigned-byte 8) :fill-pointer 0
+				       :adjustable t))
 	 (*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
     (with-storage (storage :flusher (make-write-into-adjustable-ub8-vector output-vector))
       (apply #'store-objects storage elements)

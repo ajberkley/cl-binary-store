@@ -125,6 +125,7 @@
       (setf (storage-offset storage) 0))))
 
 (defun make-write-into-adjustable-ub8-vector (vector)
+  (assert (adjustable-array-p vector))
   (lambda (storage)
     (let* ((num-bytes (storage-offset storage))
 	   (bytes-available (- (array-total-size vector) (fill-pointer vector))))
