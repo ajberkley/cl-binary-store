@@ -74,7 +74,7 @@
 			      obj storage eq-refs store-object assign-new-reference-id nil))
   (defstore standard-object (store-standard/structure-object
 			     obj storage eq-refs store-object assign-new-reference-id t))
-  ;; On sbcl a condition is neither a structure-object nor a standard-object, but has slots and all
+  ;; On sbcl a condition is neither a structure-object nor a standard-object
   #+sbcl
   (defstore condition (store-standard/structure-object
 		       obj storage eq-refs store-object assign-new-reference-id t))
@@ -104,6 +104,7 @@
   ;; SIMPLE VECTORS
   #+sbcl
   (defstore (simple-array * (*)) (store-simple-specialized-vector obj storage) :check-for-ref-in eq-refs)
+  #+sbcl
   (defrestore +simple-specialized-vector-code+ (restore-simple-specialized-vector storage))
   
   (defstore simple-vector (store-simple-vector obj storage store-object) :check-for-ref-in eq-refs)
@@ -113,6 +114,7 @@
   #+sbcl
   (defstore (and (simple-array * *) (not (simple-array t *)))
       (store-simple-specialized-array obj storage) :check-for-ref-in eq-refs :call-during-reference-phase nil)
+  #+sbcl
   (defrestore +simple-specialized-array-code+ (restore-simple-specialized-array storage))
   
   ;; COMPLEX VECTORS AND ARRAYS

@@ -98,7 +98,7 @@
   (let ((offset (storage-offset storage))
         (sap (storage-sap storage)))
     (setf (storage-offset storage) (+ 4 offset))
-    (sb-kernel:make-single-float (signed-sap-ref-32 sap offset))))
+    (sap-ref-single sap offset)))
 
 (declaim (inline store-single-float))
 (defun store-single-float (single-float storage &optional (tag t))
@@ -107,7 +107,7 @@
     (when tag
       (storage-write-byte! storage +single-float-code+ :offset offset :sap sap)
       (incf offset))
-    (setf (signed-sap-ref-32 sap offset) (sb-kernel:single-float-bits single-float))))
+    (setf (sap-ref-single sap offset) single-float)))
 
 (declaim (inline restore-double-float))
 (defun restore-double-float (storage)
@@ -116,9 +116,7 @@
   (let ((offset (storage-offset storage))
         (sap (storage-sap storage)))
     (setf (storage-offset storage) (+ 8 offset))
-    (let ((lo (sap-ref-32 sap offset))
-	  (hi (signed-sap-ref-32 sap (+ 4 offset))))
-      (sb-kernel:make-double-float hi lo))))
+    (sap-ref-double sap offset)))
 
 (declaim (inline restore-double-float-zero))
 (defun restore-double-float-zero ()
@@ -133,9 +131,7 @@
      (let ((offset (storage-offset ,storage))
            (sap (storage-sap ,storage)))
        (setf (storage-offset ,storage) (+ 8 offset))
-       (let* ((lo& (sap-ref-32 sap offset))
-	      (hi& (signed-sap-ref-32 sap (+ 4 offset))))
-	 (setf ,slot (sb-kernel:make-double-float hi& lo&))))))
+       (setf ,slot (sap-ref-double sap offset)))))
 
 (declaim (inline store-double-float))
 (defun store-double-float (double-float storage double-float-refs assign-new-reference-id
@@ -153,9 +149,7 @@
           (when tag
 	    (storage-write-byte! storage +double-float-code+ :offset offset :sap sap)
 	    (incf offset))
-	  (setf (sap-ref-32 sap offset) (sb-kernel:double-float-low-bits double-float))
-	  (setf (signed-sap-ref-32 sap (+ 4 offset))
-		(sb-kernel:double-float-high-bits double-float))))))
+	  (setf (sap-ref-double sap offset) double-float)))))
 
 (defun restore-ratio (restore-object)
   (declare (optimize speed safety) (type function restore-object))

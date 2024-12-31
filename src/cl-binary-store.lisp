@@ -183,7 +183,12 @@
    ;; Extensions for modifying object serialization
    #:serializable-object-info
    #:specialized-object-constructor
-   #:specialized-serializer/deserializer))
+   #:specialized-serializer/deserializer
+   #:delete-restore
+   #:delete-store
+   #:delete-codespace
+   #:*codespaces*
+   #:*allow-codespace-switching*))
 
 
 (in-package :cl-binary-store)

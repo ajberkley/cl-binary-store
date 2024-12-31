@@ -14,82 +14,6 @@
   (size 0 :type fixnum);; ;; storage-size is only used for read, so we know how to chunk
   (underlying-stream nil :type (or null stream)))  ;; if exists... I have found no use for this yet
 
-(declaim (inline sap-ref-8 (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
-		 sap-ref-32 (setf sap-ref-32) sap-ref-64 (setf sap-ref-64)
-		 signed-sap-ref-64 (setf signed-sap-ref-64)))
-
-(defun (setf sap-ref-8) (ub8 sap offset)
-  #+sbcl (setf (sb-sys:sap-ref-8 sap offset) ub8)
-  #-sbcl (setf (aref sap offset) ub8))
-
-(defun (setf sap-ref-16) (ub16 sap offset)
-  #+sbcl (setf (sb-sys:sap-ref-16 sap offset) ub16)
-  #-sbcl (progn (setf (aref store (+ 0 offset)) (logand ub16 #xFF))
-		(setf (aref store (+ 1 offset)) (ash ub16 -8))))
-
-(defun (setf sap-ref-32) (ub32 sap offset)
-  #+sbcl (setf (sb-sys:sap-ref-32 sap offset) ub32)
-  #-sbcl (progn (setf (aref store (+ 0 offset)) (logand ub32 #xFF))
-		(setf (aref store (+ 1 offset)) (logand (ash ub32 -8) #xFF))
-		(setf (aref store (+ 2 offset)) (logand (ash ub32 -16) #xFF))
-		(setf (aref store (+ 3 offset)) (ash ub32 -24))))
-
-(defun (setf sap-ref-64) (ub64 sap offset)
-  #+sbcl (setf (sb-sys:sap-ref-64 sap offset) ub64)
-  #-sbcl (progn (setf (aref sap (+ 0 offset)) (logand ub64 #xFF))
-		(setf (aref sap (+ 1 offset)) (logand (ash ub64 -8) #xFF))
-		(setf (aref sap (+ 2 offset)) (logand (ash ub64 -16) #xFF))
-		(setf (aref sap (+ 3 offset)) (logand (ash ub64 -24) #xFF))
-		(setf (aref sap (+ 4 offset)) (logand (ash ub64 -32) #xFF))
-		(setf (aref sap (+ 5 offset)) (logand (ash ub64 -40) #xFF))
-		(setf (aref sap (+ 6 offset)) (logand (ash ub64 -48) #xFF))
-		(setf (aref sap (+ 7 offset)) (ash ub64 -56))))
-
-(defun (setf signed-sap-ref-64) (sb64 sap offset)
-  #+sbcl (setf (sb-sys:signed-sap-ref-64 sap offset) sb64)
-  #-sbcl (error "impl me"))
-
-(declaim (inline sap-ref-8 sap-ref-16 sap-ref-32 sap-ref-64 signed-sap-ref-64))
-(defun sap-ref-8 (sap offset)
-  #+sbcl (sb-sys:sap-ref-8 sap offset)
-  #-sbcl (aref sap offset))
-
-(defun sap-ref-16 (sap offset)
-  #+sbcl (sb-sys:sap-ref-16 sap offset)
-  #-sbcl (+      (aref sap (+ 0 offset))
-	    (ash (aref sap (+ 1 offset)) 8)))
-
-(defun sap-ref-32 (sap offset)
-  #+sbcl (sb-sys:sap-ref-32 sap offset)
-  #-sbcl (+      (aref sap (+ 0 offset))
-	    (ash (aref sap (+ 1 offset)) 8)
-	    (ash (aref sap (+ 2 offset)) 16)
-	    (ash (aref sap (+ 3 offset)) 24)))
-
-(defun sap-ref-64 (sap offset)
-  #+sbcl (sb-sys:sap-ref-64 sap offset)
-  #-sbcl (+      (aref sap (+ 0 offset))
-	    (ash (aref sap (+ 1 offset)) 8)
-	    (ash (aref sap (+ 2 offset)) 16)
-	    (ash (aref sap (+ 3 offset)) 24)
-	    (ash (aref sap (+ 4 offset)) 32)
-	    (ash (aref sap (+ 5 offset)) 40)
-	    (ash (aref sap (+ 6 offset)) 48)
-	    (ash (aref sap (+ 7 offset)) 56)))
-
-(declaim (inline signed-sap-ref-32 (setf signed-sap-ref-32)))
-(defun signed-sap-ref-32 (sap offset)
-  #+sbcl (sb-sys:signed-sap-ref-32 sap offset)
-  #-sbcl (error ""))
-
-(defun (setf signed-sap-ref-32) (value sap offset)
-  #+sbcl (setf (sb-sys:signed-sap-ref-32 sap offset) value)
-  #-sbcl (error ""))
-
-(defun signed-sap-ref-64 (sap offset)
-  #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
-  #-sbcl (error "imple me"))
-
 (declaim (inline storage-write-byte storage-write-byte! storage-write-ub16! storage-write-ub32!
 		 storage-write-ub64! storage-write-sb64! storage-read-sb64!))
 
@@ -219,47 +143,48 @@
 		 :end2 (storage-offset storage)))
       (setf (storage-offset storage) 0))))
 
-(defmacro with-pinned-objects ((&rest objects) &body body)
-  #+sbcl
-  `(sb-sys:with-pinned-objects ,objects
-     ,@body)
-  #-sbcl `(progn ,@body))
-
-(defmacro vector-sap (vector)
-  "On sbcl, return a SAP referring to the backing store of vector, otherwise the
- vector itself"
-  #+sbcl `(sb-sys:vector-sap ,vector)
-  #-sbcl vector)
-
-(defmacro array-sap (array)
-  "Return a SAP referring to the backing store of array-sap (on sbcl) otherwise the
- 1D vector backing-store of the vector."
-  #+sbcl
-  (let ((g (gensym)))
-    `(sb-kernel:with-array-data ((,g ,array) (start) (end))
-       (declare (ignore end))
-       (assert (zerop start))
-       (with-pinned-objects (,g)
-         (vector-sap ,g))))
-  #-sbcl
-  (error "unimplemented"))
-
 (defmacro with-storage ((storage &key stream (buffer-size 8192)
-                                 sap flusher store max size) &body body)
-  (assert (and (atom storage) (atom stream) (atom buffer-size))) ;; lazy, multiply evaluating
-  (let ((vector (gensym)))
-    `(let ((,vector
-	     ,(if store store `(make-array ,buffer-size :element-type '(unsigned-byte 8)))))
-       (with-pinned-objects (,vector)
-	 (let ((,storage (make-storage
+                                   sap flusher store max size) &body body)
+  ;; If you pass in store, it better be a static-vector and pinned
+  (cond
+    (sap ;; no need to allocate a store
+     `(let* ((temp ,(or store `(make-array 0 :element-type '(unsigned-byte 8))))
+	     (,storage (make-storage
+			:flusher ,flusher
+			:store temp
+			:max ,(or max 0)
+			:sap ,sap
+			:underlying-stream ,stream
+			:size ,(or size 0))))
+	(unless store `(declare (dynamic-extent temp)))
+	,@body))
+    (store
+     (let ((stores (gensym))
+	   (sap (gensym)))
+       `(let* ((,stores ,store)
+	       (,sap (static-vectors:static-vector-pointer ,stores))
+	       (,storage (make-storage
 			  :flusher ,flusher
-			  :store ,vector
-			  :max ,(if max max `(length ,vector))
-			  :sap ,(if sap sap `(vector-sap ,vector))
+			  :store ,stores
+			  :max ,(or max `(length ,store))
+			  :sap ,sap
 			  :underlying-stream ,stream
-                          :size ,(or size `(length ,vector)))))
-	   (declare (dynamic-extent ,storage))
-	   ,@body)))))
+			  :size ,(or size `(length ,stores)))))
+	  (declare (dynamic-extent ,storage))
+	  ,@body)))
+    (t	
+      (let ((vector (gensym)))
+	`(static-vectors:with-static-vector
+	     (,vector ,buffer-size :element-type '(unsigned-byte 8))
+	   (let ((,storage (make-storage
+			    :flusher ,flusher
+			    :store ,vector
+			    :max ,(or max `(length ,vector))
+			    :sap ,(or sap `(static-vectors:static-vector-pointer ,vector))
+			    :underlying-stream ,stream
+                            :size ,(or size `(length ,vector)))))
+	     (declare (dynamic-extent ,storage))
+	     ,@body))))))
 		
 (defun shift-data-to-beginning (read-storage)
   "Move the data in seq to the beginning and update storage-offset and storage-max.

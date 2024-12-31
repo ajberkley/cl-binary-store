@@ -4,7 +4,10 @@
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :long-name "Fast serialization / deserialization library"
   :pathname "src/"
-  :depends-on (#:flexi-streams #:babel)
+  :depends-on (#:flexi-streams
+	       #:babel
+	       #:static-vectors
+	       #-sbcl #:cffi)
   :components ((:file "features")
 	       (:file "cl-binary-store")
 	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))
@@ -21,13 +24,14 @@
 						     "actions" "object-info"
 						     "basic-codespace-codes"
 						     "reference-coding"))
-	       (:file "storage" :depends-on ("features" "cl-binary-store"))
+	       (:file "sap-ref")
+	       (:file "storage" :depends-on ("features" "cl-binary-store" "sap-ref"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
-							      "basic-codespace"))
+							      "basic-codespace" "sap-ref"))
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"
 									  "basic-codespace"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
-							      "features"))
+							      "features" "sap-ref"))
 	       (:file "reference-count" :depends-on ("actions" "numbers" "features"))
                (:file "magic-numbers" :depends-on ("actions" "numbers"))
 	       (:file "end-action" :depends-on ("actions" "numbers"))
@@ -35,7 +39,7 @@
 								"features"))
 	       (:file "sbcl-utilities" :if-feature :sbcl :depends-on ("features"))
 	       (:file "simple-array-sbcl" :if-feature :sbcl
-		:depends-on ("referrers-and-fixup" "numbers" "features"))
+		:depends-on ("referrers-and-fixup" "numbers" "features" "sap-ref"))
 	       (:file "simple-vector" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 								    "features" "numbers"))
 	       (:file "symbols" :depends-on ("unsigned-bytes" "referrers-and-fixup"
