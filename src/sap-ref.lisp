@@ -1,6 +1,10 @@
 (in-package :cl-binary-store)
 
-;; Functions to access static-vectors memory
+;; Functions to access foreign memory and set it from lisp values or
+;; read into lisp values.  Uses SBCL stuff for SBCL, CFFI for other
+;; impls, and some other work around.  Here we provide an interface
+;; for accessing unaligned 8, 16, 32, 64 unsigned bits and 32, 64
+;; signed bits, and unaligned single-floats and double-floats.
 
 (declaim (inline sap-ref-8 (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
 		 sap-ref-32 (setf sap-ref-32) signed-sap-ref-32 (setf signed-sap-ref-32)
@@ -43,11 +47,14 @@
 
 (defun (setf signed-sap-ref-32) (value sap offset)
   #+sbcl (setf (sb-sys:signed-sap-ref-32 sap offset) value)
-  #-sbcl (setf (cffi:mem-ref sap :int32 offset) value))
+  #-(or sbcl allegro) (setf (cffi:mem-ref sap :int32 offset) value)
+  #+allegro (error "boo"))
+  
 
 (defun (setf signed-sap-ref-64) (sb64 sap offset)
   #+sbcl (setf (sb-sys:signed-sap-ref-64 sap offset) sb64)
-  #-sbcl (setf (cffi:mem-ref sap :int64 offset) sb64))
+  #-(or sbcl allegro) (setf (cffi:mem-ref sap :int64 offset) sb64)
+  #+allegro (error "boo"))
 
 (defun sap-ref-8 (sap offset)
   #+sbcl (sb-sys:sap-ref-8 sap offset)
@@ -117,17 +124,22 @@
     (setf (sap-ref-16 sap offset) s0)
     (setf (sap-ref-16 sap (+ offset 2)) s1)))
 
+(defun mask-signed (x size)
+  "Re-interpret a SIZE bit lisp number as if it were a signed twos complement number"
+  (logior x (- (mask-field (byte 1 (1- size)) x))))
+
 (defun signed-sap-ref-32 (sap offset)
   #+sbcl (sb-sys:signed-sap-ref-32 sap offset)
-  #-sbcl (cffi:mem-ref sap :int32 offset))
+  #-(or sbcl allegro) (cffi:mem-ref sap :int32 offset)
+  #+allegro (mask-signed (sap-ref-32 sap offset) 32))
 
 (defun signed-sap-ref-64 (sap offset)
   #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
-  #-sbcl (cffi:mem-ref sap :int64 offset))
+  #-(or sbcl allegro) (cffi:mem-ref sap :int64 offset)
+  #+allegro (mask-signed (sap-ref-64 sap offset) 32))
 
 (defmacro array-sap (array)
-  "Return a SAP referring to the backing store of array-sap (on sbcl) otherwise the
- 1D vector backing-store of the vector."
+  "Return a pointer referring to the backing store of an array (on sbcl)"
   #+sbcl
   (let ((g (gensym)))
     `(sb-kernel:with-array-data ((,g ,array) (start) (end))
@@ -145,8 +157,7 @@
   #-sbcl `(progn ,@body))
 
 (defmacro vector-sap (vector)
-  "On sbcl, return a SAP referring to the backing store of vector, otherwise the
- vector itself"
+  "On sbcl, return a SAP referring to the backing store of vector"
   #+sbcl `(sb-sys:vector-sap ,vector)
   #-sbcl vector)
 
