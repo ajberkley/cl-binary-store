@@ -263,10 +263,7 @@ See [benchmarking.md](benchmarking.md).
 ## TODO ideas
 - [ ] A codespace for messagepack (for example; for a limited subset of types).  This is mainly as an exercise as cl-messagepack is fine.
 - [ ] Support for other Common Lisps aside from sbcl
-  - [ ] At least basic slow support
-  - [ ] Optimized support: static-vectors would be a good start
-- [ ] Further discoveries from real world use cases (that is, my use case)
-  - [ ] Build compacted hash tables after the reference counting
+  - [ ] At least basic slow support (CCL working)
+  - [ ] Optimized support
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
 - [X] Always track references for object info
-- [ ] Always track references for symbols
