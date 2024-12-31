@@ -147,7 +147,8 @@
   (make-list n :initial-element (random 256)))
 
 (defun long-list-of-random-fixnums (&optional (n 1000000))
-  (loop repeat n collect (random (- (expt 2 61) (expt 2 60)))))
+  (loop repeat n collect (random #-ccl(- (expt 2 61) (expt 2 60))
+				 #+ccl (- (expt 2 59) (expt 2 58)))))
 
 (defun long-list-of-random-double-floats (&optional (n 1000000))
   (loop repeat n collect (random 1d0)))

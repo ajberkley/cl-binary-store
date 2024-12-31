@@ -374,11 +374,7 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
 
 For reference here is behavior on CCL, not recommended for speed, (on a list that is 100x shorter):
 
-    (defun long-list-of-tiny-integers (&optional (n 10000))
-      (loop repeat n collect (- (random 33) 16)))
-
-    CL-BINARY-STORE> (test-on-data (long-list-of-tiny-integers))
-
+    CL-BINARY-STORE> (test-on-data (long-list-of-tiny-integers 10000))
     CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
      WRITE: 27.11 ms at 1 MB/sec
@@ -387,3 +383,15 @@ For reference here is behavior on CCL, not recommended for speed, (on a list tha
      OUTPUT SIZE: 0.02MB
      WRITE: 5.56 ms at 4 MB/sec
      READ : 0.68 ms at 29 MB/sec
+
+It's not quite so terrible at double floats... I'm not sure what is going wrong on the writing side.  Likely the typecase dispatch needs some tweaking?  Read side works great!
+
+    CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats 10000) :hlmem nil :cl-store nil)
+    CL-BINARY-STORE
+     OUTPUT SIZE: 0.10 MB
+     WRITE: 19.08 ms at 5 MB/sec
+     READ : 0.35 ms at 288 MB/sec
+    CL-CONSPACK
+     OUTPUT SIZE: 0.09MB
+     WRITE: 14.69 ms at 6 MB/sec
+     READ : 12.18 ms at 7 MB/sec
