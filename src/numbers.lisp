@@ -217,11 +217,6 @@
   (store-single-float (realpart complex-single-float) storage nil)
   (store-single-float (imagpart complex-single-float) storage nil))
 
-(defconstant +maximum-untagged-unsigned-integer+ (- +last-small-integer-code+
-						    +small-integer-zero-code+))
-(defconstant +minimum-untagged-signed-integer+ (- +first-small-integer-code+
-						  +small-integer-zero-code+))
-
 (declaim (inline store-tagged-unsigned-fixnum))
 (defun store-tagged-unsigned-fixnum (fixnum storage)
   "Store and tag a number from 0 to max-positive-fixnum.

@@ -61,3 +61,8 @@
 (defconstant +last-small-integer-code+ 224)
 (defconstant +first-user-code+ (+ 1 +last-small-integer-code+))
 (defconstant +last-user-code+ 255)
+
+(defconstant +maximum-untagged-unsigned-integer+ (- +last-small-integer-code+
+						    +small-integer-zero-code+))
+(defconstant +minimum-untagged-signed-integer+ (- +first-small-integer-code+
+						  +small-integer-zero-code+))

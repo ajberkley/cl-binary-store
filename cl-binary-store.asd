@@ -31,7 +31,8 @@
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"
 									  "basic-codespace"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
-							      "features" "sap-ref"))
+							      "features" "sap-ref"
+							      "basic-codespace-codes"))
 	       (:file "reference-count" :depends-on ("actions" "numbers" "features"))
                (:file "magic-numbers" :depends-on ("actions" "numbers"))
 	       (:file "end-action" :depends-on ("actions" "numbers"))
