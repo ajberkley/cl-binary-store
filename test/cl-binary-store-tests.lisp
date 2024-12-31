@@ -79,6 +79,10 @@
 	    (format nil "~A~%" c)
 	    (format nil "~A~%" b))))))
 
+(defun type-equal (t1 t2)
+  (and (subtypep t1 t2)
+       (subtypep t2 t1)))
+
 (define-test test-simple-arrays
     (let* ((elt-types
 	     #+sbcl'(bit fixnum base-char character single-float
@@ -95,9 +99,16 @@
 	       (unsigned-byte 62)
 		     (unsigned-byte 64))
 	     ;; character fails on CCL
-	     #-sbcl '(bit fixnum base-char
+	     #-sbcl '(bit
+		      #-ecl fixnum ;; ecl ext:integer64 for upgraded array element type
+		      base-char
 		      #-ccl character ;; no character arrays, just base strings?
-		      single-float double-float (unsigned-byte 8)))
+		      single-float double-float
+		      (unsigned-byte 8)
+		      (unsigned-byte 16)
+		      (unsigned-byte 32)
+		      (unsigned-byte 64)
+		      ))
 	   (sizes
 	     (loop repeat (length elt-types)
 		   collect (+ 1 (random 10))))
@@ -132,9 +143,9 @@
 	      for size in sizes
 	      for result in (restore-from-vector input)
 	      do
-		 ;; (format t "~A with ~A elements~% result is a ~A and is ~A~%"
+		 ;; (format t "~A with ~A elements, result is a ~A and is~% ~A~%"
 		 ;; 	 elt-type size (type-of result) result)
-		 (is 'equal (upgraded-array-element-type (array-element-type result))
+		 (is 'type-equal (upgraded-array-element-type (array-element-type result))
 		     elt-type)
 		 (true (every (lambda (x fill-value) (eql x fill-value)) result fill))
 		 (true (= (length result) size))))))
