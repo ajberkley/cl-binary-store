@@ -74,7 +74,7 @@
 
 (defun restore-bignum (storage)
   (declare (optimize speed safety))
-  (let ((count (restore-fixnum storage)))
+  (let ((count (restore-tagged-unsigned-fixnum storage)))
     (declare (type fixnum count))
     (ensure-enough-data storage (the fixnum (* 4 count)))
     (* (if (< count 0) -1 1)
@@ -88,8 +88,8 @@
     (multiple-value-bind (ub32s count)
 	(num->bits bignum)
       (declare (type fixnum count))
-      (store-fixnum (if (minusp bignum) (- count) count) storage)
-      (dolist (ub32 ub32s) (store-ub32 ub32 storage)))))
+      (store-tagged-unsigned-fixnum (if (minusp bignum) (- count) count) storage)
+      (dolist (ub32 ub32s) (store-ub32 ub32 storage nil)))))
 
 (declaim (inline restore-single-float))
 (defun restore-single-float (storage)
