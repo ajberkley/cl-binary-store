@@ -4,7 +4,7 @@ A fast and customizable serializer/deserializer of Common Lisp objects to/from a
 
 > :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for messagepack support.
 
-Currently cl-binary-store runs on SBCL, ECL, CCL, and Allegro Common Lisp.  The SBCL implementation is the fast one.  Neither ECL, CCL, nor Allegro have fast serializers / deserializers for simple-arrays and general performance is terrible (see TODO for speeding things up on Allegro).
+Currently cl-binary-store runs on SBCL, ECL, CCL, and Allegro Common Lisp.  The SBCL implementation is the fast one.  Neither ECL, CCL, nor Allegro have fast serializers / deserializers for simple-arrays and general performance is terrible (see TODO for speeding things up on Allegro).  ABCL doesn't work yet either.
 
 ## Status
 
@@ -263,4 +263,4 @@ See [benchmarking.md](benchmarking.md).
 ## TODO ideas
 - [ ] A codespace for messagepack (for example; for a limited subset of types).  This is mainly as an exercise as cl-messagepack is fine.
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
-- [ ] Speed up cl-binary-store on Allegro Common Lisp (and maybe on ECL and CCL?)
+- [ ] Speed up cl-binary-store on Allegro Common Lisp and ABCL (and maybe on ECL and CCL?)
