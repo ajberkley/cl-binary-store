@@ -9,7 +9,7 @@
   (max 0 :type fixnum) ;; end of valid data if read, length of storage array if write
   (store nil :type (simple-array (unsigned-byte 8) (*))) ;; If we are writing/reading from a pure
                                                          ;; pure sap, store is a 0 length array
-  (sap nil :type #+sbcl sb-alien::system-area-pointer #-sbcl (simple-array (unsigned-byte 8) (*)))
+  (sap nil #+sbcl :type #+sbcl sb-alien::system-area-pointer)
   (flusher nil :type function) ;; on read return number of available bytes, on write storage-offset
   (size 0 :type fixnum);; ;; storage-size is only used for read, so we know how to chunk
   (underlying-stream nil :type (or null stream)))  ;; if exists... I have found no use for this yet
