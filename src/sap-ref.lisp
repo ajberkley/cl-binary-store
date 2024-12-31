@@ -7,8 +7,8 @@
 ;; signed bits, and unaligned single-floats and double-floats.
 
 (declaim (inline sap-ref-8 (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
-		 sap-ref-32 (setf sap-ref-32) signed-sap-ref-32 (setf signed-sap-ref-32)
-		 sap-ref-64 (setf sap-ref-64) signed-sap-ref-64 (setf signed-sap-ref-64)
+		 sap-ref-32 (setf sap-ref-32) sap-ref-64 (setf sap-ref-64)
+		 signed-sap-ref-64 (setf signed-sap-ref-64)
 		 sap-ref-double (setf sap-ref-double)
 		 sap-ref-single (setf sap-ref-single)))
 
@@ -27,7 +27,7 @@
   #+sbcl (setf (sb-sys:sap-ref-32 sap offset) ub32)
   #-(or sbcl allegro) (setf (cffi:mem-ref sap :uint32 offset) ub32)
   #+allegro
-  (progn (setf (cffi:mem-ref sap :uint8 offset) (logand ub32 #xFF))
+  (progn (setf (cffi:mem-ref sap :uint8 (+ offset 0)) (logand (ash ub32 0) #xFF))
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 1)) (logand (ash ub32 -8) #xFF))
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 2)) (logand (ash ub32 -16) #xFF))
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 3)) (logand (ash ub32 -24) #xFF))))
@@ -43,18 +43,7 @@
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 4)) (logand (ash ub64 -32) #xFF))
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 5)) (logand (ash ub64 -40) #xFF))
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 6)) (logand (ash ub64 -48) #xFF))
-	 (setf (cffi:mem-ref sap :uint8 (+ offset 7)) (logand (ash ub64 -54) #xFF))))
-
-(defun (setf signed-sap-ref-32) (value sap offset)
-  #+sbcl (setf (sb-sys:signed-sap-ref-32 sap offset) value)
-  #-(or sbcl allegro) (setf (cffi:mem-ref sap :int32 offset) value)
-  #+allegro (error "boo"))
-  
-
-(defun (setf signed-sap-ref-64) (sb64 sap offset)
-  #+sbcl (setf (sb-sys:signed-sap-ref-64 sap offset) sb64)
-  #-(or sbcl allegro) (setf (cffi:mem-ref sap :int64 offset) sb64)
-  #+allegro (error "boo"))
+	 (setf (cffi:mem-ref sap :uint8 (+ offset 7)) (logand (ash ub64 -56) #xFF))))
 
 (defun sap-ref-8 (sap offset)
   #+sbcl (sb-sys:sap-ref-8 sap offset)
@@ -84,7 +73,7 @@
 	       (ash (cffi:mem-ref sap :uint8 (+ offset 4)) 32)
 	       (ash (cffi:mem-ref sap :uint8 (+ offset 5)) 40)
 	       (ash (cffi:mem-ref sap :uint8 (+ offset 6)) 48)
-	       (ash (cffi:mem-ref sap :uint8 (+ offset 7)) 54)))
+	       (ash (cffi:mem-ref sap :uint8 (+ offset 7)) 56)))
 
 (defun sap-ref-double (sap offset)
   #+sbcl (sb-sys:sap-ref-double sap offset)
@@ -124,22 +113,32 @@
     (setf (sap-ref-16 sap offset) s0)
     (setf (sap-ref-16 sap (+ offset 2)) s1)))
 
+(declaim (inline mask-signed negative-to-twos-complement/64))
 (defun mask-signed (x size)
   "Re-interpret a SIZE bit lisp number as if it were a signed twos complement number"
   (logior x (- (mask-field (byte 1 (1- size)) x))))
 
-(defun signed-sap-ref-32 (sap offset)
-  #+sbcl (sb-sys:signed-sap-ref-32 sap offset)
-  #-(or sbcl allegro) (cffi:mem-ref sap :int32 offset)
-  #+allegro (mask-signed (sap-ref-32 sap offset) 32))
+(defun negative-to-twos-complement/64 (x)
+  (assert (< x 0))
+  (logand (+ 1 (logxor (- x) #xFFFFFFFFFFFFFFFF)) #xFFFFFFFFFFFFFFFF))
 
 (defun signed-sap-ref-64 (sap offset)
   #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
   #-(or sbcl allegro) (cffi:mem-ref sap :int64 offset)
-  #+allegro (mask-signed (sap-ref-64 sap offset) 32))
+  #+allegro (mask-signed (sap-ref-64 sap offset) 64))
+
+(defun (setf signed-sap-ref-64) (value sap offset)
+  #+sbcl (sb-sys:signed-sap-ref-64 sap offset)
+  #-(or sbcl allegro) (cffi:mem-ref sap :int64 offset)
+  #+allegro
+  (setf (sap-ref-64 sap offset)
+	(if (< value 0)
+	    (negative-to-twos-complement/64 value)
+	    value)))
 
 (defmacro array-sap (array)
   "Return a pointer referring to the backing store of an array (on sbcl)"
+  (declare (ignorable array))
   #+sbcl
   (let ((g (gensym)))
     `(sb-kernel:with-array-data ((,g ,array) (start) (end))
@@ -151,6 +150,7 @@
   (error "unimplemented"))
 
 (defmacro with-pinned-objects ((&rest objects) &body body)
+  (declare (ignorable objects))
   #+sbcl
   `(sb-sys:with-pinned-objects ,objects
      ,@body)

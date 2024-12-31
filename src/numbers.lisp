@@ -42,7 +42,7 @@
 (declaim (inline restore-fixnum))
 (defun restore-fixnum (storage)
   (declare (optimize (speed 3) (safety 0)))
-  (the (values fixnum &optional) (storage-read-sb64 storage)))
+  (the (values fixnum &optional) (storage-read-fixnum storage)))
 
 (declaim (inline store-only-fixnum))
 (defun store-only-fixnum (fixnum storage &optional (tag +fixnum-code+))
@@ -52,7 +52,7 @@
     (when tag
       (storage-write-byte! storage tag :offset offset :sap sap)
       (incf offset))
-    (storage-write-sb64! storage fixnum :offset offset :sap sap)))
+    (storage-write-fixnum! storage fixnum :offset offset :sap sap)))
 
 ;; Bignum code is based on code from the CL-STORE package which is
 ;; Copyright (c) 2004 Sean Ross
