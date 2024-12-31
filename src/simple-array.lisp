@@ -164,7 +164,7 @@
                      (copy-sap (write-storage-sap storage) offset (vector-sap output) 0 num-bytes))
 		   #-sbcl
 		   (loop
-		     with sap = (storage-sap storage)
+		     with sap = (write-storage-sap storage)
 		     for uint8 across output
 		     for sap-offset from offset
 		     do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
