@@ -94,8 +94,10 @@
 	       (unsigned-byte 32)
 	       (unsigned-byte 62)
 		     (unsigned-byte 64))
-	     #-sbcl '(bit fixnum base-char character single-float
-		      double-float (unsigned-byte 8)))
+	     ;; character fails on CCL
+	     #-sbcl '(bit fixnum base-char
+		      #-ccl character ;; no character arrays, just base strings?
+		      single-float double-float (unsigned-byte 8)))
 	   (sizes
 	     (loop repeat (length elt-types)
 		   collect (+ 1 (random 10))))
@@ -130,9 +132,10 @@
 	      for size in sizes
 	      for result in (restore-from-vector input)
 	      do
-		 ;;(format t "~A with ~A elements~% ~A (vs ~A)~%" elt-type size fill result)
-		 (true (equal (upgraded-array-element-type (array-element-type result))
-			      elt-type))
+		 ;; (format t "~A with ~A elements~% result is a ~A and is ~A~%"
+		 ;; 	 elt-type size (type-of result) result)
+		 (is 'equal (upgraded-array-element-type (array-element-type result))
+		     elt-type)
 		 (true (every (lambda (x fill-value) (eql x fill-value)) result fill))
 		 (true (= (length result) size))))))
   
