@@ -8,6 +8,8 @@ hyperluminal-mem is currently broken in quicklisp (though you can hit accept a c
 
 In terms of feature comparable, cl-store has the best behavior out of the box without requiring anything of the user.  cl-conspack is really nice too, but has some different goals, and it requires adding specialized serializers for each structure or object you use.  It is faster than cl-store which is nice, but not fast enough, and as noted earlier doesn't work well with data containing many instances of structures or classes.  Hyperluminal-mem is a very optimized binary serializer made to write to SAP buffers directly.  It is somewhat extensible and again requires writing code for every struct or object you want to serialize.  It does not do reference or circularity tracking at all.  Hyperluminal-mem is currently broken in quicklisp unfortunately, but you can still load it by accepting the compilation errors (it's problems in stm library).  It's my benchmark for zippy raw data serialization.  We are almost as fast as it in many cases, faster in others, slower in others.
 
+All the tests here are using SBCL.  There is a section at the end where I tried it on CCL
+
 ## Reference tracking disabled
 
 Here we use hyperluminal-mem as the benchmark as it does no reference tracking.  Let's start with some very artificial tests, mainly focused on dispatch code and raw data writing speed.  In this section we disable reference-tracking.  Generally hyperluminal mem wins here (though it generates large files)
@@ -368,3 +370,20 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
      READ : 2218.00 ms at 0 MB/sec <-- I don't know what is going on here
 
 
+## CCL
+
+For reference here is behavior on CCL, not recommended for speed, (on a list that is 100x shorter):
+
+    (defun long-list-of-tiny-integers (&optional (n 10000))
+      (loop repeat n collect (- (random 33) 16)))
+
+    CL-BINARY-STORE> (test-on-data (long-list-of-tiny-integers))
+
+    CL-BINARY-STORE
+     OUTPUT SIZE: 0.02 MB
+     WRITE: 27.11 ms at 1 MB/sec
+     READ : 0.23 ms at 87 MB/sec
+    CL-CONSPACK
+     OUTPUT SIZE: 0.02MB
+     WRITE: 5.56 ms at 4 MB/sec
+     READ : 0.68 ms at 29 MB/sec

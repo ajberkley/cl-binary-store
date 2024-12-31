@@ -1,7 +1,7 @@
 (quicklisp:quickload "cl-store")
 (quicklisp:quickload "hyperluminal-mem")
 (quicklisp:quickload "cl-conspack")
-(require 'sb-sprof)
+#+sbcl (require 'sb-sprof)
 
 (in-package :cl-binary-store)
 
