@@ -43,6 +43,10 @@
   (store nil :type (or null (simple-array (unsigned-byte 8) (*))))
   (underlying-stream nil :type (or null stream)))
 
+(defmacro truly-the (type &body body)
+  #+sbcl `(sb-ext:truly-the ,type ,@body)
+  #-sbcl `(the ,type ,@body))
+
 (declaim (inline storage-write-byte storage-write-byte! storage-write-ub16! storage-write-ub32!
 		 storage-write-ub64! storage-write-sb64! storage-read-sb64!))
 

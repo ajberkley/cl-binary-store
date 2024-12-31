@@ -1,10 +1,5 @@
 (in-package :cl-binary-store)
 
-(defmacro truly-the (type &body body)
-  #+sbcl `(sb-ext:truly-the ,type ,@body)
-  #-sbcl `(the ,type ,@body))
-    
-
 (declaim (#-debug-cbs inline #+debug-cbs notinline maybe-restore-ub8))
 (defun maybe-restore-ub8 (storage)
   "Maybe restore an (unsigned-byte 8) value from storage that has previously
