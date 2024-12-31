@@ -5,7 +5,8 @@
 	#+abcl #:mop
 	#+lispworks #:clos
 	#+clasp #:clos
-	#+ecl #:clos)
+	#+ecl #:clos
+	#+ccl #:ccl)
   (:documentation "A package that exports tools used inside cl-binary-store for use by
  someone writing their own specialized serialization or deserialization routine.")
   (:export
