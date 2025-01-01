@@ -18,7 +18,6 @@
   (declare #-debug-cbs(optimize (speed 3) (safety 0) (debug 0))) ;; called all the time!
   (ensure-enough-data storage 1)
   (let ((offset (read-storage-offset storage)))
-    (declare (type fixnum offset))
     (prog1
 	(sap-ref-8 (read-storage-sap storage) offset)
       (setf (read-storage-offset storage) (truly-the fixnum (+ 1 offset))))))

@@ -225,8 +225,7 @@
  You can call `restore-tagged-unsigned-fixnum' to restore it (or restore-object).  Do
  not call this except during the actual storage phase."
   (declare (optimize (speed 3) (safety 1) (size 0))
-	   (type fixnum fixnum) (type write-storage storage)
-	   (:explain :inlining))
+	   (type fixnum fixnum) (type write-storage storage))
   (if (<= fixnum +maximum-untagged-unsigned-integer+)
       (store-ub8/no-tag (the fixnum (+ fixnum +small-integer-zero-code+)) storage)
       (if (< fixnum 256)
@@ -237,11 +236,15 @@
 	          (store-ub32 fixnum storage)
 	          (store-only-fixnum fixnum storage))))))
 
-(declaim (ftype (function (read-storage) (values fixnum &optional)) restore-tagged-unsigned-fixnum))
+(declaim (ftype (function (read-storage)
+			  #+sbcl (values fixnum &optional)
+			  #-sbcl fixnum)
+		restore-tagged-unsigned-fixnum))
 (defun restore-tagged-unsigned-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
   (declare (optimize (speed 3) (safety 1)))
   (let ((tag (restore-ub8 storage)))
+    (declare (type (unsigned-byte 8) tag))
     (if (<= +small-integer-zero-code+ tag +last-small-integer-code+)
 	(- tag +small-integer-zero-code+)
 	(ecase tag
@@ -250,7 +253,9 @@
 	  (#.+ub32-code+ (restore-ub32 storage))
 	  (#.+fixnum-code+ (restore-fixnum storage))))))
 
-(declaim (ftype (function (read-storage) (values fixnum &optional)) restore-tagged-fixnum))
+(declaim (ftype (function (read-storage)
+			  +sbcl (values fixnum &optional)
+			  #-sbcl fixnum) restore-tagged-fixnum))
 (defun restore-tagged-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
   (let ((tag (restore-ub8 storage)))

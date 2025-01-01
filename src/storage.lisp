@@ -2,7 +2,8 @@
 
 (declaim (inline make-read-storage read-storage-offset read-storage-max read-storage-sap
 		 read-storage-flusher read-storage-store read-storage-size
-		 read-storage-underlying-stream))
+		 read-storage-underlying-stream
+		 (setf read-storage-offset)))
 
 (defstruct read-storage
   "A static memory buffer (SAP) with an OFFSET, which is the offset in bytes of the
@@ -19,7 +20,8 @@
  front of a stream (unused)."
   (offset 0 :type fixnum)
   (max 0 :type fixnum)
-  (sap nil #+sbcl :type #+sbcl sb-alien::system-area-pointer)
+  (sap nil #+sbcl :type #+sbcl sb-alien::system-area-pointer
+	   #+allegro :type #+allegro fixnum)
   (size 0 :type fixnum)
   (flusher nil :type function) ;; reads more data (lambda (storage))
   (store nil :type (or null (simple-array (unsigned-byte 8) (*))))
@@ -28,7 +30,8 @@
 
 (declaim (inline make-write-storage write-storage-offset write-storage-max write-storage-sap
 		 write-storage-flusher write-storage-store write-storage-size
-		 write-storage-underlying-stream))
+		 write-storage-underlying-stream
+		 (setf write-storage-offset)))
 (defstruct write-storage
   "A static memory buffer (SAP) with an OFFSET, which is the offset in bytes where you should
  write new data to.  MAX is the size of the SAP buffer.  STORE, if it exists, is an
@@ -38,7 +41,8 @@
  the flusher."
   (offset 0 :type fixnum) ;; index of the next valid location to write data to
   (max 0 :type fixnum) ;; size of SAP in bytes
-  (sap nil #+sbcl :type #+sbcl sb-alien::system-area-pointer)
+  (sap nil #+sbcl :type #+sbcl sb-alien::system-area-pointer
+	   #+allegro :type #+allegro fixnum)
   (flusher nil :type function) ;; writes out data from sap/store and returns new storage-offset
   (store nil :type (or null (simple-array (unsigned-byte 8) (*))))
   (underlying-stream nil :type (or null stream)))
@@ -57,8 +61,9 @@
   (declare (optimize (speed 3) (safety 0) (debug 0)) (type (unsigned-byte 8) ub8))
   (let ((offset (or offset (write-storage-offset storage))))
     (declare (type fixnum offset))
-    (setf (sap-ref-8 sap offset) ub8)
-    (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 1 offset))))))
+    (set-sap-ref-8 sap offset ub8)
+    (unless offset-provided-p
+      (setf (write-storage-offset storage) (truly-the fixnum (+ 1 offset))))))
 
 (defun storage-write-ub16! (storage ub16 &key (sap (write-storage-sap storage))
 					   (offset nil offset-provided-p))

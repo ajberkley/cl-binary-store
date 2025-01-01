@@ -6,11 +6,16 @@
 ;; for accessing unaligned 8, 16, 32, 64 unsigned bits and 32, 64
 ;; signed bits, and unaligned single-floats and double-floats.
 
-(declaim (inline sap-ref-8 (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
+(declaim (inline (setf sap-ref-8) sap-ref-16 (setf sap-ref-16)
 		 sap-ref-32 (setf sap-ref-32) sap-ref-64 (setf sap-ref-64)
 		 signed-sap-ref-64 (setf signed-sap-ref-64)
 		 sap-ref-double (setf sap-ref-double)
 		 sap-ref-single (setf sap-ref-single)))
+
+;; Terrible compilers
+(defmacro set-sap-ref-8 (sap offset ub8)
+  #+sbcl `(setf (sb-sys:sap-ref-8 sap offset) ub8)
+  #-sbcl `(setf (cffi:mem-ref ,sap :uint8 ,offset) ,ub8))
 
 (defun (setf sap-ref-8) (ub8 sap offset)
   #+sbcl (setf (sb-sys:sap-ref-8 sap offset) ub8)
@@ -45,9 +50,10 @@
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 6)) (logand (ash ub64 -48) #xFF))
 	 (setf (cffi:mem-ref sap :uint8 (+ offset 7)) (logand (ash ub64 -56) #xFF))))
 
-(defun sap-ref-8 (sap offset)
-  #+sbcl (sb-sys:sap-ref-8 sap offset)
-  #-sbcl (cffi:mem-ref sap :uint8 offset))
+;; Have to do this silliness because there are some very bad compilers out there
+(defmacro sap-ref-8 (sap offset)
+  #+sbcl `(sb-sys:sap-ref-8 ,sap ,offset)
+  #-sbcl `(cffi:mem-ref ,sap :uint8 ,offset))
 
 (defun sap-ref-16 (sap offset)
   #+sbcl (sb-sys:sap-ref-16 sap offset)
