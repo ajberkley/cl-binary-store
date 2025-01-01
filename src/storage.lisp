@@ -65,7 +65,7 @@
 	      ,@(when offset `((,offset ,original-offset)))
 	      ,@(when sap
 		  `((,sap (write-storage-sap ,storage)))))
-	 (declare (ignorable ,original-offset))
+	 (declare (ignorable ,original-offset) (type fixnum ,offset))
 	 (progn ,@body
 		,(when reserve-bytes
 		   `(setf (write-storage-offset ,storage) (truly-the fixnum (+ ,original-offset ,reserve-bytes-sym)))))))))

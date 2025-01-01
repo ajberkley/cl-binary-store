@@ -71,7 +71,8 @@
 	   (type (unsigned-byte 8) ub8)
 	   (type write-storage storage))
   (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
-    (set-sap-ref-16 sap offset (+ +ub8-code+ (ash ub8 8)))))
+    ;; Annotations for bad compilers
+    (set-sap-ref-16 sap offset (truly-the fixnum (+ +ub8-code+ (truly-the fixnum (ash ub8 8)))))))
 
 (declaim (inline store-ub16))
 (defun store-ub16 (ub16 storage &optional (tag +ub16-code+))
@@ -80,11 +81,10 @@
  know from the context that the value is a UB16 to save a byte."
   (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 16) ub16))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 3 2) :sap sap)
-    (locally (declare (type fixnum offset))
-      (when tag
-	(set-sap-ref-8 sap offset tag)
-	(incf offset))
-      (set-sap-ref-16 sap offset ub16))))
+    (when tag
+      (set-sap-ref-8 sap offset tag)
+      (incf offset))
+    (set-sap-ref-16 sap offset ub16)))
 
 (declaim (inline store-ub32))
 (defun store-ub32 (ub32 storage &optional (tag +ub32-code+))
