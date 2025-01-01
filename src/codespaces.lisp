@@ -1,5 +1,11 @@
 (in-package :cl-binary-store)
 
+#+allegro
+(eval-when (:compile-toplevel)
+  (setf declared-fixnums-remain-fixnums-switch t)
+  (declaim (optimize (speed 3) (safety 1)
+		     (space 0) (debug 0) (compilation-speed 0))))
+
 ;; A codespace is the collection of `defstore' / `defrestore' definitions
 ;; and `register-references'.
 
@@ -238,13 +244,16 @@
 	 (setf *current-codespace/compile-time* codespace)
 	 (let ((store-objects-source-code
 		 `(lambda (storage &rest stuff)
-			   (declare (optimize speed safety) (type write-storage storage)
+			   (declare (optimize (speed 3) (safety 1)) (type write-storage storage)
 				    (dynamic-extent stuff))
 		    ,(build-store-objects))))
 	   (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
 	   (setf (codespace-store-objects codespace) (compile nil store-objects-source-code)))
 	 (let ((restore-objects-source-code
-		 `(lambda (storage) ,(build-restore-objects))))
+		 `(lambda (storage)
+		    (declare (optimize (speed 3) (safety 1))
+			     (type read-storage storage))
+		    ,(build-restore-objects))))
 	   (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)
 	   (setf (codespace-restore-objects codespace)
 		 (compile nil restore-objects-source-code))))

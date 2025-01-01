@@ -1,5 +1,10 @@
 (in-package :cl-binary-store)
 
+#+allegro
+(eval-when (:compile-toplevel)
+  (declaim (optimize (speed 3) (safety 1)
+		     (space 0) (debug 0) (compilation-speed 0))))
+
 (defvar *eq-refs-table-size* 7
   "A hint for the starting size of the object tracking hash table used for most objects")
 (defvar *double-float-refs-table-size* 7

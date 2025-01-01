@@ -55,7 +55,7 @@
       ;; creating the actual array.
       (let ((elt-type (array-element-type array)))
 	(if (eq elt-type t)
-	    (store-t storage)
+	    (when storage (store-t storage))
 	    (if (symbolp elt-type)
 		(store-symbol elt-type storage eq-refs store-object assign-new-reference-id)
 		(if storage

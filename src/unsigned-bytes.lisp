@@ -1,5 +1,11 @@
 (in-package :cl-binary-store)
 
+#+allegro
+(eval-when (:compile-toplevel)
+  (setf declared-fixnums-remain-fixnums-switch t)
+  (declaim (optimize (speed 3) (safety 1)
+		     (space 0) (debug 0) (compilation-speed 0))))
+
 (declaim (#-debug-cbs inline #+debug-cbs notinline maybe-restore-ub8))
 (defun maybe-restore-ub8 (storage)
   "Maybe restore an (unsigned-byte 8) value from storage that has previously

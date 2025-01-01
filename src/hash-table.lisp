@@ -9,10 +9,10 @@
   (funcall store-object (hash-table-test ht)) ;; a symbol
   (funcall store-object (hash-table-rehash-threshold ht)) ;; float
   (funcall store-object (hash-table-rehash-size ht)) ;; float
-  #+sbcl (store-boolean (sb-ext:hash-table-synchronized-p ht) storage)
-  #-sbcl (store-nil storage)
+  #+sbcl (when storage (store-boolean (sb-ext:hash-table-synchronized-p ht) storage))
+  #-sbcl (when storage (store-nil storage))
   #+sbcl (funcall store-object (sb-ext:hash-table-weakness ht))
-  #-sbcl (store-nil storage)
+  #-sbcl (when storage (store-nil storage))
   (maphash (lambda (k v)
 	     (funcall store-object k)
 	     (funcall store-object v))

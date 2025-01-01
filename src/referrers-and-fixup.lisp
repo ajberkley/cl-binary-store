@@ -1,5 +1,11 @@
 (in-package :cl-binary-store)
 
+#+allegro
+(eval-when (:compile-toplevel)
+  (setf declared-fixnums-remain-fixnums-switch t)
+  (declaim (optimize (speed 3) (safety 1)
+		     (space 0) (debug 0) (compilation-speed 0))))
+
 ;; References are used to handle both circularity and the maintenance
 ;; of equality of objects.  For example if you have two references to
 ;; the same object in your data you do not want them to be restored as

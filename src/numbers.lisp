@@ -1,17 +1,28 @@
 (in-package :cl-binary-store)
 
+
+#+allegro
+(eval-when (:compile-toplevel)
+  (setf declared-fixnums-remain-fixnums-switch t)
+  (declaim (optimize (speed 3) (safety 0)
+		     (space 0) (debug 0) (compilation-speed 0))))
+
 ;; See also unsigned-bytes.lisp for smaller unsigned numbers
 
 (declaim (inline store-sb8))
-(defun store-sb8/tag (sb8 storage &optional (tag +sb8-code+))
-  "Store an (integer -255 0) value SB8 to STORAGE.  Set TAG to NIL if your
+(defun store-sb8 (sb8 storage &optional (tag +sb8-code+))
+    "Store an (integer -255 0) value SB8 to STORAGE.  Set TAG to NIL if your
  deserializer will know this is a SB8 value and the value will be written
  without a tag byte.  It's a bit odd to have (integer -255 0) but the dispatch
  cost is negligible.... the tag byte is the sign bit."
-  (declare (optimize (speed 3) (safety 1)) (type (integer -255 0) sb8))
-  (if tag
-      (store-ub8/tag (- sb8) storage)
-      (store-ub8/no-tag (- sb8) storage)))
+  (declare (optimize (speed 3) (safety 1)) (type (integer -255 0) sb8)
+	   (type write-storage storage))
+  (let ((ub8 (- sb8)))
+    (if tag
+	(with-write-storage (storage :offset offset :reserve-bytes 2)
+	  (storage-write-ub16! storage (+ tag (ash ub8 8)) :offset offset))
+	(with-write-storage (storage :offset offset :reserve-bytes 1)
+	  (storage-write-byte! storage ub8 :offset offset)))))
 
 (declaim (notinline store-sb16))
 (defun store-sb16 (sb16 storage &optional (tag +sb16-code+))
@@ -167,7 +178,7 @@
       (storage-write-byte! storage +ratio-code+ :offset offset :sap sap))
     (labels ((store-integer (integer)
                (if (typep integer 'fixnum)
-                   (store-fixnum integer storage)
+                   (when storage (store-fixnum integer storage))
                    (store-bignum integer storage))))
       (store-integer (numerator ratio))
       (store-integer (denominator ratio)))))
@@ -224,7 +235,7 @@
   "Store and tag a number from 0 to max-positive-fixnum.
  You can call `restore-tagged-unsigned-fixnum' to restore it (or restore-object).  Do
  not call this except during the actual storage phase."
-  (declare (optimize (speed 3) (safety 1) (size 0))
+  (declare (optimize (speed 3) (safety 1))
 	   (type fixnum fixnum) (type write-storage storage))
   (if (<= fixnum +maximum-untagged-unsigned-integer+)
       (store-ub8/no-tag (the fixnum (+ fixnum +small-integer-zero-code+)) storage)
@@ -254,7 +265,7 @@
 	  (#.+fixnum-code+ (restore-fixnum storage))))))
 
 (declaim (ftype (function (read-storage)
-			  +sbcl (values fixnum &optional)
+			  #+sbcl (values fixnum &optional)
 			  #-sbcl fixnum) restore-tagged-fixnum))
 (defun restore-tagged-fixnum (storage)
   "Read back a number written by `store-tagged-unsigned-fixnum'."
@@ -270,7 +281,7 @@
 	  (#.+sb16-code+ (restore-sb16 storage))
 	  (#.+sb32-code+ (restore-sb32 storage))))))
 
-(declaim (inline store-fixnum))
+(declaim (notinline store-fixnum))
 (defun store-fixnum (fixnum storage)
   "Store and tag a fixnum; "
   (declare (type fixnum fixnum) (optimize (speed 3) (safety 1)) (type write-storage storage))

@@ -48,5 +48,5 @@
 	 (values nil :ignore))))))
 
 (defmethod store-action ((action magic-number) storage store-object)
-  (store-fixnum (magic-number-number action) storage))
+  (when storage (store-fixnum (magic-number-number action) storage)))
   

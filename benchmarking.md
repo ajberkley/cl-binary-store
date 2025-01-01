@@ -370,83 +370,39 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
 
 ## ECL, CCL, Allegro
 
-None are recommended for speed, they are about 100x slower than the sbcl version (which is really bonkers --- I think this could easily be fixed, especially Allegro can be made very zippy I am sure).  I couldn't test hyperluminal mem on Allegro as it does not load.
+None are recommended for speed, they are about 10-100x slower than the sbcl version (which is really bonkers).  Without a lot of manual work this isn't easily fixable.  The code is written with the idea that function inlining works well in exchange for having readable code, but, for example, Allegro ignores inline declarations except for very very specific cases.  cl-binary-store is still the fastest among cl-store and cl-conspack (couldn't test hyperluminal-mem on Allegro because it didn't load) but that's not saying much.
 
-    ;; Using a 100x shorter list for this test because its slow (and no reference tracking)
-    CL-BINARY-STORE> (test-on-data (long-list-of-tiny-integers 10000))
+    ;; Using a 10x shorter list for this test because its slow (and no reference tracking)
+    ;; So Allegro here is 10x slower than the equivalent on sbcl
+    CL-USER> (test-on-data (long-list-of-tiny-integers 100000))
     ALLEGRO CL-BINARY-STORE
-     OUTPUT SIZE: 0.02 MB
-     WRITE: 5.20 ms at 4 MB/sec
-     READ : 1.03 ms at 19 MB/sec
-    ALLEGRO CL-CONSPACK
-     OUTPUT SIZE: 0.02MB
-     WRITE: 0.90 ms at 22 MB/sec
-     READ : 1.50 ms at 13 MB/sec
-    ALLEGRO CL-STORE
-     OUTPUT SIZE: 0.05MB
-     WRITE: 3.10 ms at 16 MB/sec
-     READ : 1.90 ms at 26 MB/sec    
-    ECL HYPERLUMINAL-MEM
-     OUTPUT SIZE: 0.08 MB
-     WRITE: 4.80 ms at 17 MB/sec
-     READ : 5.55 ms at 14 MB/sec
+     OUTPUT SIZE: 0.20 MB
+     WRITE: 5.15 ms at 39 MB/sec
+     READ : 9.05 ms at 22 MB/sec
+    ;; Using a 100x shorter list for this test because its slow (and no reference tracking)
+    ;; So it's about 100x slower on these two.
+    CL-USER> (test-on-data (long-list-of-tiny-integers 10000))     
     ECL CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
      WRITE: 6.34 ms at 3 MB/sec
      READ : 7.71 ms at 3 MB/sec
-    ECL CL-CONSPACK
-     OUTPUT SIZE: 0.02MB
-     WRITE: 5.04 ms at 4 MB/sec
-     READ : 4.66 ms at 4 MB/sec
-    ECL CL-STORE
-     OUTPUT SIZE: 0.05MB
-     WRITE: 6.62 ms at 8 MB/sec
-     READ : 10.79 ms at 5 MB/sec
     CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
      WRITE: 27.11 ms at 1 MB/sec
-     READ : 0.23 ms at 87 MB/sec
-    CCL CL-CONSPACK
-     OUTPUT SIZE: 0.02MB
-     WRITE: 5.56 ms at 4 MB/sec
-     READ : 0.68 ms at 29 MB/sec
+     READ : 0.23 ms at 87 MB/sec <-- this is weird, and maybe a bug?
 
 It's not quite so terrible at double floats... on ECL and CCL and Allegro
 
-    CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats 10000))
+    CL-USER> (test-on-data (long-list-of-random-double-floats 10000))
     ALLEGRO CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
-     WRITE: 2.53 ms at 40 MB/sec
-     READ : 4.35 ms at 23 MB/sec
-    ALLEGRO CL-CONSPACK
-     OUTPUT SIZE: 0.09MB
-     WRITE: 8.30 ms at 11 MB/sec
-     READ : 16.60 ms at 5 MB/sec
-    ALLEGRO CL-STORE
-     OUTPUT SIZE: 0.48MB
-     WRITE: 12.50 ms at 38 MB/sec
-     READ : 19.20 ms at 25 MB/sec    
-    ECL HYPERLUMINAL-MEM
-     OUTPUT SIZE: 0.16 MB
-     WRITE: 13.96 ms at 11 MB/sec
-     READ : 11.62 ms at 14 MB/sec
+     WRITE: 1.58 ms at 63 MB/sec
+     READ : 4.13 ms at 24 MB/sec
     ECL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
      WRITE: 12.30 ms at 8 MB/sec
      READ : 23.30 ms at 4 MB/sec
-    ECL CL-CONSPACK
-     OUTPUT SIZE: 0.09MB
-     WRITE: 25.91 ms at 3 MB/sec
-     READ : 29.86 ms at 3 MB/sec
-    ECL CL-STORE
-     OUTPUT SIZE: 0.48MB
-     WRITE: 70.37 ms at 7 MB/sec
-     READ : 62.12 ms at 8 MB/sec
     CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
      WRITE: 19.08 ms at 5 MB/sec
-     READ : 0.35 ms at 288 MB/sec  <-- this is interesting, a sweet spot for CCL
-    CCL CL-CONSPACK
-     OUTPUT SIZE: 0.09MB
-     WRITE: 14.69 ms at 6 MB/sec
-     READ : 12.18 ms at 7 MB/sec
+     READ : 0.35 ms at 288 MB/sec  <-- this is weird, and maybe a bug?
