@@ -77,7 +77,7 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
     CL-BINARY-STORE-USER> (restore "blarg.bin")
     HI
     CL-BINARY-STORE-USER> (store nil (make-string 1 :initial-element #\U+03b1))
-    #(31 210 206 177) ;; 31 is simple-string, 210 encoded length = 2, 206 117 = α
+    #(30 210 206 177) ;; 31 is simple-string, 210 encoded length = 2, 206 117 = α
 
     CL-BINARY-STORE-USER> (let* ((*print-circle* t)
                                  (v (make-array 1)))
