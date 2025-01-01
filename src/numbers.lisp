@@ -101,8 +101,9 @@
 	      collect (restore-ub32 storage))))))
 
 (defun store-bignum (bignum storage)
-  (with-write-storage (storage)
-    (storage-write-byte storage +bignum-code+)
+  (when storage
+    (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+      (set-sap-ref-8 sap offset +bignum-code+))
     (multiple-value-bind (ub32s count)
 	(num->bits bignum)
       (declare (type fixnum count))

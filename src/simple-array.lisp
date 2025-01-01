@@ -287,8 +287,9 @@
 (defun store-simple-specialized-array (sa storage)
   (declare (optimize speed safety)
 	   (type (simple-array * *) sa))
-  (with-write-storage (storage)
-    (storage-write-byte storage +simple-specialized-array-code+)
+  (when storage
+    (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+      (storage-write-byte storage +simple-specialized-array-code+))
     (let* ((array-dimensions (array-dimensions sa))
 	   (num-elts (array-total-size sa)))
       (storage-write-byte storage (length array-dimensions))
