@@ -372,9 +372,9 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
      WRITE: 15.20 ms at 14 MB/sec
      READ : 2218.00 ms at 0 MB/sec <-- I don't know what is going on here
 
-## ECL, CCL, Allegro
+## ECL, CCL, Allegro, Lispworks and ABCL
 
-None are recommended for speed, they are about 10-100x slower than the sbcl version (which is really bonkers).  Without a lot of manual work this isn't easily fixable.  The code is written with the idea that function inlining works well in exchange for having readable code, but, for example, Allegro ignores inline declarations except for very very specific cases.  cl-binary-store is still the fastest among cl-store and cl-conspack (couldn't test hyperluminal-mem on Allegro because it didn't load) but that's not saying much.
+None are recommended for speed, they are about 4-100x slower than the sbcl version.  cl-binary-store is still the fastest among cl-store and cl-conspack.  I would do more optimization on Allegro and Lispworks but their heap/time limitations make it near impossible to do any real work.
 
     ;; Using a 100x shorter list for this test because these implementations are slow
     CL-USER> (test-on-data (long-list-of-tiny-integers 10000))
@@ -382,6 +382,10 @@ None are recommended for speed, they are about 10-100x slower than the sbcl vers
      OUTPUT SIZE: 0.02 MB
      WRITE: 0.24 ms at 83 MB/sec
      READ : 0.89 ms at 22 MB/sec
+    LISPWORKS CL-BINARY-STORE <-- about 5x slower than sbcl
+     OUTPUT SIZE: 0.02 MB
+     WRITE: 0.32 ms at 63 MB/sec
+     READ : 1.17 ms at 17 MB/sec
     CCL CL-BINARY-STORE  <-- about 4x slower than sbcl
      OUTPUT SIZE: 0.02 MB
      WRITE: 0.27 ms at 74 MB/sec
