@@ -162,8 +162,8 @@
 (defun long-list-of-random-complex-double-floats (&optional (n 1000000))
   (loop repeat n collect (complex (random 1d0) (random 1d0))))
 
-(defun long-list-of-big-ub8-vectors ()
-  (loop repeat 1000
+(defun long-list-of-big-ub8-vectors (&optional (n 1000))
+  (loop repeat n
 	collect
 	(coerce
 	 (loop for i fixnum from 0 below 10000
