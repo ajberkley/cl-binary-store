@@ -6,7 +6,7 @@
   :pathname "src/"
   :depends-on (#:flexi-streams
 	       #:babel
-	       #:static-vectors
+	       #:static-vectors #:alexandria
 	       #-sbcl #:cffi)
   :components ((:file "features")
 	       (:file "cl-binary-store")

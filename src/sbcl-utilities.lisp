@@ -1,5 +1,6 @@
 (in-package :cl-binary-store)
 
+#+sbcl
 (sb-alien:define-alien-routine "memcpy" sb-alien:void
   (dest sb-alien:system-area-pointer :in)
   (src sb-alien:system-area-pointer :in)
@@ -10,20 +11,20 @@
   (case n
     (0)
     (1
-     (setf (sap-ref-8 target-sap target-offset)
-	   (sap-ref-8 source-sap source-offset)))
+     (set-sap-ref-8 target-sap target-offset (sap-ref-8 source-sap source-offset)))
     (2
-     (setf (sap-ref-16 target-sap target-offset)
-	   (sap-ref-16 source-sap source-offset)))
+     (set-sap-ref-16 target-sap target-offset (sap-ref-16 source-sap source-offset)))
     (4
-     (setf (sap-ref-32 target-sap target-offset)
-	   (sap-ref-32 source-sap source-offset)))
+     (set-sap-ref-32 target-sap target-offset (sap-ref-32 source-sap source-offset)))
     (8
-     (setf (sap-ref-64 target-sap target-offset)
-	   (sap-ref-64 source-sap source-offset)))
+     (set-sap-ref-64 target-sap target-offset (sap-ref-64 source-sap source-offset)))
     (t
-     (memcpy (sb-sys:sap+ target-sap target-offset)
-	     (sb-sys:sap+ source-sap source-offset)
+     #+sbcl (memcpy (sb-sys:sap+ target-sap target-offset)
+		    (sb-sys:sap+ source-sap source-offset)
+		    n)
+     #-sbcl (static-vectors:replace-foreign-memory
+	     (cffi:inc-pointer target-sap target-offset)
+	     (cffi:inc-pointer source-sap source-offset)
 	     n))))
 
 (declaim (inline copy-n-bytes))

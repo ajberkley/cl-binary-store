@@ -109,20 +109,20 @@
 (defun store-simple-base-string (string storage &optional references assign-new-reference-id)
   (declare (optimize speed safety) (type simple-base-string string))
   (labels ((write-it ()
-	     (with-write-storage (storage)
-	       (storage-write-byte storage +simple-base-string-code+)
-	       (let ((string-length (length string)))
-		 (store-tagged-unsigned-fixnum string-length storage)
-		 #+sbcl (with-pinned-objects (string)
-			  (write-sap-data-to-storage (vector-sap string)
-						     string-length storage))
-		 #-sbcl (loop
-			  with sap = (write-storage-sap storage)
-			  for char of-type base-char across string
-			  for string-offset from 0 below string-length
-			  for sap-offset from (write-storage-offset storage)
-			  do (setf (cffi:mem-ref sap :uint8 sap-offset) (char-code char))
-			  finally (incf (write-storage-offset storage) string-length))))))
+	     (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+	       (set-sap-ref-8 sap offset +simple-base-string-code+))
+	     (let ((string-length (length string)))
+	       (store-tagged-unsigned-fixnum string-length storage)
+	       #+sbcl (with-pinned-objects (string)
+			(write-sap-data-to-storage (vector-sap string)
+						   string-length storage))
+	       #-sbcl (loop
+			with sap = (write-storage-sap storage)
+			for char of-type base-char across string
+			for string-offset from 0 below string-length
+			for sap-offset from (write-storage-offset storage)
+			do (setf (cffi:mem-ref sap :uint8 sap-offset) (char-code char))
+			finally (incf (write-storage-offset storage) string-length)))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -150,13 +150,14 @@
 (defun store-simple-string (string storage &optional references assign-new-reference-id)
   (declare (optimize speed safety) (type simple-string string))
   (labels ((write-it ()
-	     (with-write-storage (storage)
-	       #+(or (not sbcl) (and sbcl sb-unicode))
+	     #+(or (not sbcl) (and sbcl sb-unicode))
+	     (when storage
+	       (with-write-storage (storage :sap sap :offset offset :reserve-bytes 1)
+	       	 (set-sap-ref-8 sap offset +simple-string-code+))
 	       ;; Ideally we'd avoid this copy
 	       (let* ((output #+sbcl (sb-ext:string-to-octets string :external-format :utf-8)
 			      #-sbcl (babel:string-to-octets string :encoding :utf-8))
-		      (num-bytes (length output)))
-		 (storage-write-byte storage +simple-string-code+)
+		      (num-bytes (length output))) 
 		 (store-tagged-unsigned-fixnum num-bytes storage)
 		 (let ((offset (ensure-enough-room-to-write storage num-bytes)))
                    #+sbcl
@@ -168,8 +169,8 @@
 		     for uint8 across output
 		     for sap-offset from offset
 		     do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
-		   (setf (write-storage-offset storage) (truly-the fixnum (+ offset num-bytes)))))
-	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil))))
+		   (setf (write-storage-offset storage) (truly-the fixnum (+ offset num-bytes))))))
+	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil)))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -226,8 +227,10 @@
 #+sbcl
 (defun store-simple-specialized-vector (sv storage &optional (tag t))
   (declare (optimize speed safety) (type (simple-array * (*)) sv))
-  (with-write-storage (storage)
-    (when tag (storage-write-byte storage +simple-specialized-vector-code+))
+  (when storage
+    (when tag
+      (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
+	(set-sap-ref-8 sap offset +simple-specialized-vector-code+)))
     (let ((sv-length (length sv)))
       (store-tagged-unsigned-fixnum sv-length storage)
       (multiple-value-bind (bytes-to-write encoded-element-type)

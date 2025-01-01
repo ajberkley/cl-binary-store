@@ -19,10 +19,10 @@
 	   (type write-storage storage))
   (let ((ub8 (- sb8)))
     (if tag
-	(with-write-storage (storage :offset offset :reserve-bytes 2)
-	  (storage-write-ub16! storage (+ tag (ash ub8 8)) :offset offset))
-	(with-write-storage (storage :offset offset :reserve-bytes 1)
-	  (storage-write-byte! storage ub8 :offset offset)))))
+	(with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
+	  (set-sap-ref-16 sap offset (+ tag (ash ub8 8))))
+	(with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+	  (set-sap-ref-8 sap offset ub8)))))
 
 (declaim (notinline store-sb16))
 (defun store-sb16 (sb16 storage &optional (tag +sb16-code+))
@@ -52,10 +52,15 @@
  been stored by STORE-UB32."
   (- (restore-ub32 storage)))
 
+
 (declaim (inline restore-fixnum))
 (defun restore-fixnum (storage)
   (declare (optimize (speed 3) (safety 0)))
-  (the (values fixnum &optional) (storage-read-fixnum storage)))
+  (ensure-enough-data storage 8)
+  (let* ((offset (read-storage-offset storage))
+	 (fixnum (signed-sap-ref-64 (read-storage-sap storage) offset)))
+    (setf (read-storage-offset storage) (truly-the fixnum (+ offset 8)))
+    (truly-the fixnum fixnum)))
 
 (declaim (inline store-only-fixnum))
 (defun store-only-fixnum (fixnum storage &optional (tag +fixnum-code+))
@@ -63,9 +68,9 @@
 	   (type (or null write-storage) storage))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
     (when tag
-      (storage-write-byte! storage tag :offset offset :sap sap)
+      (set-sap-ref-8 sap offset tag)
       (incf offset))
-    (storage-write-fixnum! storage fixnum :offset offset :sap sap)))
+    (set-signed-sap-ref-64 sap offset fixnum)))
 
 ;; Bignum code is based on code from the CL-STORE package which is
 ;; Copyright (c) 2004 Sean Ross
@@ -118,9 +123,9 @@
   (declare (optimize (speed 3) (safety 1)) (type single-float single-float))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 5 4) :sap sap)
     (when tag
-      (storage-write-byte! storage +single-float-code+ :offset offset :sap sap)
+      (set-sap-ref-8 sap offset +single-float-code+)
       (incf offset))
-    (setf (sap-ref-single sap offset) single-float)))
+    (set-sap-ref-single sap offset single-float)))
 
 (declaim (inline restore-double-float))
 (defun restore-double-float (storage)
@@ -160,9 +165,9 @@
 				      assign-new-reference-id)
         (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
           (when tag
-	    (storage-write-byte! storage +double-float-code+ :offset offset :sap sap)
+	    (set-sap-ref-8 sap offset +double-float-code+)
 	    (incf offset))
-	  (setf (sap-ref-double sap offset) double-float)))))
+	  (set-sap-ref-double sap offset double-float)))))
 
 (defun restore-ratio (restore-object)
   (declare (optimize (speed 3) (safety 1)) (type function restore-object))
@@ -175,7 +180,7 @@
   (declare (optimize (speed 3) (safety 1)))
   (maybe-store-reference-instead (ratio storage num-eq-refs assign-new-reference-id)
     (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
-      (storage-write-byte! storage +ratio-code+ :offset offset :sap sap))
+      (set-sap-ref-8 sap offset +ratio-code+))
     (labels ((store-integer (integer)
                (if (typep integer 'fixnum)
                    (when storage (store-fixnum integer storage))
@@ -196,7 +201,7 @@
     ((complex single-float) (store-complex-single-float complex storage))
     (t
      (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
-       (storage-write-byte! storage +complex-code+ :offset offset :sap sap))
+       (set-sap-ref-8 sap offset +complex-code+))
      (locally (declare (type function store-object))
        ;; We know it's a number, but overhead is small
        (funcall store-object (realpart complex))
@@ -212,7 +217,7 @@
 (defun store-complex-double-float (complex-double-float storage)
   (declare (optimize (speed 3) (safety 1)) (type (complex double-float) complex-double-float))
   (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
-    (storage-write-byte! storage +complex-double-float-code+ :offset offset :sap sap))
+    (set-sap-ref-8 sap offset +complex-double-float-code+))
   (store-double-float (realpart complex-double-float) storage nil nil nil)
   (store-double-float (imagpart complex-double-float) storage nil nil nil))
 
@@ -226,7 +231,7 @@
 (defun store-complex-single-float (complex-single-float storage)
   (declare (optimize (speed 3) (safety 1)) (type (complex single-float) complex-single-float))
   (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
-    (storage-write-byte! storage +complex-single-float-code+ :sap sap :offset offset))
+    (set-sap-ref-8 sap offset +complex-single-float-code+))
   (store-single-float (realpart complex-single-float) storage nil)
   (store-single-float (imagpart complex-single-float) storage nil))
 

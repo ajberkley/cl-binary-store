@@ -23,7 +23,8 @@
   (tagbody start
      (when (referenced-already cons storage eq-refs assign-new-reference-id)
        (return-from store-cons (values)))
-     (storage-write-byte storage +cons-code+)
+     (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+       (set-sap-ref-8 sap offset +cons-code+))
      (funcall store-object (car cons))
      (let ((cdr (cdr cons)))
        (if (consp cdr)

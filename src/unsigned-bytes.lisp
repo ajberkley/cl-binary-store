@@ -59,10 +59,8 @@
   (declare (optimize (speed 3) (safety 1))
 	   (type (unsigned-byte 8) ub8)
 	   (type write-storage storage))
-  (with-write-storage (storage :offset offset :reserve-bytes 1)
-    (locally (declare (type (unsigned-byte 8) ub8)
-		      (type fixnum offset)) ;; allegro is not smart
-      (storage-write-byte! storage ub8 :offset offset))))
+  (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+    (set-sap-ref-8 sap offset ub8)))
 
 (declaim (inline store-ub8/tag))
 (defun store-ub8/tag (ub8 storage)
@@ -72,9 +70,8 @@
   (declare (optimize (speed 3) (safety 1))
 	   (type (unsigned-byte 8) ub8)
 	   (type write-storage storage))
-  (with-write-storage (storage :offset offset :reserve-bytes 2)
-    (locally (declare (type fixnum offset)) ;; allegro is not smart
-      (storage-write-ub16! storage (+ +ub8-code+ (ash ub8 8)) :offset offset))))
+  (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
+    (set-sap-ref-16 sap offset (+ +ub8-code+ (ash ub8 8)))))
 
 (declaim (inline store-ub16))
 (defun store-ub16 (ub16 storage &optional (tag +ub16-code+))
@@ -85,9 +82,9 @@
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 3 2) :sap sap)
     (locally (declare (type fixnum offset))
       (when tag
-	(storage-write-byte! storage tag :offset offset :sap sap)
+	(set-sap-ref-8 sap offset tag)
 	(incf offset))
-      (storage-write-ub16! storage ub16 :offset offset :sap sap))))
+      (set-sap-ref-16 sap offset ub16))))
 
 (declaim (inline store-ub32))
 (defun store-ub32 (ub32 storage &optional (tag +ub32-code+))
@@ -98,6 +95,6 @@
 	   (type (or null (unsigned-byte 8)) tag))
   (with-write-storage (storage :offset offset :reserve-bytes (if tag 5 4) :sap sap)
     (when tag
-      (storage-write-byte! storage tag :offset offset :sap sap)
+      (set-sap-ref-8 sap offset tag)
       (incf offset))
-    (storage-write-ub32! storage ub32 :offset offset :sap sap)))
+    (set-sap-ref-32 sap offset ub32)))

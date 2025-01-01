@@ -8,7 +8,7 @@ hyperluminal-mem is currently broken in quicklisp (though you can hit accept a c
 
 In terms of feature comparable, cl-store has the best behavior out of the box without requiring anything of the user.  cl-conspack is really nice too, but has some different goals, and it requires adding specialized serializers for each structure or object you use.  It is faster than cl-store which is nice, but not fast enough, and as noted earlier doesn't work well with data containing many instances of structures or classes.  Hyperluminal-mem is a very optimized binary serializer made to write to SAP buffers directly.  It is somewhat extensible and again requires writing code for every struct or object you want to serialize.  It does not do reference or circularity tracking at all.  Hyperluminal-mem is currently broken in quicklisp unfortunately, but you can still load it by accepting the compilation errors (it's problems in stm library).  It's my benchmark for zippy raw data serialization.  We are almost as fast as it in many cases, faster in others, slower in others.
 
-All the tests here are using SBCL.  There is a section at the end where I run some on ECL, CCL, and Allegro which are... slow (currently).  I think at least Allegro could be sped up quite a lot.
+All the tests here are mainly using SBCL as that is (by far) the fastest implementation.  There is a section at the end where I run some on ECL, CCL, and Allegro.
 
 ## Reference tracking disabled
 
@@ -376,16 +376,12 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
 
 None are recommended for speed, they are about 10-100x slower than the sbcl version (which is really bonkers).  Without a lot of manual work this isn't easily fixable.  The code is written with the idea that function inlining works well in exchange for having readable code, but, for example, Allegro ignores inline declarations except for very very specific cases.  cl-binary-store is still the fastest among cl-store and cl-conspack (couldn't test hyperluminal-mem on Allegro because it didn't load) but that's not saying much.
 
-    ;; Using a 10x shorter list for this test because its slow (and no reference tracking)
-    ;; So Allegro here is 10x slower than the equivalent on sbcl
-    CL-USER> (test-on-data (long-list-of-tiny-integers 100000))
-    ALLEGRO CL-BINARY-STORE
-     OUTPUT SIZE: 0.20 MB
-     WRITE: 5.15 ms at 39 MB/sec
-     READ : 9.05 ms at 22 MB/sec
-    ;; Using a 100x shorter list for this test because its slow (and no reference tracking)
-    ;; So it's about 100x slower on these two.
-    CL-USER> (test-on-data (long-list-of-tiny-integers 10000))     
+    ;; Using a 10x0 shorter list for this test because these implementations are slow
+    CL-USER> (test-on-data (long-list-of-tiny-integers 10000))
+    ALLEGRO CL-BINARY-STORE <-- not so terribly slow, only 4x slower than sbcl
+     OUTPUT SIZE: 0.02 MB
+     WRITE: 0.24 ms at 83 MB/sec
+     READ : 0.89 ms at 22 MB/sec
     ECL CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
      WRITE: 6.34 ms at 3 MB/sec
@@ -393,9 +389,9 @@ None are recommended for speed, they are about 10-100x slower than the sbcl vers
     CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.02 MB
      WRITE: 27.11 ms at 1 MB/sec
-     READ : 0.23 ms at 87 MB/sec <-- this is weird, and maybe a bug?
+     READ : 0.23 ms at 87 MB/sec <-- this is weird, and probably a bug?
 
-It's not quite so terrible at double floats... on ECL and CCL and Allegro
+And on double-floats
 
     CL-USER> (test-on-data (long-list-of-random-double-floats 10000))
     ALLEGRO CL-BINARY-STORE
@@ -409,4 +405,4 @@ It's not quite so terrible at double floats... on ECL and CCL and Allegro
     CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
      WRITE: 19.08 ms at 5 MB/sec
-     READ : 0.35 ms at 288 MB/sec  <-- this is weird, and maybe a bug?
+     READ : 0.35 ms at 288 MB/sec  <-- this is weird, and probably a bug?

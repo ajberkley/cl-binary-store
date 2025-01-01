@@ -239,7 +239,7 @@
   "Write an indicator that we should assign a reference id to the next object; that is place
  it in the restore reference-vector (and increment the ref-id counter)."
   (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
-    (storage-write-byte! storage +new-reference-indicator-code+ :sap sap :offset offset)))
+    (set-sap-ref-8 sap offset +new-reference-indicator-code+)))
 
 (declaim (inline restore-new-reference-indicator))
 (defun restore-new-reference-indicator (references restore-object)
@@ -259,21 +259,22 @@
     #+dribble-cbs (format t "Writing reference ~A~%" ref-index)
     (cond
       ((<= +reference-direct-min-ref-id+ ref-index +reference-direct-max-ref-id+)
-       (storage-write-byte storage (encode-reference-direct ref-index)))
+       (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+	 (set-sap-ref-8 sap offset (encode-reference-direct ref-index))))
       ((<= ref-index +reference-one-byte-max-ref-id+)
        (with-write-storage (storage :offset offset :reserve-bytes 2 :sap sap)
 	 ;;(format t "~16,'0b~%" (encode-reference-one-byte ref-index))
-	 (storage-write-ub16! storage (encode-reference-one-byte ref-index)
-			      :sap sap :offset offset)))
+	 (set-sap-ref-16 sap offset (encode-reference-one-byte ref-index))))
       ((<= ref-index +reference-two-byte-max-ref-id+)
-	  (with-write-storage (storage :offset offset :reserve-bytes 3 :sap sap)
-	    (multiple-value-bind (tag-byte second-two-bytes)
-		(encode-reference-two-bytes ref-index)
-	      ;;(format t "~16,'0b~8,'0b~%" second-two-bytes tag-byte)
-	      (storage-write-byte! storage tag-byte :sap sap :offset offset)
-	      (storage-write-ub16! storage second-two-bytes :sap sap :offset (incf offset)))))
+       (multiple-value-bind (tag-byte second-two-bytes)
+	   (encode-reference-two-bytes ref-index)
+	 ;;(format t "~16,'0b~8,'0b~%" second-two-bytes tag-byte)
+	 (with-write-storage (storage :offset offset :reserve-bytes 3 :sap sap)
+	   (set-sap-ref-8 sap offset tag-byte)
+	   (set-sap-ref-16 sap (incf offset) second-two-bytes))))
       (t
-       (storage-write-byte storage +tagged-reference-code+)
+       (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+	 (set-sap-ref-8 sap offset +tagged-reference-code+))
        (store-tagged-unsigned-integer (encode-reference-tagged ref-index) storage)))))
 
 (declaim (inline restore-reference))

@@ -7,6 +7,7 @@
 	#+clasp #:clos
 	#+ecl #:clos
 	#+ccl #:ccl)
+  (:import-from #:alexandria #:once-only)
   (:documentation "A package that exports tools used inside cl-binary-store for use by
  someone writing their own specialized serialization or deserialization routine.")
   (:export
@@ -131,8 +132,6 @@
    #:rebuild-dispatch
    #:make-end-marker
    #:with-write-storage
-   #:storage-write-byte
-   #:storage-write-byte!
    #:copy-sap
    #:ensure-enough-data
    #:copy-n-bytes
