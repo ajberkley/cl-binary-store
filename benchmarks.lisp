@@ -21,7 +21,7 @@
                         "")))))))
 
 
-#-allegro
+#-(or allegro abcl) ;; crashes on abcl
 (defun test-hlmem-on-data (data &key (repeats 100))
   (let* ((words (hyperluminal-mem:msize 0 data))
          (output-size (/ (* 8 words) 1e6)))
@@ -130,7 +130,7 @@
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
 (defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
-  #-allegro
+  #-(or allegro abcl)
   (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
@@ -268,8 +268,8 @@
 (defun simple-strings ()
   (loop for i below 100000
         collect (format nil "~A~A" (random 1000000)
-			#+allegro (code-char #x03b1)
-			#-allegro #\U+03b1)))
+			#+(or abcl allegro) (code-char #x03b1)
+			#-(or abcl allegro) #\U+03b1)))
 
 (defun a-pile-of-tangled-conses (&optional (number 20000))
   (let ((a (make-array number)))
