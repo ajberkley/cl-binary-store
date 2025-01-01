@@ -228,12 +228,15 @@
 (conspack:defencoding bench-blarg
   a b)
 
+#-allegro
 (defmethod hyperluminal-mem:msize-object ((b bench-blarg) index)
   (hyperluminal-mem:msize* index (bench-blarg-a b) (bench-blarg-b b)))
 
+#-allegro
 (defmethod hyperluminal-mem:mwrite-object ((b bench-blarg) ptr index end-index)
   (hyperluminal-mem:mwrite* ptr index end-index (bench-blarg-a b) (bench-blarg-b b)))
 
+#-allegro
 (defmethod hyperluminal-mem:mread-object ((type (eql 'bench-blarg)) ptr index end-index &key)
   (hyperluminal-mem:with-mread* (a b new-index) (ptr index end-index)
     (values
