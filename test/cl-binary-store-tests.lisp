@@ -355,9 +355,11 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun store-string-for-tests (obj storage)
+    ;; Write nothing!
     (declare (ignore obj storage)))
   (define-codespace ("test-codespace" 999999 :inherits-from +basic-codespace+)
-    (defstore simple-string (store-string-for-tests obj storage) :override t)))
+    (defstore simple-string (store-string-for-tests obj storage) :override t)
+    (defstore simple-base-string (store-string-for-tests obj storage) :override t)))
 
 (define-test test-versioning
   (true (null (restore
