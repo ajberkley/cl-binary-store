@@ -85,7 +85,11 @@
 	when (or is-structure-object
 		 store-class-slots
 		 (not (eql (slot-definition-allocation slot) :class)))
-	  collect (slot-definition-name slot)))
+	  collect
+	#+abcl (if is-structure-object
+		   (sys::dsd-name slot)
+		   (slot-definition-name slot))
+	#-abcl (slot-definition-name slot)))
 
 (defgeneric serializable-object-info (type)
   (:documentation
