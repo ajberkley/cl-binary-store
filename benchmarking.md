@@ -376,22 +376,22 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
 
 None are recommended for speed, they are about 10-100x slower than the sbcl version (which is really bonkers).  Without a lot of manual work this isn't easily fixable.  The code is written with the idea that function inlining works well in exchange for having readable code, but, for example, Allegro ignores inline declarations except for very very specific cases.  cl-binary-store is still the fastest among cl-store and cl-conspack (couldn't test hyperluminal-mem on Allegro because it didn't load) but that's not saying much.
 
-    ;; Using a 10x0 shorter list for this test because these implementations are slow
+    ;; Using a 100x shorter list for this test because these implementations are slow
     CL-USER> (test-on-data (long-list-of-tiny-integers 10000))
-    ALLEGRO CL-BINARY-STORE <-- not so terribly slow, only 4x slower than sbcl
+    ALLEGRO CL-BINARY-STORE <-- about 4x slower than sbcl
      OUTPUT SIZE: 0.02 MB
      WRITE: 0.24 ms at 83 MB/sec
      READ : 0.89 ms at 22 MB/sec
-    ECL CL-BINARY-STORE
+    CCL CL-BINARY-STORE  <-- about 4x slower than sbcl
      OUTPUT SIZE: 0.02 MB
-     WRITE: 6.34 ms at 3 MB/sec
-     READ : 7.71 ms at 3 MB/sec
-    CCL CL-BINARY-STORE
+     WRITE: 0.27 ms at 74 MB/sec
+     READ : 1.58 ms at 13 MB/sec
+    ECL CL-BINARY-STORE  <-- about 10x slower than sbcl
      OUTPUT SIZE: 0.02 MB
-     WRITE: 27.11 ms at 1 MB/sec
-     READ : 0.23 ms at 87 MB/sec <-- this is weird, and probably a bug?
+     WRITE: 4.76 ms at 4 MB/sec
+     READ : 7.96 ms at 3 MB/sec
 
-And on double-floats
+While this is absolutely slower than on sbcl (by about 4-10x), cl-binary-store is still faster than the rest.  Here are double-floats too:
 
     CL-USER> (test-on-data (long-list-of-random-double-floats 10000))
     ALLEGRO CL-BINARY-STORE
@@ -400,9 +400,9 @@ And on double-floats
      READ : 4.13 ms at 24 MB/sec
     ECL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
-     WRITE: 12.30 ms at 8 MB/sec
-     READ : 23.30 ms at 4 MB/sec
+     WRITE: 10.07 ms at 10 MB/sec
+     READ : 22.61 ms at 4 MB/sec
     CCL CL-BINARY-STORE
      OUTPUT SIZE: 0.10 MB
-     WRITE: 19.08 ms at 5 MB/sec
-     READ : 0.35 ms at 288 MB/sec  <-- this is weird, and probably a bug?
+     WRITE: 0.93 ms at 108 MB/sec
+     READ : 6.98 ms at 14 MB/sec
