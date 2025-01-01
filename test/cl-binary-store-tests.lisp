@@ -100,14 +100,15 @@
 		     (unsigned-byte 64))
 	     ;; character fails on CCL
 	     #-sbcl '(bit
-		      #-ecl fixnum ;; ecl ext:integer64 for upgraded array element type
+		      #-(or abcl ecl) fixnum
 		      base-char
 		      #-ccl character ;; no character arrays, just base strings?
-		      single-float double-float
+		      #-abcl single-float
+		      #-abcl double-float
 		      (unsigned-byte 8)
 		      (unsigned-byte 16)
 		      (unsigned-byte 32)
-		      (unsigned-byte 64)
+		      #-abcl (unsigned-byte 64)
 		      ))
 	   (sizes
 	     (loop repeat (length elt-types)
@@ -571,7 +572,7 @@
   (is '= -12345678901234567890 (restore (store nil -12345678901234567890))))
 
 (define-test test-write-into-extant-vector
-  (loop for length in '(100 50000)
+  (loop for length in '(100 #-abcl 50000)
 	do
 	   (let* ((data (make-list length :initial-element 1))
 		  (result (coerce (store nil data) '(simple-array (unsigned-byte 8) (*))))
