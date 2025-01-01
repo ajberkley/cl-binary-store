@@ -324,7 +324,7 @@
 	 (store-to-vector complex-numbers)))))
 
 (define-test test-ratio
-  (let ((ratios (list (/ 1 2) (/ 4 -5))))
+  (let ((ratios (list (/ 1 2) (/ 4 -5) (/ 1 (expt 2 93)))))
     (is 'equal
 	ratios
 	(restore-from-vector
