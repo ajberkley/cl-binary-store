@@ -275,7 +275,8 @@
       (t
        (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
 	 (set-sap-ref-8 sap offset +tagged-reference-code+))
-       (store-tagged-unsigned-integer (encode-reference-tagged ref-index) storage)))))
+       (when storage
+	 (store-tagged-unsigned-fixnum (encode-reference-tagged ref-index) storage))))))
 
 (declaim (inline restore-reference))
 (defun restore-reference (ref-id references)

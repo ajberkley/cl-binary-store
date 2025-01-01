@@ -303,6 +303,7 @@
 		      (store-only-fixnum fixnum storage)))))))
 
 (declaim (inline store-tagged-unsigned-integer))
+
 (defun store-tagged-unsigned-integer (integer storage)
   "Store and tag any unsigned integer.  For restoring this, call restore-object as this may
  be a bignum.  Prefer `store-tagged-unsigned-fixnum' if you are sure this isn't a bignum"

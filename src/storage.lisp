@@ -75,7 +75,6 @@
   (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
     (set-sap-ref-8 sap offset byte)))
 
-
 (defmethod print-object ((s write-storage) stream)
   (print-unreadable-object (s stream :type t :identity t)
     (format stream "WRITE-STORAGE (FROM ~A), OFFSET: ~A MAX: ~A SAP: ~A"
@@ -146,8 +145,12 @@
 (defun make-write-into-adjustable-ub8-vector (vector)
   (assert (adjustable-array-p vector))
   (lambda (storage)
+    #+dribble-cbs(format t "Flushing to adjustable ub8 vector~%")
     (let* ((num-bytes (write-storage-offset storage))
 	   (bytes-available (- (array-total-size vector) (fill-pointer vector))))
+      #+dribble-cbs
+      (format t "NUM-BYTES in buffer is ~A / ~A, bytes-available in storage vector is ~A~%"
+	      num-bytes (length (write-storage-store storage)) bytes-available)
       (unless (>= bytes-available num-bytes)
 	(setf vector
 	      (adjust-array vector

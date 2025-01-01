@@ -109,20 +109,20 @@
 (defun store-simple-base-string (string storage &optional references assign-new-reference-id)
   (declare (optimize speed safety) (type simple-base-string string))
   (labels ((write-it ()
-	     (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
-	       (set-sap-ref-8 sap offset +simple-base-string-code+))
-	     (let ((string-length (length string)))
-	       (store-tagged-unsigned-fixnum string-length storage)
-	       #+sbcl (with-pinned-objects (string)
-			(write-sap-data-to-storage (vector-sap string)
-						   string-length storage))
-	       #-sbcl (loop
-			with sap = (write-storage-sap storage)
-			for char of-type base-char across string
-			for string-offset from 0 below string-length
-			for sap-offset from (write-storage-offset storage)
-			do (setf (cffi:mem-ref sap :uint8 sap-offset) (char-code char))
-			finally (incf (write-storage-offset storage) string-length)))))
+	     (when storage
+	       (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+		 (set-sap-ref-8 sap offset +simple-base-string-code+))
+	       (let ((string-length (length string)))
+		 (store-tagged-unsigned-fixnum string-length storage)
+		 #+sbcl (with-pinned-objects (string)
+			  (write-sap-data-to-storage (vector-sap string)
+						     string-length storage))
+		 #-sbcl
+		 (with-write-storage (storage :offset offset :reserve-bytes string-length :sap sap)
+		   (loop
+		     for char of-type base-char across string
+		     for sap-offset fixnum from offset
+		     do (setf (sap-ref-8 sap sap-offset) (char-code char))))))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -159,17 +159,15 @@
 			      #-sbcl (babel:string-to-octets string :encoding :utf-8))
 		      (num-bytes (length output))) 
 		 (store-tagged-unsigned-fixnum num-bytes storage)
-		 (let ((offset (ensure-enough-room-to-write storage num-bytes)))
-                   #+sbcl
+		 (with-write-storage (storage :sap sap :offset offset :reserve-bytes num-bytes)
+		   #+sbcl
 		   (with-pinned-objects (output)
                      (copy-sap (write-storage-sap storage) offset (vector-sap output) 0 num-bytes))
 		   #-sbcl
 		   (loop
-		     with sap = (write-storage-sap storage)
 		     for uint8 across output
 		     for sap-offset from offset
-		     do (setf (cffi:mem-ref sap :uint8 sap-offset) uint8))
-		   (setf (write-storage-offset storage) (truly-the fixnum (+ offset num-bytes))))))
+		     do (setf (sap-ref-8 sap sap-offset) uint8)))))
 	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil)))
     (declare (inline write-it))
     (if references
