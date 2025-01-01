@@ -66,8 +66,8 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
     CL-USER> (quicklisp:quickload "cl-binary-store")
     CL-USER> (in-package :cl-binary-store-user) ;  or (use-package :cl-binary-store-user)
     CL-BINARY-STORE-USER> (store nil (list "abcd" 1234))
-    #(4 31 39 97 98 99 100 4 1 210 4 5)
-    ;; 4 = cons, 31 = simple-string, 39 = tiny integer length 4, 97 98 99 100 = abcd, 4 = cons 1 210 4 = 16 bit integer 1234, 5 = nil
+    #(4 30 212 97 98 99 100 4 1 210 4 5)
+    ;; 4 = cons, 30 = simple-string, 212 = tiny integer length 4, 97 98 99 100 = abcd, 4 = cons 1 210 4 = 16 bit integer 1234, 5 = nil
     
     CL-BINARY-STORE-USER> (restore (store nil (list "abcd" 1234)))
     ("abcd" 1234)
@@ -77,7 +77,7 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
     CL-BINARY-STORE-USER> (restore "blarg.bin")
     HI
     CL-BINARY-STORE-USER> (store nil (make-string 1 :initial-element #\U+03b1))
-    #(31 37 206 177) ;; 31 is simple-string, 37 encoded length = 2, 206 117 = α
+    #(31 210 206 177) ;; 31 is simple-string, 210 encoded length = 2, 206 117 = α
 
     CL-BINARY-STORE-USER> (let* ((*print-circle* t)
                                  (v (make-array 1)))
