@@ -34,7 +34,7 @@
 		       (if storage "Storing" "Analyzing")
 		       (type-of array))
     (when storage
-      (store-ub8 +array-code+ storage nil)
+      (store-ub8/no-tag +array-code+ storage)
       (cond
 	((array-has-fill-pointer-p array)
 	 (store-t storage)
@@ -43,7 +43,7 @@
 	 (store-nil storage)))
       (store-boolean (adjustable-array-p array) storage)
       (let ((array-dimensions (array-dimensions array)))
-	(store-ub8 (length array-dimensions) storage nil) ;; sbcl limits to 128
+	(store-ub8/no-tag (length array-dimensions) storage) ;; sbcl limits to 128
 	(dolist (a array-dimensions)
 	  (store-tagged-unsigned-fixnum (the fixnum a) storage))))
     (multiple-value-bind (next-array offset)

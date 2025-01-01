@@ -43,7 +43,7 @@
 
 (defun store-something-else (obj storage store-object)
   (when storage
-    (store-ub8 +test-code+ storage nil)
+    (store-ub8/no-tag +test-code+ storage)
     (store-ub16 12345 storage))
   (funcall store-object (format nil "Hi, I decided to write this instead of a 'something-else~%"))
   (funcall store-object (format nil "But actually, it told me to tell you:~%"))

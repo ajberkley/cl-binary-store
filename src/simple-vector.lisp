@@ -3,7 +3,7 @@
 (defun store-simple-vector (sv storage store-object)
   (declare (optimize speed safety) (type simple-vector sv) (type function store-object))
   (when storage
-    (store-ub8 +simple-vector-code+ storage nil)
+    (store-ub8/no-tag +simple-vector-code+ storage)
     (store-tagged-unsigned-fixnum (length sv) storage))
   (map nil store-object sv))
 

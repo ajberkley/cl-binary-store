@@ -108,6 +108,7 @@
  is a `fixup', in which case you have to provide a function to be called back when the
  object is fully reified.  See restore-object-to for the logic.")
   (:method (type)
+    (declare (ignorable type))
     nil))
 
 (defgeneric specialized-serializer/deserializer (type)
@@ -117,6 +118,7 @@
  and as side effects should write to storage, etc.  The second value should be a function
  that has a signature (lambda (storage restore-object) -> object)")
   (:method (type)
+    (declare (ignorable type))
     (values nil nil)))
 
 (defun compute-object-info (type)
@@ -149,7 +151,7 @@
 		(cond
 		  ((gethash ,object-info ,eql-refs)
 		   ;; We have already stored this object-info, write a reference to it
-		   (store-ub8 +object-info-code+ ,storage nil)
+		   (store-ub8/no-tag +object-info-code+ ,storage)
 		   (store-fixnum (object-info-ref-id ,object-info) ,storage)
 		   t)
 		  (t
@@ -170,7 +172,7 @@
     (maybe-store-local-reference-instead (object-info storage *eql-refs*)
       (let ((slot-names (object-info-slot-names object-info)))
 	(when storage
-	  (store-ub8 +object-info-code+ storage nil)
+	  (store-ub8/no-tag +object-info-code+ storage)
 	  (store-tagged-unsigned-fixnum (length slot-names) storage))
 	(store-symbol (object-info-type object-info) storage eq-refs store-object
 		      assign-new-reference-id)
@@ -317,7 +319,7 @@
 
 (declaim (inline store-unbound))
 (defun store-unbound (storage)
-  (store-ub8 +unbound-code+ storage nil))
+  (store-ub8/no-tag +unbound-code+ storage))
 
 (declaim (inline restore-unbound))
 (defun restore-unbound ()
@@ -328,7 +330,7 @@
   (declare (optimize speed safety) (type (or structure-object standard-object condition) obj))
   (maybe-store-reference-instead (obj storage eq-refs assign-new-reference-id)
     (when storage
-      (store-ub8 +standard/structure-object-code+ storage nil))
+      (store-ub8/no-tag +standard/structure-object-code+ storage))
     (let* ((object-info (get-object-info obj))
 	   (object-info-specialized-serializer (object-info-specialized-serializer object-info)))
       (cond

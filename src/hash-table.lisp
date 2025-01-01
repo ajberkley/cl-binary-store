@@ -3,7 +3,7 @@
 (defun store-hash-table (ht storage store-object)
   (declare (optimize speed safety) (type hash-table ht) (type function store-object))
   (when storage
-    (store-ub8 +hash-table-code+ storage nil)
+    (store-ub8/no-tag +hash-table-code+ storage)
     (store-tagged-unsigned-fixnum (hash-table-count ht) storage)
     (store-tagged-unsigned-fixnum (hash-table-size ht) storage))
   (funcall store-object (hash-table-test ht)) ;; a symbol

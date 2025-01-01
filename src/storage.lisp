@@ -54,26 +54,33 @@
 					   (offset nil offset-provided-p))
   "store will be a sap on sbcl or just a ub8 array otherwise.
  If you pass in offset, then you are responsible for incrementing it."
-  (declare (optimize (speed 3) (safety 0) (debug 0)))
+  (declare (optimize (speed 3) (safety 0) (debug 0)) (type (unsigned-byte 8) ub8))
   (let ((offset (or offset (write-storage-offset storage))))
+    (declare (type fixnum offset))
     (setf (sap-ref-8 sap offset) ub8)
     (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 1 offset))))))
 
 (defun storage-write-ub16! (storage ub16 &key (sap (write-storage-sap storage))
 					   (offset nil offset-provided-p))
+  (declare (optimize (speed 3) (safety 0)) (type (unsigned-byte 16) ub16))
   (let ((offset (or offset (write-storage-offset storage))))
+    (declare (type fixnum offset))
     (setf (sap-ref-16 sap offset) ub16)
     (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 2 offset))))))
 
 (defun storage-write-ub32! (storage ub32 &key (sap (write-storage-sap storage))
 					   (offset nil offset-provided-p))
+  (declare (optimize (speed 3) (safety 0)) (type (unsigned-byte 32) ub32))
   (let ((offset (or offset (write-storage-offset storage))))
+    (declare (type fixnum offset))
     (setf (sap-ref-32 sap offset) ub32)
     (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 4 offset))))))
 
 (defun storage-write-fixnum! (storage fixnum &key (sap (write-storage-sap storage))
 					       (offset nil offset-provided-p))
+  (declare (optimize (speed 3) (safety 0)) (type fixnum fixnum))
   (let ((offset (or offset (write-storage-offset storage))))
+    (declare (type fixnum offset))
     (setf (signed-sap-ref-64 sap offset) fixnum)
     (unless offset-provided-p (setf (write-storage-offset storage) (truly-the fixnum (+ 8 offset))))))
 
@@ -152,7 +159,7 @@
        ,@body)))
 
 (defun make-read-into-storage/stream (stream)
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 1)))
   (with-tracking-rates ("Read ")
     (lambda (storage)
       (let ((seq (read-storage-store storage)))
@@ -166,10 +173,10 @@
 	  (- new-bytes-end-at (read-storage-offset storage)))))))
 
 (defun make-write-into-storage/stream (stream)
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 1)))
   (with-tracking-rates ("Write ")
     (lambda (storage)
-      (declare (optimize speed safety))
+      (declare (optimize (speed 3) (safety 1)))
       (let ((seq (write-storage-store storage)))
 	#+debug-cbs (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
 	(write-sequence seq stream :end (write-storage-offset storage))
@@ -299,7 +306,7 @@
 (defun maybe-shift-data-to-beginning-of-read-storage (read-storage bytes)
   "If all we have is a sap the store is a length 0 vector so this
  fails gracefully"
-  (declare (optimize speed safety) (type fixnum bytes))
+  (declare (optimize (speed 3) (safety 1)) (type fixnum bytes))
   (let ((vector-length (read-storage-size read-storage))
 	(valid-data-ends-at (read-storage-max read-storage)))
     (when (and (> bytes (the fixnum (- vector-length valid-data-ends-at))) ;; we don't have room
@@ -315,7 +322,7 @@
   (:documentation "Ran out of data while expecting more while reading /deserializing"))
 
 (defun refill-read-storage (storage bytes return-nil-on-eof)
-  (declare #+debug-cbs (optimize (debug 3)) #-debug-cbs (optimize speed safety)
+  (declare #+debug-cbs (optimize (debug 3)) #-debug-cbs (optimize (speed 3) (safety 1))
            (type fixnum bytes))
   #+dribble-cbs (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A)~%"
 		      bytes return-nil-on-eof)
@@ -376,7 +383,9 @@
           (error 'out-of-space :current-offset (write-storage-offset storage))))
     offset))
 
-(declaim (ftype (function (write-storage fixnum) (values fixnum &optional))
+(declaim (ftype (function (write-storage fixnum)
+			  #+sbcl (values fixnum &optional)
+			  #-sbcl fixnum)
                 ensure-enough-room-to-write))
 (declaim (inline ensure-enough-room-to-write))
 (defun ensure-enough-room-to-write (write-storage bytes)

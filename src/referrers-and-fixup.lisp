@@ -78,7 +78,7 @@
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
  Otherwise returns NIL.  This should *ONLY* be called during the actual storage phase,
  not the reference counting phase."
-  (declare (type write-storage storage) (optimize speed safety))
+  (declare (type write-storage storage) (optimize (speed 3) (safety 1)))
   (when references
     (let ((ref-idx (gethash object references)))
       ;; When ref-idx is positive, it's a note that we have already written out the
@@ -117,7 +117,7 @@
  ADD-NEW-REFERENCE should be NIL is if you are explicitly
  dis-allowing (for performance reasons) circularity, as we optionally
  do during cons serialization."
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 1)))
   (if storage	     ; we are in the storage phase, writing things out
       (referenced-already object storage references assign-new-reference-id)
       (check-reference object references add-new-reference)))
@@ -144,7 +144,7 @@
 (declaim (inline update-reference))
 (defun update-reference (ref-id value references)
   "Used during RESTORE"
-  (declare (optimize speed safety) (type fixnum ref-id))
+  (declare (optimize (speed 3) (safety 1)) (type fixnum ref-id))
   #+debug-cbs
   (let ((*print-circle* t))
     (format t "Updating reference id ~A to ~S~%" ref-id value))
@@ -164,7 +164,7 @@
   (ref-id -1 :type fixnum))
 
 (defun fixup (fixup new-value references)
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 1)))
   "Resolve a delayed object construction.  Returns new-value."
   #+debug-cbs (format t "Executing ~A fixups for reference id ~A of type ~A~%"
 		      (length (fixup-list fixup)) (fixup-ref-id fixup)

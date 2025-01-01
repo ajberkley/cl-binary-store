@@ -338,7 +338,7 @@
              (if check-for-ref-in
                  `(unless (referenced-already obj storage ,check-for-ref-in assign-new-reference-id)
                     ,@(when write-phase-code
-                        `((store-ub8 ,write-phase-code storage nil)))
+                        `((store-ub8/no-tag ,write-phase-code storage)))
                     ,code)
                  code))
            (maybe-wrap-code-with-ref-check-for-ref-phase (code)

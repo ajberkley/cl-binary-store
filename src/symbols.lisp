@@ -2,11 +2,11 @@
 
 (declaim (inline store-nil))
 (defun store-nil (storage)
-  (store-ub8 +nil-code+ storage nil))
+  (store-ub8/no-tag +nil-code+ storage))
 
 (declaim (inline store-t))
 (defun store-t (storage)
-  (store-ub8 +t-code+ storage nil))
+  (store-ub8/no-tag +t-code+ storage))
 
 (declaim (inline store-boolean))
 (defun store-boolean (boolean storage)
