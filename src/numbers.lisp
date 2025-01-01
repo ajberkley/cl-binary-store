@@ -281,7 +281,7 @@
 	  (#.+sb16-code+ (restore-sb16 storage))
 	  (#.+sb32-code+ (restore-sb32 storage))))))
 
-(declaim (notinline store-fixnum))
+(declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage)
   "Store and tag a fixnum; "
   (declare (type fixnum fixnum) (optimize (speed 3) (safety 1)) (type write-storage storage))

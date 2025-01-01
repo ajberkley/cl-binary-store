@@ -21,7 +21,8 @@
                         "")))))))
 
 
-#-allegro(defun test-hlmem-on-data (data &key (repeats 100))
+#-allegro
+(defun test-hlmem-on-data (data &key (repeats 100))
   (let* ((words (hyperluminal-mem:msize 0 data))
          (output-size (/ (* 8 words) 1e6)))
     (format t "HYPERLUMINAL-MEM~%")
@@ -129,7 +130,8 @@
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
 (defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
-  #-allegro(when hlmem
+  #-allegro
+  (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
     (test-cl-binary-store-on-data data :track-references (not hlmem)
@@ -251,6 +253,9 @@
     ()
   ((a :initarg :a)
    (b :initarg :b)))
+
+(conspack:defencoding c-blarg
+  a b)
 
 (defun lots-of-standard-objects ()
   (loop for i below 100000

@@ -28,8 +28,8 @@ Note that here we are writing out 1M conses and 1M small integers in < 10 ms, th
      READ : 5.36 ms at 1493 MB/sec
     CL-BINARY-STORE <-- ~290 M objects / second (1 million conses, 1 million integers)
      OUTPUT SIZE: 2.00 MB <--- tiny file!
-     WRITE: 6.88 ms at 291 MB/sec
-     READ : 6.52 ms at 307 MB/sec
+     WRITE: 6.24 ms at 320 MB/sec
+     READ : 4.84 ms at 413 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 2.00MB  <--- tiny files too!
      WRITE: 38.80 ms at 52 MB/sec
@@ -49,8 +49,8 @@ faster than the above, but whatever.
      READ : 4.68 ms at 1709 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 3.00 MB
-     WRITE: 3.08 ms at 974 MB/sec
-     READ : 7.24 ms at 414 MB/sec
+     WRITE: 2.76 ms at 1087 MB/sec
+     READ : 6.48 ms at 463 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 2.00MB  <--- cute doing un-boxed conses
      WRITE: 36.40 ms at 55 MB/sec
@@ -69,8 +69,8 @@ OK, now onto fixnums.  Still not doing shabbily.  I am not sure why the read dis
      READ : 4.88 ms at 1639 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 10.00 MB
-     WRITE: 3.28 ms at 3049 MB/sec
-     READ : 5.96 ms at 1678 MB/sec
+     WRITE: 3.24 ms at 3087 MB/sec
+     READ : 7.28 ms at 1374 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 9.00MB <-- cute, must be detecting proper lists and eliding cons tags
      WRITE: 58.80 ms at 153 MB/sec
@@ -255,8 +255,8 @@ Just a bunch of random crud in long list just to average out dispatch stuff.
      READ : 29.92 ms at 685 MB/sec
     CL-BINARY-STORE
      OUTPUT SIZE: 8.14 MB
-     WRITE: 18.64 ms at 437 MB/sec
-     READ : 39.44 ms at 207 MB/sec
+     WRITE: 17.68 ms at 461 MB/sec
+     READ : 37.99 ms at 214 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 7.47MB
      WRITE: 132.80 ms at 56 MB/sec
@@ -342,6 +342,10 @@ Again I did not feel like writing an extension for hyperluminal-mem or cl-conspa
      OUTPUT SIZE: 0.59 MB
      WRITE: 32.12 ms at 18 MB/sec
      READ : 9.08 ms at 65 MB/sec
+    CL-CONSPACK
+     OUTPUT SIZE: 3.50MB
+     WRITE: 197.58 ms at 18 MB/sec
+     READ : 66.39 ms at 53 MB/sec     
     CL-STORE
      OUTPUT SIZE: 2.20MB
      WRITE: 85.20 ms at 26 MB/sec
