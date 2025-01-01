@@ -100,7 +100,7 @@
 		     (unsigned-byte 64))
 	     ;; character fails on CCL
 	     #-sbcl '(bit
-		      #-(or abcl ecl) fixnum
+		      #-(or abcl ecl lispworks) fixnum ;; lispworks uses signed-byte 64
 		      base-char
 		      #-ccl character ;; no character arrays, just base strings?
 		      #-abcl single-float
@@ -108,6 +108,7 @@
 		      (unsigned-byte 8)
 		      (unsigned-byte 16)
 		      (unsigned-byte 32)
+		      #+lispworks (signed-byte 64)
 		      #-abcl (unsigned-byte 64)
 		      ))
 	   (sizes
