@@ -14,7 +14,7 @@
 
 ;; Terrible compilers
 (defmacro set-sap-ref-8 (sap offset ub8)
-  #+sbcl `(setf (sb-sys:sap-ref-8 sap offset) ub8)
+  #+sbcl `(setf (sb-sys:sap-ref-8 ,sap ,offset) ,ub8)
   #-sbcl `(setf (cffi:mem-ref ,sap :uint8 ,offset) ,ub8))
 
 (defun (setf sap-ref-8) (ub8 sap offset)
