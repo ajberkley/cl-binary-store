@@ -23,7 +23,8 @@
    #:store-t
    #:store-nil
    
-   #:store-ub8 ; critically used for writing tag ids
+   #:store-ub8/tag
+   #:store-ub8/no-tag   
    #:store-ub16
    #:store-ub32
    #:store-fixnum
