@@ -149,7 +149,7 @@
 	   (declare (type fixnum max-ref-id))
            (when track-references
 	     ,(replacing-reference-tables
-	       'table-name 'old-ht 'new-ht
+	       'old-ht 'new-ht
 	       `(maphash (lambda (k v)
 			   (when (> (the fixnum v) 1)
 			     (setf (gethash k new-ht) t)
@@ -318,12 +318,11 @@
              (codespace-ref-tables *current-codespace/compile-time*))
     `(progn ,@code)))
 
-(defun replacing-reference-tables (name old-ht new-ht body)
+(defun replacing-reference-tables (old-ht new-ht body)
   (let ((code nil))
     (maphash (lambda (table-name ref-table)
                (push `(setf ,table-name
-			    (let ((,name ',table-name)
-				  (,old-ht ,table-name)
+			    (let ((,old-ht ,table-name)
 				  (,new-ht ,(ref-table-construction-code ref-table)))
 			      (progn ,body
 				     ,new-ht)))
@@ -367,10 +366,6 @@
 		  override)
         (cerror "REPLACE IT" (format nil "Replacing already existing store code for type ~A" type)))
       (setf (gethash type store-info) si))))
-
-(defmacro delete-restore (code)
-  "In define-codespace that has inherited another codespace, delete restore capability for a tag"
-  `(remhash ,code *current-codespace/compile-time*))
 
 (defmacro delete-restore (code)
   "In define-codespace that has inherited another codespace, delete store capability for a type"
