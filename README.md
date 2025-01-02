@@ -274,4 +274,4 @@ See [benchmarking.md](benchmarking.md).
 - [ ] Compile the storage / restore functions on demand instead of up front.  If you don't use a reference table why wait for it to compile on load (so far not a problem, I only use two).
 - [ ] Specialize store / restore functions on global settings to avoid so many parameters being passed around.
 - [ ] When using implicit reference tracking, use a vector on restore like we do for the explicit case instead of overloading the reference ht
-- [ ] Re-speed up long-list-of-tiny-integers read speed.
+- [ ] Have symbols tracked even when not using reference tracking?  That way users of non-packaged symbols as shortcuts for names will preserve equality and not be stupid large files.

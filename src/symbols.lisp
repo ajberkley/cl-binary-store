@@ -27,10 +27,10 @@
 (declaim (notinline store-symbol))
 (defun store-symbol (symbol storage eq-refs store-object assign-new-reference-id)
   (declare (notinline store-simple-specialized-vector))
-  (let ((symbol-package (symbol-package symbol)))
-    (cond
-      (symbol-package
-       (maybe-store-reference-instead (symbol storage eq-refs assign-new-reference-id)
+  (maybe-store-reference-instead (symbol storage eq-refs assign-new-reference-id)
+    (let ((symbol-package (symbol-package symbol)))
+      (cond
+	(symbol-package
 	 #+debug-cbs
 	 (format t "Storing symbol ~S from package ~S~%"
 		 (symbol-name symbol) (package-name (symbol-package symbol)))
@@ -38,12 +38,12 @@
 	   (storage-write-byte storage +symbol-code+)
 	   (store-string/no-refs (symbol-name symbol) storage))
          ;; Nominally we can use the eq-refs table but we don't
-	 (funcall (the function store-object) (package-name symbol-package))))
-      (t ;; uninterned symbols.  We don't bother de-duplicating the string representations
-       #+debug-cbs (format t "Storing symbol without a package ~S~%" symbol)
-       (when storage
-	 (storage-write-byte storage +uninterned-symbol-code+)
-	 (store-string/no-refs (symbol-name symbol) storage))))))
+	 (funcall (the function store-object) (package-name symbol-package)))
+	(t ;; uninterned symbols.  We don't bother de-duplicating the string representations
+	 #+debug-cbs (format t "Storing symbol without a package ~S~%" symbol)
+	 (when storage
+	   (storage-write-byte storage +uninterned-symbol-code+)
+	   (store-string/no-refs (symbol-name symbol) storage)))))))
 
 (define-condition missing-package-during-restore (error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)

@@ -218,13 +218,20 @@
     (loop for i fixnum from 0 below 1000000
 	  collect string)))
 
-(defun lots-of-keywords ()
-  (loop for i fixnum from 0 below 100000
-	collect (intern (format nil "~A" (random 250000)) 'keyword)))
+(defun lots-of-keywords (&optional (n 100000))
+  "With some repeats"
+  (loop for i fixnum from 0 below n
+	collect (intern (format nil "~A" (random n)) 'keyword)))
 
-(defun lots-of-symbols ()
-  (loop for i fixnum from 0 below 100000
-	collect (intern (format nil "~A" (random 250000)) 'cl-user)))
+(defun lots-of-symbols (&optional (N 100000))
+  "With some repeats"
+  (loop for i fixnum from 0 below n
+	collect (intern (format nil "~A" (random n)) 'cl-user)))
+
+(defun lots-of-uninterned-symbols (&optional (N 100000))
+  "With some repeats"
+  (let ((symbol-pool (loop for i fixnum below (floor N 5) collect (gensym "HELLO"))))
+    (loop repeat 5 appending symbol-pool)))
 
 (defstruct bench-blarg
   a
