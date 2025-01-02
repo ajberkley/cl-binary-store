@@ -38,10 +38,9 @@
 
 (defun test-cl-binary-store-on-data
     (data &key (track-references t) (support-shared-list-structures nil) (repeats 100)
-            (read t) (write t) (file nil) (no-circular-lists nil))
+            (read t) (write t) (file nil))
   (let* ((cl-binary-store:*support-shared-list-structures* support-shared-list-structures)
 	 (cl-binary-store:*track-references* track-references)
-	 (cl-binary-store:*no-circular-lists* no-circular-lists)
 	 (store (coerce
 		 (cl-binary-store:store nil data)
 		 '(simple-array (unsigned-byte 8) (*))))

@@ -45,13 +45,10 @@
                          implicit-eql-refs table and the assign-new-reference-id function.
                          This is used for object-info and symbols.")
 
-  (register-global-state new-implicit-ref-id
-			  (let ((counter 0))
-			    (declare (type fixnum counter))
-			    (lambda () (the fixnum (incf counter))))
-			  :dynamic-extent t :restore t :store t
-			  :documentation "A counter used during store and restore for implicit
-                           reference id labelling even if *track-references* is nil.")
+  (register-global-state implicit-ref-id (cons 0 nil) :type (cons fixnum null)
+			 :dynamic-extent t :restore t :store t
+			 :documentation "A counter used during store and restore for implicit
+                          reference id labelling even if *track-references* is nil.")
   
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
   (defrestore +ub8-code+ (restore-ub8 storage))
@@ -110,15 +107,15 @@
   
   (defstore structure-object (store-standard/structure-object
 			      obj storage eq-refs store-object assign-new-reference-id nil
-			      object-info implicit-eql-refs new-implicit-ref-id))
+			      object-info implicit-eql-refs implicit-ref-id))
   (defstore standard-object (store-standard/structure-object
 			     obj storage eq-refs store-object assign-new-reference-id t
-			     object-info implicit-eql-refs new-implicit-ref-id))
+			     object-info implicit-eql-refs implicit-ref-id))
   ;; On sbcl a condition is neither a structure-object nor a standard-object
   #+sbcl
   (defstore condition (store-standard/structure-object
 		       obj storage eq-refs store-object assign-new-reference-id t
-		       object-info implicit-eql-refs new-implicit-ref-id))
+		       object-info implicit-eql-refs implicit-ref-id))
   
   (defrestore +standard/structure-object-code+
       (restore-standard/structure-object storage restore-object))
@@ -126,7 +123,7 @@
   ;; REFERENCES
   ;; direct integer encoding [-16 16] in the tag byte
   (defrestore (<= +first-small-integer-code+ code +last-small-integer-code+)
-      (- code +small-integer-zero-code+))
+      (truly-the fixnum (- (truly-the (unsigned-byte 8) code) +small-integer-zero-code+)))
   ;; small refs in the tag byte from [1 30]
   (defrestore (<= +first-direct-reference-id-code+ code +last-direct-reference-id-code+)
       (restore-reference (decode-reference-direct code) references))
@@ -164,7 +161,7 @@
   
   (defstore object-info (store-object-info obj storage eq-refs store-object implicit-eql-refs assign-new-reference-id))
   (defrestore +object-info-code+ (restore-object-info storage restore-object implicit-eql-refs
-						      new-implicit-ref-id))
+						      implicit-ref-id))
   
   ;; UNBOUND MARKER
   (defrestore +unbound-code+ (restore-unbound))

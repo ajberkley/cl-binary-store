@@ -44,11 +44,11 @@
 (defun store-cons/finite (cons storage eq-refs store-object assign-new-reference-id list-lengths)
   "This is called during the actual storage output phase if we have already computed the list
  length.  This is not called when *support-shared-list-structures* is true."
-  (declare (optimize (debug 3) safety) (type write-storage storage) (type function store-object))
+  (declare (optimize speed safety) (type write-storage storage) (type function store-object))
   (maybe-store-reference-instead (cons storage eq-refs assign-new-reference-id)
     (let ((length (or (and list-lengths (gethash cons list-lengths))
 		      (length/detect-dotted cons))))
-      (when (or (not length) (= length 1))
+      (when (or (not length) (= (the fixnum length) 1))
 	;; Dotted lists are usually just a single cons, and are more compact to store
 	;; with a cons tag than a finite-length-list of length 2.
 	(return-from store-cons/finite

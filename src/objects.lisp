@@ -131,7 +131,7 @@
     (declare (ignorable type))
     (values nil nil)))
 
-(defun compute-object-info (type new-implicit-ref-id)
+(defun compute-object-info (type implicit-ref-id)
   "Takes a symbol denoting the type of an object and returns an `object-info' allowing for
  the various user methods to override behaviors."
   (declare (optimize speed safety))
@@ -148,7 +148,7 @@
 	 :specialized-constructor (specialized-object-constructor type)
 	 :specialized-serializer specialized-serializer
 	 :specialized-deserializer specialized-deserializer
-	 :ref-id (- (the fixnum (funcall (the function new-implicit-ref-id)))))))))
+	 :ref-id (- (the fixnum (incf (the fixnum (car implicit-ref-id))))))))))
 
 (defmacro maybe-store-local-reference-instead ((object-info storage eql-refs) &body body)
   "Called during the serialization / storage phase.  This is a kludged
@@ -286,14 +286,14 @@
 		      value))
 	  struct)))))
 
-(defun restore-object-info (storage restore-object implicit-eql-refs assign-new-implicit-ref-id)
+(defun restore-object-info (storage restore-object implicit-eql-refs implicit-ref-id)
   (declare (optimize speed safety) (type function restore-object))
   (let* ((num-slots (restore-tagged-fixnum storage)))
     (if (< num-slots 0) ; it's a reference id, look it up in our implicit tracking table
 	(gethash num-slots implicit-eql-refs)
         (let ((slot-name-vector (make-array num-slots))
 	      (type (funcall restore-object))
-	      (ref-id (- (the fixnum (funcall (the function assign-new-implicit-ref-id))))))
+	      (ref-id (- (the fixnum (incf (the fixnum (car implicit-ref-id)))))))
 	  ;; No circularity possible below as these are symbols
 	  (loop for idx fixnum from 0 below num-slots
 		do (setf (svref slot-name-vector idx) (funcall restore-object)))
@@ -328,11 +328,11 @@
 		     (setf (object-info-slot-names si) slot-name-vector))
 		   si)))))))))
 	
-(defun get-object-info (object object-info new-implicit-ref-id)
+(defun get-object-info (object object-info implicit-ref-id)
   (let ((type (type-of object)))
     (or (gethash type object-info)
 	(setf (gethash type object-info)
-	      (compute-object-info type new-implicit-ref-id)))))
+	      (compute-object-info type implicit-ref-id)))))
 
 (declaim (inline store-unbound))
 (defun store-unbound (storage)
@@ -344,12 +344,12 @@
 
 (defun store-standard/structure-object
     (obj storage eq-refs store-object assign-new-reference-id is-standard-object object-info
-     implicit-eql-refs new-implicit-ref-id)
+     implicit-eql-refs implicit-ref-id)
   (declare (optimize speed safety) (type (or structure-object standard-object condition) obj))
   (maybe-store-reference-instead (obj storage eq-refs assign-new-reference-id)
     (when storage
       (store-ub8/no-tag +standard/structure-object-code+ storage))
-    (let* ((object-info (get-object-info obj object-info new-implicit-ref-id))
+    (let* ((object-info (get-object-info obj object-info implicit-ref-id))
 	   (object-info-specialized-serializer (object-info-specialized-serializer object-info)))
       (cond
 	(object-info-specialized-serializer
