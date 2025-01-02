@@ -99,7 +99,7 @@ Of course, who the heck would use a list for this sort of thing.  Here's a simpl
 
 ## Integers
 
-OK, now onto fixnums.  Still not doing shabbily.  I am not sure why the read dispatch code isn't as fast as hyperluminal-mem, but tracking that down is low down on my list.  These are pretty good numbers.  Note cl-binary-store is slower than hyperluminal-mem because we actually walk the list twice in this mode, trying to keep the output small.  Here is a simple vector of random fixnums... (we showed simple-arrays are no fun to benchmark with because cl-binary-store wins too easily):
+OK, now onto fixnums.  These are pretty good numbers.  Here is a simple vector of random fixnums... (we showed simple-arrays are no fun to benchmark with because cl-binary-store wins too easily):
 
     HYPERLUMINAL-MEM
      OUTPUT SIZE: 8.00 MB
