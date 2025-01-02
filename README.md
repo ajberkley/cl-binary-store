@@ -179,13 +179,15 @@ If T we will write out a magic number and the \*write-version\* to the output, w
 
 If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.  It also means you can write multiple chunks of objects to a stream and have restore-objects return between each chunk.
 
-### Adding code points to the codespace
+### Extending the codespace
 
-The storage mechanism dispatches on types and the dispatch mechanism on deserialization is byte based --- we read a byte, called a *tag* and dispatch to an appropriate reader based on it.
+A codespace is a definition of the binary file format, they are identified with a magic / version number.  At write time the codespace is identified by \*write-version\*.  The codespace can optionally be written out to the output (\*write-magic-number\*).  Currently we have baked in a notion of tag bytes between objects that identify the type of the next object --- you could presumably switch to whatever tagging scheme you want with a bit of work on the code generation side.  We automatically build the storage time typecase dispatch, provide the basics of reference tracking, and some other niceties, and as well a dispatch case statement during restore.  This code is specialized for each codespace and built at compile / load time.  This can lead to some complexities debugging as the source code is not accessible.  To alleviate this one may define-codespace with :debug t, in which case the store and restore functions that are built are dumped to a file "codespace-debug.lisp" and loaded so the usual nice Common Lisp debugging experience can occur.  Usually you want to inline many of your functions for performance reasons (especially if you have regular data, the inlining, at least on sbcl, allows very nice performance as, for example, the first restore-object call from inside a wrapper function can be inlined --- so the list restore, for example, is not bouncing back and forth between functions).
 
-The notion we have for extension and versioning is a "codespace", that is a set of types and storage functions for them and a set of bytes and restore functions for them.  We start reading data with whatever the default codespace is (specified by \*read-version\*).  If we hit a magic number (+action-code+ then +magic-number-code+ followed by a coded number) we then try and load the specified codespace version, erroring if we do not support it.  Here we are versioning by codespace.  You can easily extend the actions to do whatever further versioning you want of the file.  See [magic-numbers.lisp](src/magic-numbers.lisp) and [actions.lisp](src/actions.lisp).  During writing you would specify what codespace you want with \*write-version\*.
+During restore, we start reading data with whatever the default codespace is (specified by \*read-version\*).  If we hit a magic number (+action-code+ then +magic-number-code+ followed by a coded number) we then try and load the specified codespace version, erroring if we do not support it (or if codespace switching is disallowed for security reasons).  You can easily extend the actions to do whatever further versioning you want of the file.  See [magic-numbers.lisp](src/magic-numbers.lisp) and [actions.lisp](src/actions.lisp).  
 
-For an example, look at [example-extension.lisp](src/example-extension.lisp) and [example-extension-codespace.lisp](src/example-extension-codespace.lisp) which I reproduce here:
+In cl-binary-store we provide a codespace that is my best guess at a general purpose very dense and fast binary encoding for all Common Lisp types in [basic-codespace.lisp](src/basic-codespace.lisp).  You may wish to extend that or specialize it to more specific types.  For example, you might want to store (simple-array (signed-byte 8) 4) specially for some odd reason, or to serialize a structure in a very dense format.  To do so you would do something like what is in [example-extension-codespace.lisp](src/example-extension-codespace.lisp).
+
+For an example, look at [example-extension.lisp](src/example-extension.lisp) and [example-extension-codespace.lisp](src/example-extension-codespace.lisp) which I reproduce here.  The define-codespace environment provides an imperative means of describing the codespace.  We define restore routines with defrestore, store routines with defstore, global state with register-global-state, reference-tables for reference tracking with register-reference-table.  Within the define-codespace environment we have several globally defined names, OBJ, STORAGE, STORE-OBJECT, RESTORE-OBJECT
 
     (define-codespace ("extension-codespace" +extension-codespace+ :inherits-from +basic-codespace+)
       ;; Disable storing and loading of double-floats because we hate them or something
@@ -197,7 +199,7 @@ For an example, look at [example-extension.lisp](src/example-extension.lisp) and
 
 Here we are definining how to store an object of type SOMETHING-ELSE (which is defined in [example-extension.lisp](src/example-extension.lisp)).  We define our type *tag* +test-code+ and we write it out in #'store-something-else along with whatever else we feel like.  Then on restore we call (restore-something-else restore-object) when we see +test-code+.  restore-object is a function we can call to restore further objects from the data stream.  See [basic-codespace.lisp](src/basic-codespace.lisp) for lots of examples.
 
-Anyhow, here is the result of running the code
+Anyhow, here is the boring result of running the code in [example-extension.lisp](src/example-extension.lisp]
 
     CL-USER> (quicklisp:quickload "example-extension")
     CL-USER> (example-extension:test-serializable-object-info)
@@ -214,8 +216,6 @@ Anyhow, here is the result of running the code
     But actually, it told me to tell you:
     Hi from slot information!
     "And here is a bonus thing returned to you"
-
-The codespace can nominally be changed multiple times in a file if needed.
 
 As a further example, we decided to disable double-float storing and restoration because we think they are dangerous and too precise for normal human brains to handle.  In the example-extension file there is an example:
 

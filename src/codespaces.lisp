@@ -13,11 +13,15 @@
 ;; TRACK-REFERENCES is bound to *track-references*
 ;; OBJ within a defstore is the object you should store
 ;; CODE within a defrestore is the tag code that has been read.
+;; STORAGE within a defstore is a `write-storage' or nil if in the reference counting phase
+;; STORAGE within a defrestore is a `read-storage'
+;; RESTORE-OBJECT is a (lambda ()) -> object that can be passed to a function during the restore phase
+;; STORE-OBJECT is a (lambda (object)) -> writes stuff out
 
-;; To debug this stuff you want to inspect *codespaces*.
-;; Find your codepsace, dump the source code stored in the -source-code slot
-;; into a file, compile it to a named function, and then put that named function
-;; into the codespace compiled function slots and you will have full debuggability.
+;; If you are developing new codespace stuff errors can be cryptic, best to
+;; use the :debug t option of define-codespace.  In that case the functions that
+;; get compiled get dumped to a file in the current directory so the debugger knows
+;; where the source code is.
 
 #+allegro
 (eval-when (:compile-toplevel)
@@ -228,30 +232,54 @@
                                                 (format nil "~%")))))))
 			data)))))
 
-(defun compile-codespace (codespace)
-  (let ((store-objects-source-code
-	  `(lambda (storage &rest stuff)
-	     (declare (optimize (speed 3) (safety 1)) (type write-storage storage)
-		      (dynamic-extent stuff))
-	     ,(macroexpand (build-store-objects codespace)))))
-    (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
-    (setf (codespace-store-objects codespace) (compile nil store-objects-source-code)))
-  (let ((restore-objects-source-code
-	  `(lambda (storage)
-	     (declare (optimize (speed 3) (safety 1))
-		      (type read-storage storage))
+(defun compile-codespace (codespace debug)
+  (let* ((store-function-name (if debug '(defun store-objects/debug) '(lambda)))
+	 (restore-function-name (if debug '(defun restore-objects/debug) '(lambda)))
+	 (declarations
+	   `(declare ,(if debug
+	        	  '(optimize (debug 3) (safety 3))
+			  '(optimize (speed 3) (safety 1)))))
+	 (store-objects-source-code
+	   `(,@store-function-name (storage &rest stuff)
+	      ,declarations
+	      (declare (type write-storage storage) (dynamic-extent stuff))
+	      ,(macroexpand (build-store-objects codespace))))
+	(restore-objects-source-code
+	  `(,@restore-function-name (storage)
+	      ,declarations
+              (declare (type read-storage storage))
 	     ,(macroexpand (build-restore-objects codespace)))))
+    (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
     (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)
-    (setf (codespace-restore-objects codespace) (compile nil restore-objects-source-code))
+    (cond
+      (debug
+       (let ((filename "codespace-debug.lisp"))
+	 (with-open-file (str filename
+			      :if-exists :supersede :direction :output
+			      :if-does-not-exist :create)
+	   (write restore-objects-source-code :stream str :circle nil :pretty t)
+	   (format str "~%~%")
+	   (write store-objects-source-code :stream str :circle nil :pretty t))
+	 (load "codespace-debug.lisp" :verbose t))
+       (setf (codespace-store-objects codespace) (fdefinition 'store-objects/debug))
+       (setf (codespace-restore-objects codespace) (fdefinition 'restore-objects/debug)))
+      (t
+       (setf (codespace-store-objects codespace) (compile nil store-objects-source-code))
+       (setf (codespace-restore-objects codespace) (compile nil restore-objects-source-code))))
     codespace))
 
 
-(defmacro define-codespace ((name magic-number &key inherits-from) &body body)
+(defmacro define-codespace ((name magic-number &key inherits-from debug) &body body)
   "Creates and registers a codespace into *codespaces*.  Within this environment
  there are a three pre-defined symbols:
  TRACK-REFERENCES is bound to *track-references*
  OBJ within a defstore is the object you should store
- CODE within a defrestore is the tag code that has been read."
+ CODE within a defrestore is the tag code that has been read.
+ STORAGE is a `read-storage' if you are in a defrestore, if you are in a
+ defstore, it is either a `write-storage' or NIL if you are in the reference
+ counting phase (you can provide a separate function for that phase too).
+ RESTORE-OBJECT is a (lambda ()) -> object that can be passed to a function during the restore phase
+ STORE-OBJECT is a (lambda (object)) -> writes stuff out"
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (let ((codespace (make-codespace :magic-number ,magic-number :name ,name)))
        ,(when inherits-from
@@ -260,7 +288,7 @@
 	 ,@body)
        (when (gethash ,magic-number *codespaces*)
 	 (format t "WARNING: redefining code-space ~A~%" ,magic-number))
-       (setf (gethash ,magic-number *codespaces*) (compile-codespace codespace)))))
+       (setf (gethash ,magic-number *codespaces*) (compile-codespace codespace ,debug)))))
 
 (defstruct restore-info
   "Information about a defrestore statement"
