@@ -1,26 +1,29 @@
 (in-package :cl-binary-store)
 
-#+allegro
-(eval-when (:compile-toplevel)
-  (setf declared-fixnums-remain-fixnums-switch t)
-  (declaim (optimize (speed 3) (safety 1)
-		     (space 0) (debug 0) (compilation-speed 0))))
-
-;; A codespace is the collection of `defstore' / `defrestore' definitions
-;; `register-references', and `register-store-state' definitions.  This
-;; information is used to build two functions, one for serializing data and
-;; one for deserializing it.  Each codespace then defines a file format.
+;; A codespace is a description of a binary file format and the code that
+;; stores and restores from it.  A codespace is built through the imperative
+;; `define-codespace' micro-domain specific language.
 
 ;; Within a `define-codespace' top-level, one is working within your
 ;; own namespace, and using a declarative language to describe how to
 ;; serialize and deserialize things.  You can define global variables
 ;; with register-store-state, and explicit reference tracking
-;; hash-tables with register-references.
+;; hash-tables with register-references.  There are a three globally bound
+;; names within a define-codespace:
+;; TRACK-REFERENCES is bound to *track-references*
+;; OBJ within a defstore is the object you should store
+;; CODE within a defrestore is the tag code that has been read.
 
 ;; To debug this stuff you want to inspect *codespaces*.
 ;; Find your codepsace, dump the source code stored in the -source-code slot
 ;; into a file, compile it to a named function, and then put that named function
 ;; into the codespace compiled function slots and you will have full debuggability.
+
+#+allegro
+(eval-when (:compile-toplevel)
+  (setf declared-fixnums-remain-fixnums-switch t)
+  (declaim (optimize (speed 3) (safety 1)
+		     (space 0) (debug 0) (compilation-speed 0))))
 
 (defvar *codespaces* (make-hash-table :test 'eql)
   "a map from magic/version-number -> `codespace'")
@@ -31,6 +34,7 @@
 
 (defvar *current-codespace/compile-time* nil
   "nil or a `codespace'.  This is bound while compiling each codespace.")
+
 
 (defun invalid (&rest rest)
   (declare (ignore rest))
@@ -75,21 +79,21 @@
  This will trigger the end of restore (for use in cases where there
  isn't an obvious end of file)")
 
-(defun build-restore-objects ()
+(defun build-restore-objects (codespace)
   "Builds the body of a function that reads tag bytes and dispatches them through a
  big case statement built by make-read-dispatch-table."
   `(let* ((references-vector (make-array 2048 :initial-element nil))
 	  (references (make-references :vector references-vector))
 	  (*version-being-read* (codespace-magic-number *current-codespace*))
-	  ,@(build-global-state-let-bindings :restore t))
+	  ,@(build-global-state-let-bindings codespace :restore t))
      (declare (dynamic-extent references references-vector))
-     ,(build-global-state-declarations :restore t)
+     ,(build-global-state-declarations codespace :restore t)
      (labels ((restore-object2 (&optional (code (restore-ub8 storage)))
 		(let ((restore-object #'restore-object))
-                  ,(make-read-dispatch-table 'code)))
+                  ,(make-read-dispatch-table codespace 'code)))
 	      (restore-object (&optional (code (restore-ub8 storage)))
 		(let ((restore-object #'restore-object2))
-                  ,(make-read-dispatch-table 'code))))
+                  ,(make-read-dispatch-table codespace 'code))))
        (declare (inline restore-object2)) ;; inline one level
        (let ((objects
                (loop
@@ -106,73 +110,77 @@
                    collect object)))
 	 (apply #'values objects)))))
 
-(defun build-store-objects ()
+(defun build-store-objects (codespace)
   `(let* ((track-references *track-references*)
-	  ,@(build-global-state-let-bindings :store t))
-     ,(build-store-state-declarations :store t)
-     ,(with-reference-tables 'track-references
-	#+debug-cbs `(when track-references (format t "Starting reference counting pass on ~A objects~%" (length stuff)))
-	`(labels ((store-object2 (obj)
-		    (let ((store-object #'store-object)
-			  (storage nil)
-			  (assign-new-reference-id nil))
-		      ,(build-store-object/reference-phase)))
-		  (store-object (obj)
-		    (let ((store-object #'store-object2)
-			  (assign-new-reference-id nil)
-			  (storage nil))
-		      ,(build-store-object/reference-phase))))
-	   (declare (inline store-object2)) ;; inline one level deep
-	   (when track-references
-	     (dolist (elt stuff)
-	       (store-object elt))))
-	#+debug-cbs `(when track-references (format t "Finished reference counting pass~%"))
-	`(when track-references
-           ,(build-map-reference-tables ''analyze-references-hash-table)) ;; debugging only
-        ;; Now clean up the references table: delete anyone who has no references
-        #+debug-cbs `(when track-references (format t "Generating real reference hash-table~%"))
-	;; We do not assign reference ids.  They are assigned as objects are
-	;; written, in order as we are keeping the implicit numbering scheme, on
-	;; reading
-	`(let ((max-ref-id 0))
-	   (declare (type fixnum max-ref-id))
-           (when track-references
-	     ,(replacing-reference-tables
+	  ,@(build-global-state-let-bindings codespace :store t))
+     ,(build-global-state-declarations codespace :store t)
+     ,(build-reference-tables
+       codespace 'track-references
+       `(progn
+	  #+debug-cbs (when track-references (format t "Starting reference counting pass on ~A objects~%" (length stuff)))
+	  (labels ((store-object2 (obj)
+		     (let ((store-object #'store-object)
+			   (storage nil)
+			   (assign-new-reference-id nil))
+		       ,(store-object/phase codespace 'obj 'store-info-reference-phase-code)))
+		   (store-object (obj)
+		     (let ((store-object #'store-object2)
+			   (assign-new-reference-id nil)
+			   (storage nil))
+		       ,(store-object/phase codespace 'obj 'store-info-reference-phase-code))))
+	    (declare (inline store-object2)) ;; inline one level deep
+	    (when track-references
+	      (dolist (elt stuff)
+		(store-object elt))))
+	  #+debug-cbs (when track-references (format t "Finished reference counting pass~%"))
+	  #+debug-cbs (when track-references
+			,(build-map-reference-tables codespace ''analyze-references-hash-table))
+          ;; Now clean up the references table: delete anyone who has no references
+          #+debug-cbs (when track-references (format t "Generating real reference hash-table~%"))
+	  ;; We do not assign reference ids.  They are assigned as objects are
+	  ;; written, in order as we are keeping the implicit numbering scheme, on
+	  ;; reading
+	  (let ((max-ref-id 0))
+	    (declare (type fixnum max-ref-id))
+            (when track-references
+	      ,(replacing-reference-tables
+	       codespace
 	       'old-ht 'new-ht
-	       `(maphash (lambda (k v)
+	       '(maphash (lambda (k v)
 			   (when (> (the fixnum v) 1)
 			     (setf (gethash k new-ht) t)
 			     (the fixnum (incf max-ref-id))))
-			 old-ht)))
-           #+debug-cbs
-	   (when track-references
-             ,(build-map-reference-tables `(lambda (table-name table)
-                                             (format t "~A: there are ~A actual references~%"
-						     table-name
-						     (hash-table-count table)))))
-           #+debug-cbs `(format t "Starting actual storage phase~%")
-           (let ((ref-id 0))
-	     (declare (type fixnum ref-id))
-	     (labels ((assign-new-reference-id ()
-			#+dribble-cbs
-			(format t "Assigning new reference id! (ref-id is ~A)~%" ref-id)
-			(the fixnum (incf ref-id)))
-		      (store-object2 (obj) ;; inline one deep
-			(let ((store-object #'store-object)
-			      (assign-new-reference-id #'assign-new-reference-id))
-			  ,(build-store-object/storage-phase)))
-                      (store-object (obj)
-			(let ((store-object #'store-object2)
-			      (assign-new-reference-id #'assign-new-reference-id))
-			  ,(build-store-object/storage-phase))))
-	       (declare (inline store-object2) (inline assign-new-reference-id))
-	       (when (>= max-ref-id 2048) ;; if we would have to expand the references vector
-		 #+debug-cbs `(format t "Writing total reference count ~A to file~%" (1+ ref-id))
-		 (write-reference-count (1+ max-ref-id) #'store-object))
-	       (dolist (elt stuff)
-		 (store-object elt))
-	       (when *write-end-marker* (store-object (make-end-marker)))))
-	   (flush-write-storage storage)))))
+		 old-ht)))
+            #+debug-cbs
+	    (when track-references
+              ,(build-map-reference-tables codespace
+					   `(lambda (table-name table)
+                                              (format t "~A: there are ~A actual references~%"
+						      table-name
+						      (hash-table-count table)))))
+            #+debug-cbs (format t "Starting actual storage phase~%")
+            (let ((ref-id 0))
+	      (declare (type fixnum ref-id))
+	      (labels ((assign-new-reference-id ()
+			 #+dribble-cbs
+			 (format t "Assigning new reference id! (ref-id is ~A)~%" ref-id)
+			 (the fixnum (incf ref-id)))
+		       (store-object2 (obj) ;; inline one deep
+			 (let ((store-object #'store-object)
+			       (assign-new-reference-id #'assign-new-reference-id))
+			   ,(store-object/phase codespace 'obj 'store-info-storage-phase-code)))
+                       (store-object (obj)
+			 (let ((store-object #'store-object2)
+			       (assign-new-reference-id #'assign-new-reference-id))
+			   ,(store-object/phase codespace 'obj 'store-info-storage-phase-code))))
+		(declare (inline store-object2) (inline assign-new-reference-id))
+		(when (>= max-ref-id 2048) ;; if we would have to expand the references vector
+		  #+debug-cbs (format t "Writing total reference count ~A to file~%" (1+ ref-id))
+		  (write-reference-count (1+ max-ref-id) #'store-object))
+		(dolist (elt stuff)
+		  (store-object elt))
+		(when *write-end-marker* (store-object (make-end-marker)))))
+	    (flush-write-storage storage))))))
 
 (defun analyze-references-hash-table (table-name references)
   (declare (ignorable table-name references))
@@ -221,44 +229,38 @@
 			data)))))
 
 (defun compile-codespace (codespace)
-  ;; First build the code for the store-object phases
-  (unwind-protect
-       (progn
-	 (setf *current-codespace/compile-time* codespace)
-	 (let ((store-objects-source-code
-		 `(lambda (storage &rest stuff)
-			   (declare (optimize (speed 3) (safety 1)) (type write-storage storage)
-				    (dynamic-extent stuff))
-		    ,(build-store-objects))))
-	   (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
-	   (setf (codespace-store-objects codespace) (compile nil store-objects-source-code)))
-	 (let ((restore-objects-source-code
-		 `(lambda (storage)
-		    (declare (optimize (speed 3) (safety 1))
-			     (type read-storage storage))
-		    ,(build-restore-objects))))
-	   (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)
-	   (setf (codespace-restore-objects codespace)
-		 (compile nil restore-objects-source-code))))
-    (setf *current-codespace/compile-time* nil))
-  codespace)
+  (let ((store-objects-source-code
+	  `(lambda (storage &rest stuff)
+	     (declare (optimize (speed 3) (safety 1)) (type write-storage storage)
+		      (dynamic-extent stuff))
+	     ,(macroexpand (build-store-objects codespace)))))
+    (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
+    (setf (codespace-store-objects codespace) (compile nil store-objects-source-code)))
+  (let ((restore-objects-source-code
+	  `(lambda (storage)
+	     (declare (optimize (speed 3) (safety 1))
+		      (type read-storage storage))
+	     ,(macroexpand (build-restore-objects codespace)))))
+    (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)
+    (setf (codespace-restore-objects codespace) (compile nil restore-objects-source-code))
+    codespace))
+
 
 (defmacro define-codespace ((name magic-number &key inherits-from) &body body)
-  "Creates and registers a codespace into *codespaces*."
+  "Creates and registers a codespace into *codespaces*.  Within this environment
+ there are a three pre-defined symbols:
+ TRACK-REFERENCES is bound to *track-references*
+ OBJ within a defstore is the object you should store
+ CODE within a defrestore is the tag code that has been read."
   `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (unwind-protect
-	  (progn
-	    (setf *current-codespace/compile-time*
-		  (let ((codespace (make-codespace :magic-number ,magic-number :name ,name)))
-		    ,(when inherits-from
-		       `(deep-copy-codespace codespace (gethash ,inherits-from *codespaces*)))
-		    codespace))
-	    ,@body
-	    (when (gethash ,magic-number *codespaces*)
-	      (format t "WARNING: redefining code-space ~A~%" ,magic-number))
-	    (setf (gethash ,magic-number *codespaces*)
-		  (compile-codespace *current-codespace/compile-time*)))
-       (setf *current-codespace/compile-time* nil))))
+     (let ((codespace (make-codespace :magic-number ,magic-number :name ,name)))
+       ,(when inherits-from
+	  `(deep-copy-codespace codespace (gethash ,inherits-from *codespaces*)))
+       (macrolet ((get-current-codespace/compile-time () 'codespace))
+	 ,@body)
+       (when (gethash ,magic-number *codespaces*)
+	 (format t "WARNING: redefining code-space ~A~%" ,magic-number))
+       (setf (gethash ,magic-number *codespaces*) (compile-codespace codespace)))))
 
 (defstruct restore-info
   "Information about a defrestore statement"
@@ -298,31 +300,32 @@
   (values))
 
 (defmacro register-references (table-name construction-code)
-  `(register-references& *current-codespace/compile-time* ',table-name ',construction-code))
+  `(register-references& (get-current-codespace/compile-time) ',table-name ',construction-code))
 
-(defun with-reference-tables (track-references &rest body)
+(defun build-reference-tables (codespace track-references &rest body)
   "Wrap body with defined reference tables"
-  (assert *current-codespace/compile-time*)
-  (assert (codespace-ref-tables *current-codespace/compile-time*))
   (let ((let-bindings nil))
     (maphash (lambda (table-name ref-table)
                (push (list table-name `(when ,track-references
                                          ,(ref-table-construction-code ref-table)))
                      let-bindings))
-             (codespace-ref-tables *current-codespace/compile-time*))
+             (codespace-ref-tables codespace))
     `(let (,@let-bindings)
        (declare (dynamic-extent ,@(mapcar #'first let-bindings)))
        ,@body)))
 
-(defun build-map-reference-tables (func)
+(defmacro with-reference-tables (track-references &rest body)
+  `(with-reference-tables& (get-current-codespace/compile-time) ,track-references ,@body))
+
+(defun build-map-reference-tables (codespace func)
   (let ((code nil))
     (maphash (lambda (table-name ref-table)
                (declare (ignorable ref-table))
                (push `(funcall ,func ',table-name ,table-name) code))
-             (codespace-ref-tables *current-codespace/compile-time*))
+             (codespace-ref-tables codespace))
     `(progn ,@code)))
 
-(defun replacing-reference-tables (old-ht new-ht body)
+(defun replacing-reference-tables (codespace old-ht new-ht body)
   (let ((code nil))
     (maphash (lambda (table-name ref-table)
                (push `(setf ,table-name
@@ -331,16 +334,16 @@
 			      (progn ,body
 				     ,new-ht)))
 		     code))
-             (codespace-ref-tables *current-codespace/compile-time*))
+             (codespace-ref-tables codespace))
     `(progn ,@code)))
 
-(defun register-store-state& (name construction-code type dynamic-extent)
-  (setf (gethash name (codespace-store-global-state-info *current-codespace/compile-time*))
+(defun register-store-state& (codespace name construction-code type dynamic-extent)
+  (setf (gethash name (codespace-store-global-state-info codespace))
 	(make-global-state :name name :construction-code construction-code :type type
 			  :dynamic-extent dynamic-extent)))
 
-(defun register-restore-state& (name construction-code type dynamic-extent)
-  (setf (gethash name (codespace-restore-global-state-info *current-codespace/compile-time*))
+(defun register-restore-state& (codespace name construction-code type dynamic-extent)
+  (setf (gethash name (codespace-restore-global-state-info codespace))
 	(make-global-state :name name :construction-code construction-code :type type
 			  :dynamic-extent dynamic-extent)))
 
@@ -349,27 +352,27 @@
   (declare (ignore documentation))
   `(progn
      ,(when store
-	`(register-store-state& ',name ',construction-code ',type ',dynamic-extent))
+	`(register-store-state& (get-current-codespace/compile-time) ',name ',construction-code ',type ',dynamic-extent))
      ,(when restore
-	`(register-restore-state& ',name ',construction-code ',type ',dynamic-extent))))
+	`(register-restore-state& (get-current-codespace/compile-time) ',name ',construction-code ',type ',dynamic-extent))))
 
-(defun build-global-state-let-bindings (&key store restore)
+(defun build-global-state-let-bindings (codespace &key store restore)
   (assert (not (and store restore)))
   (loop for global-state being the
 	hash-values of (if store
-			   (codespace-store-global-state-info *current-codespace/compile-time*)
-			   (codespace-restore-global-state-info *current-codespace/compile-time*))
+			   (codespace-store-global-state-info codespace)
+			   (codespace-restore-global-state-info codespace))
 	 collect (list (global-state-name global-state)
 		       (global-state-construction-code global-state))))
 
-(defun build-global-state-declarations (&key store restore)
+(defun build-global-state-declarations (codespace &key store restore)
   (assert (not (and store restore)))
   `(declare
     ,@(loop for global-state being the
 	    hash-values of
 			(if store
-			    (codespace-store-global-state-info *current-codespace/compile-time*)
-			    (codespace-restore-global-state-info *current-codespace/compile-time*))
+			    (codespace-store-global-state-info codespace)
+			    (codespace-restore-global-state-info codespace))
 	    for type = (global-state-type global-state)
 	    for dynamic-extent = (global-state-dynamic-extent global-state)
 	    for name = (global-state-name global-state)
@@ -411,10 +414,10 @@
 
 (defmacro delete-restore (code)
   "In define-codespace that has inherited another codespace, delete store capability for a type"
-  `(remhash ',code (codespace-restore-infos *current-codespace/compile-time*)))
+  `(remhash ',code (codespace-restore-infos (get-current-codespace/compile-time))))
 
 (defmacro delete-store (type)
-  `(remhash ',type (codespace-store-infos *current-codespace/compile-time*)))
+  `(remhash ',type (codespace-store-infos (get-current-codespace/compile-time))))
 
 (defun delete-codespace (codespace)
   (remhash codespace *codespaces*))
@@ -423,7 +426,7 @@
     (type store-function-signature
      &key (call-during-reference-phase nil call-during-reference-phase-provided-p)
        check-for-ref-in write-phase-code override)
-  `(update-store-info *current-codespace/compile-time* ',type ',store-function-signature
+  `(update-store-info (get-current-codespace/compile-time) ',type ',store-function-signature
 		      ,@(if call-during-reference-phase-provided-p
 			    `(:call-during-reference-phase ',call-during-reference-phase))
 		      :check-for-ref-in ',check-for-ref-in
@@ -441,9 +444,9 @@
     (setf (gethash code restore-info) ri)))
 
 (defmacro defrestore (code restore-function-signature)
-  `(update-restore-info *current-codespace/compile-time* ',code ',restore-function-signature))
+  `(update-restore-info (get-current-codespace/compile-time) ',code ',restore-function-signature))
 
-(defun store-object/phase (obj store-info-accessor)
+(defun store-object/phase (codespace obj store-info-accessor)
   ;; This assumes that the caller has defined OBJ, STORAGE, STORE-OBJECT, and the various
   ;; tables in *ref-tables*.  I don't have the energy to make this all hygenic.
   `(etypecase ,obj
@@ -453,17 +456,11 @@
                      (push (list type
                                  (funcall store-info-accessor store-info))
                            type-dispatch-table))
-		   (codespace-store-infos *current-codespace/compile-time*))
+		   (codespace-store-infos codespace))
 	  type-dispatch-table)
 	:key #'first)))
   
-(defun build-store-object/storage-phase ()
-  (store-object/phase 'obj 'store-info-storage-phase-code))
-
-(defun build-store-object/reference-phase ()
-  (store-object/phase 'obj 'store-info-reference-phase-code))
-
-(defun make-read-dispatch-table (code-to-dispatch-on)
+(defun make-read-dispatch-table (codespace code-to-dispatch-on)
   ;; Assumes this is in a context where STORAGE, REFERENCES, and RESTORE-OBJECT are defined
   (assert (eq code-to-dispatch-on 'code))
   (let ((code nil))
@@ -471,7 +468,7 @@
                (push (list dispatch-code
                            ;; #+info-cbs `(incf (aref *dispatch-counter* ,dispatch-code))
                            (restore-info-restore-function-source-code restore-info)) code))
-             (codespace-restore-infos *current-codespace/compile-time*))
+             (codespace-restore-infos codespace))
     (let ((numeric-dispatch-codes (sort (remove-if-not #'numberp code :key #'first) #'< :key #'first)))
       `(cond
 	 ,@(loop for source-code in (remove-if #'numberp code :key #'first)
