@@ -157,6 +157,8 @@
    #:*eq-refs-table-size*
    #:*double-float-refs-table-size*
    #:*num-eq-refs-table-size*
+   #:implicit-eql-refs
+   #:implicit-ref-id
 
    ;; Error if symbol package does not exist and handling the case
    #:missing-package-during-restore
