@@ -1,15 +1,21 @@
 (in-package :cl-binary-store)
 
-;; Here we deal with STRUCTURE-OBJECT and STANDARD-OBJECT
-;;  NOTE that we do not de-duplicate double-floats stored in slots
-;;  unless they are eq (not eql!) to others
+;; Here we deal with `STRUCTURE-OBJECT's and `STANDARD-OBJECT's
+;; For each object type we meet, we serialize / deserialize a
+;; single description of it an `object-info'.  That contains the
+;; type-name and slot-values.  Locally during store and restore we
+;; also keep track of any user specified extension behaviors within
+;; this `object-info'.
+
+;; During restore, we provide reasonable and comprehensive restarts
+;; for missing defstruct, defclass, and slots.
 
 (defvar *store-class-slots* nil
   "If set / let to T, then slots in standard-objects with :class allocation
  will be stored, otherwise not.")
 
 ;; We provide three extension points to customize how objects are
-;; serialized and deserialized.  In order of specifi
+;; serialized and deserialized.
 
 ;; First is `SERIALIZABLE-OBJECT-INFO' which may return slot-names to
 ;; serialize or a function that will be called on each object and
@@ -125,7 +131,7 @@
     (declare (ignorable type))
     (values nil nil)))
 
-(defun compute-object-info (type)
+(defun compute-object-info (type new-implicit-ref-id)
   "Takes a symbol denoting the type of an object and returns an `object-info' allowing for
  the various user methods to override behaviors."
   (declare (optimize speed safety))
@@ -141,7 +147,8 @@
 	 :slot-value-filter-func slot-value-filter-func
 	 :specialized-constructor (specialized-object-constructor type)
 	 :specialized-serializer specialized-serializer
-	 :specialized-deserializer specialized-deserializer)))))
+	 :specialized-deserializer specialized-deserializer
+	 :ref-id (- (the fixnum (funcall (the function new-implicit-ref-id)))))))))
 
 (defmacro maybe-store-local-reference-instead ((object-info storage eql-refs) &body body)
   "Called during the serialization / storage phase.  This is a kludged
@@ -163,17 +170,18 @@
 		   nil)))
      ,@body))
 
-(defun maybe-store-to-reference-table (object-info)
+(defun maybe-store-to-reference-table (object-info implicit-eql-refs)
   "Called during the deserialization / restore phase.  We store the constructed
  object-info into our reference hash table using its reference id."
-  (when *eql-refs*
-    (setf (gethash (object-info-ref-id object-info) *eql-refs*) object-info))
+  (when implicit-eql-refs
+    (setf (gethash (object-info-ref-id object-info) implicit-eql-refs) object-info))
   object-info)
 
-(defun store-object-info (object-info storage eq-refs store-object assign-new-reference-id)
+(defun store-object-info (object-info storage eq-refs store-object implicit-eql-refs
+			  assign-new-reference-id)
   (declare (optimize speed safety) (type object-info object-info))
   (maybe-store-reference-instead (object-info storage eq-refs assign-new-reference-id)
-    (maybe-store-local-reference-instead (object-info storage *eql-refs*)
+    (maybe-store-local-reference-instead (object-info storage implicit-eql-refs)
       (let ((slot-names (object-info-slot-names object-info)))
 	(when storage
 	  (store-ub8/no-tag +object-info-code+ storage)
@@ -278,13 +286,14 @@
 		      value))
 	  struct)))))
 
-(defun restore-object-info (storage restore-object)
+(defun restore-object-info (storage restore-object implicit-eql-refs assign-new-implicit-ref-id)
   (declare (optimize speed safety) (type function restore-object))
   (let* ((num-slots (restore-tagged-fixnum storage)))
     (if (< num-slots 0) ; it's a reference id, look it up in our implicit tracking table
-	(gethash num-slots *eql-refs*)
+	(gethash num-slots implicit-eql-refs)
         (let ((slot-name-vector (make-array num-slots))
-	      (type (funcall restore-object)))
+	      (type (funcall restore-object))
+	      (ref-id (- (the fixnum (funcall (the function assign-new-implicit-ref-id))))))
 	  ;; No circularity possible below as these are symbols
 	  (loop for idx fixnum from 0 below num-slots
 		do (setf (svref slot-name-vector idx) (funcall restore-object)))
@@ -298,10 +307,14 @@
 		  (make-object-info :class nil :type type
 				    :specialized-constructor specialized-constructor
 				    :specialized-deserializer specialized-deserializer
-				    :slot-names slot-name-vector)))
+				    :slot-names slot-name-vector
+				    :ref-id ref-id)
+		  implicit-eql-refs))
 		(t
 		 (let* ((si (maybe-store-to-reference-table
-			     (make-object-info :type type :slot-names slot-name-vector)))
+			     (make-object-info
+			      :type type :slot-names slot-name-vector :ref-id ref-id)
+			     implicit-eql-refs))
 			(class (really-find-class si)))
 		   (setf (object-info-class si) class)
 		   (setf (object-info-type si) (class-name class))
@@ -315,11 +328,11 @@
 		     (setf (object-info-slot-names si) slot-name-vector))
 		   si)))))))))
 	
-(defun get-object-info (object)
+(defun get-object-info (object object-info new-implicit-ref-id)
   (let ((type (type-of object)))
-    (or (gethash type *object-info*)
-	(setf (gethash type *object-info*)
-	      (compute-object-info type)))))
+    (or (gethash type object-info)
+	(setf (gethash type object-info)
+	      (compute-object-info type new-implicit-ref-id)))))
 
 (declaim (inline store-unbound))
 (defun store-unbound (storage)
@@ -330,19 +343,21 @@
   'unbound-slot)
 
 (defun store-standard/structure-object
-    (obj storage eq-refs store-object assign-new-reference-id is-standard-object)
+    (obj storage eq-refs store-object assign-new-reference-id is-standard-object object-info
+     implicit-eql-refs new-implicit-ref-id)
   (declare (optimize speed safety) (type (or structure-object standard-object condition) obj))
   (maybe-store-reference-instead (obj storage eq-refs assign-new-reference-id)
     (when storage
       (store-ub8/no-tag +standard/structure-object-code+ storage))
-    (let* ((object-info (get-object-info obj))
+    (let* ((object-info (get-object-info obj object-info new-implicit-ref-id))
 	   (object-info-specialized-serializer (object-info-specialized-serializer object-info)))
       (cond
 	(object-info-specialized-serializer
 	 (funcall object-info-specialized-serializer
 		  obj storage eq-refs store-object assign-new-reference-id))
 	(t
-	 (store-object-info object-info storage eq-refs store-object assign-new-reference-id)
+	 (store-object-info object-info storage eq-refs store-object implicit-eql-refs
+			    assign-new-reference-id)
 	 (let ((filter (object-info-slot-value-filter-func object-info)))
 	   (declare (type function store-object))
 	   (if is-standard-object

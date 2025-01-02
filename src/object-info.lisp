@@ -1,7 +1,11 @@
 (in-package :cl-binary-store)
+
 ;; We store some meta-information about the structure-object or
-;; standard-object We generate and store this once for each object type
-;; into *class-info* and also into the output stream.
+;; standard-object.  We store part of this information (slot-names and
+;; type into the serialization stream... only once though, with either
+;; an explicit reference scheme if *track-references* is T or an implicit
+;; tracking scheme that uses object-info-ref-id and overloads the length
+;; of the slot-name vector as a reference id.)
 
 (declaim (inline object-info-class object-info-slot-names object-info-type
 		 object-info-specialized-constructor
@@ -20,5 +24,4 @@
   (specialized-constructor nil :type (or null function))
   (specialized-serializer nil :type (or null function))
   (specialized-deserializer nil :type (or null function))
-  (ref-id (when *eql-refs-ref-id* ;; ref-id is always negative number
-	    (- (the fixnum (incf (the fixnum *eql-refs-ref-id*))))) :type (or null fixnum)))
+  (ref-id nil :type (or null (and fixnum (integer * -1)))))

@@ -22,15 +22,37 @@
    double-float-refs (make-hash-table :test #+sbcl #'double-float-= #-sbcl #'eql
 				      :size *double-float-refs-table-size*))
   (register-references eq-refs (make-hash-table :test #'eq :size *eq-refs-table-size*))
-  (register-store-state list-lengths (make-hash-table :test #'eq))
-  (register-store-state support-shared-list-structures
+  (register-global-state list-lengths (make-hash-table :test #'eq) :store t)
+  (register-global-state support-shared-list-structures
 			(progn
 			  (when *support-shared-list-structures*
 			    (assert *track-references* nil
 				    "To use *support-shared-list-structures* you must have ~
                                     *track-references* t"))
-			  *support-shared-list-structures*))
+			  *support-shared-list-structures*)
+			:store t)
 
+  (register-global-state object-info (make-hash-table :test #'eq)
+			:type hash-table :dynamic-extent t :store t
+			:documentation
+			"An eql hash table which maps from structure-object or standard-class
+                         type name to a `object-info' structure.  This is bound locally during
+                         operation of store-objects.  During restore we use the reference tables")
+
+  (register-global-state implicit-eql-refs (make-hash-table :test #'eql) :dynamic-extent t
+			 :store t :restore t :documentation "When *track-references* is nil,
+                         still want to do some reference tracking.  To do that we use this
+                         implicit-eql-refs table and the assign-new-reference-id function.
+                         This is used for object-info and symbols.")
+
+  (register-global-state new-implicit-ref-id
+			  (let ((counter 0))
+			    (declare (type fixnum counter))
+			    (lambda () (the fixnum (incf counter))))
+			  :dynamic-extent t :restore t :store t
+			  :documentation "A counter used during store and restore for implicit
+                           reference id labelling even if *track-references* is nil.")
+  
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
   (defrestore +ub8-code+ (restore-ub8 storage))
   (defrestore +ub16-code+ (restore-ub16 storage))
@@ -87,13 +109,16 @@
   ;; We use two defstore lines to help with the typecase dispatch
   
   (defstore structure-object (store-standard/structure-object
-			      obj storage eq-refs store-object assign-new-reference-id nil))
+			      obj storage eq-refs store-object assign-new-reference-id nil
+			      object-info implicit-eql-refs new-implicit-ref-id))
   (defstore standard-object (store-standard/structure-object
-			     obj storage eq-refs store-object assign-new-reference-id t))
+			     obj storage eq-refs store-object assign-new-reference-id t
+			     object-info implicit-eql-refs new-implicit-ref-id))
   ;; On sbcl a condition is neither a structure-object nor a standard-object
   #+sbcl
   (defstore condition (store-standard/structure-object
-		       obj storage eq-refs store-object assign-new-reference-id t))
+		       obj storage eq-refs store-object assign-new-reference-id t
+		       object-info implicit-eql-refs new-implicit-ref-id))
   
   (defrestore +standard/structure-object-code+
       (restore-standard/structure-object storage restore-object))
@@ -137,8 +162,9 @@
   (defstore array (store-array obj storage eq-refs store-object assign-new-reference-id))
   (defrestore +array-code+ (restore-array storage restore-object))
   
-  (defstore object-info (store-object-info obj storage eq-refs store-object assign-new-reference-id))
-  (defrestore +object-info-code+ (restore-object-info storage restore-object))
+  (defstore object-info (store-object-info obj storage eq-refs store-object implicit-eql-refs assign-new-reference-id))
+  (defrestore +object-info-code+ (restore-object-info storage restore-object implicit-eql-refs
+						      new-implicit-ref-id))
   
   ;; UNBOUND MARKER
   (defrestore +unbound-code+ (restore-unbound))

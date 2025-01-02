@@ -7,16 +7,26 @@
 		     (space 0) (debug 0) (compilation-speed 0))))
 
 ;; A codespace is the collection of `defstore' / `defrestore' definitions
-;; and `register-references'.
+;; `register-references', and `register-store-state' definitions.  This
+;; information is used to build two functions, one for serializing data and
+;; one for deserializing it.
+
+;; Within a 'define-codespace top-level, one is working within your
+;; own namespace, and using a simple declarative language to describe
+;; how to serialize and deserialize things.  You can define global
+;; variables with register-store-state, and explicit reference tracking
+;; hash-tables with register-references.
+
 
 ;; It defines the data structure written on disk.  So far, we use a
-;; single byte as the first dispatch mechanism for an object, so the
+;; single byte as the first dispatch mechanism for an object (without
+;; any means to override this, but it would be easy to do so), so the
 ;; codespace defines a mapping from that byte to a deserialization
 ;; routine or a serialization routine.  So, for example maybe all #s >
 ;; 128 could be a single instruction using the high bit as a tag, so
 ;; for example one could encode 0-127 by using the high bit thus
 ;; achieving high density for small numbers.  But that might not be
-;; the best use of the codespace for some other application, thuse we
+;; the best use of the codespace for some other application, thus we
 ;; allow codespaces to be switched in and out based on what the user
 ;; requests or what is requested within the deserialized data.  The
 ;; version/magic number specifies a codespace.
@@ -41,7 +51,8 @@
   (ref-tables (make-hash-table :test 'eql)) ; Maps name -> ref-table
   (store-infos (make-hash-table :test 'equal)) ; Maps type -> `store-info'
   (restore-infos (make-hash-table :test 'eql)) ; Maps code -> `restore-info'
-  (store-state-info (make-hash-table :test 'eql)) ; Maps name -> store-state
+  (store-global-state-info (make-hash-table :test 'eql)) ; Maps name -> `global-state'
+  (restore-global-state-info (make-hash-table :test 'eql)) ; Maps name -> `global-state'
   (restore-objects-source-code nil) ; the source code that was compiled to restore-objects
   (store-objects-source-code nil) ; the source code that was compiled to make store-objects
   (restore-objects #'invalid :type function)
@@ -51,7 +62,10 @@
   (setf (codespace-ref-tables target) (codespace-ref-tables source-codespace))
   (setf (codespace-store-infos target) (codespace-store-infos source-codespace))
   (setf (codespace-restore-infos target) (codespace-restore-infos source-codespace))
-  (setf (codespace-store-state-info target) (codespace-store-state-info source-codespace)))
+  (setf (codespace-store-global-state-info target)
+	(codespace-store-global-state-info source-codespace))
+  (setf (codespace-restore-global-state-info target)
+	(codespace-restore-global-state-info source-codespace)))
 
 ;; To debug this stuff you might have to do:
 ;; (let ((*current-codespace/compile-time* (gethash 1 *codespaces*)))
@@ -65,11 +79,6 @@
  performance win (you can hit hundreds of MB/sec instead of 10s of
  MB/sec, but you need to make sure your data is safe to serialize and
  you don't care about EQL checks of data.")
-
-(defvar *object-info* nil
-  "An eql hash table which maps from structure-object or standard-class type name
- to a `object-nfo' structure.  This is bound locally during operation of store-objects
- and restore-objects.")
 
 (defvar *eql-refs* nil
   "Even when *track-references* is disabled, code can use this hash table to do its own
@@ -95,10 +104,9 @@
   `(let* ((references-vector (make-array 2048 :initial-element nil))
 	  (references (make-references :vector references-vector))
 	  (*version-being-read* (codespace-magic-number *current-codespace*))
-	  (ht (make-hash-table :test 'eql))
-	  (*eql-refs-ref-id* 0)
-	  (*eql-refs* ht))
-     (declare (dynamic-extent references references-vector ht))
+	  ,@(build-global-state-let-bindings :restore t))
+     (declare (dynamic-extent references references-vector))
+     ,(build-global-state-declarations :restore t)
      (labels ((restore-object2 (&optional (code (restore-ub8 storage)))
 		(let ((restore-object #'restore-object))
                   ,(make-read-dispatch-table 'code)))
@@ -123,18 +131,8 @@
 
 (defun build-store-objects ()
   `(let* ((track-references *track-references*)
-	  ;; TODO: move object-info and eql-refs to register-store-state statements
-	  ;; will have to add dynamic-extent stuffs?
-	  (object-info (make-hash-table :test 'eql))
-	  (*object-info* object-info)
-	  (ht (unless track-references (make-hash-table :test 'eql)))
-	  (*eql-refs-ref-id* (unless track-references 0))
-	  (*eql-refs* ht)
-	  ,@(loop for store-state being the
-		  hash-values of (codespace-store-state-info *current-codespace/compile-time*)
-		  collect (list (store-state-name store-state)
-				(store-state-construction-code store-state))))
-     (declare (dynamic-extent object-info ht))
+	  ,@(build-global-state-let-bindings :store t))
+     ,(build-store-state-declarations :store t)
      ,(with-reference-tables 'track-references
 	#+debug-cbs `(when track-references (format t "Starting reference counting pass on ~A objects~%" (length stuff)))
 	`(labels ((store-object2 (obj)
@@ -296,11 +294,13 @@
   (reference-phase-code nil)
   (storage-phase-code nil))
 
-(defstruct store-state
+(defstruct global-state
   "Something that is instantiated at the start of the store process, regardless
  of whether track-references is true or not.  Like OBJECT-INFO, and LIST-LENGTHS."
   (name nil)
-  (construction-code nil))
+  (construction-code nil)
+  (type nil)
+  (dynamic-extent nil))
 
 (defstruct ref-table
   "A ref-table is a hash table which is used solely to track references.  It will be nil
@@ -357,12 +357,49 @@
              (codespace-ref-tables *current-codespace/compile-time*))
     `(progn ,@code)))
 
-(defun register-store-state& (name construction-code)
-  (setf (gethash name (codespace-store-state-info *current-codespace/compile-time*))
-	(make-store-state :name name :construction-code construction-code)))
+(defun register-store-state& (name construction-code type dynamic-extent)
+  (setf (gethash name (codespace-store-global-state-info *current-codespace/compile-time*))
+	(make-global-state :name name :construction-code construction-code :type type
+			  :dynamic-extent dynamic-extent)))
 
-(defmacro register-store-state (name construction-code)
-  `(register-store-state& ',name ',construction-code))
+(defun register-restore-state& (name construction-code type dynamic-extent)
+  (setf (gethash name (codespace-restore-global-state-info *current-codespace/compile-time*))
+	(make-global-state :name name :construction-code construction-code :type type
+			  :dynamic-extent dynamic-extent)))
+
+(defmacro register-global-state (name construction-code &key type dynamic-extent documentation
+							  store restore)
+  (declare (ignore documentation))
+  `(progn
+     ,(when store
+	`(register-store-state& ',name ',construction-code ',type ',dynamic-extent))
+     ,(when restore
+	`(register-restore-state& ',name ',construction-code ',type ',dynamic-extent))))
+
+(defun build-global-state-let-bindings (&key store restore)
+  (assert (not (and store restore)))
+  (loop for global-state being the
+	hash-values of (if store
+			   (codespace-store-global-state-info *current-codespace/compile-time*)
+			   (codespace-restore-global-state-info *current-codespace/compile-time*))
+	 collect (list (global-state-name global-state)
+		       (global-state-construction-code global-state))))
+
+(defun build-global-state-declarations (&key store restore)
+  (assert (not (and store restore)))
+  `(declare
+    ,@(loop for global-state being the
+	    hash-values of
+			(if store
+			    (codespace-store-global-state-info *current-codespace/compile-time*)
+			    (codespace-restore-global-state-info *current-codespace/compile-time*))
+	    for type = (global-state-type global-state)
+	    for dynamic-extent = (global-state-dynamic-extent global-state)
+	    for name = (global-state-name global-state)
+	    when type
+	      collect `(type ,type ,name)
+	    when dynamic-extent
+	      collect `(dynamic-extent ,name))))
 
 (defun update-store-info
     (codespace type store-function-signature
