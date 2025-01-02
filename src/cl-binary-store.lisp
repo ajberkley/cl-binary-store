@@ -135,7 +135,12 @@
    #:copy-sap
    #:ensure-enough-data
    #:copy-n-bytes
-   #:storage-sap
+   #:write-storage-offset
+   #:write-storage-store
+   #:read-storage-offset
+   #:read-storage-store
+   #:set-sap-ref-8
+   #:read-storage-sap   
    #:eq-refs
    #:double-float-refs
    #:num-eq-refs
@@ -189,8 +194,7 @@
    #:delete-store
    #:delete-codespace
    #:*codespaces*
-   #:*allow-codespace-switching*
-   #:*no-circular-lists*))
+   #:*allow-codespace-switching*))
 
 
 (in-package :cl-binary-store)
