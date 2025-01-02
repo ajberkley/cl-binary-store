@@ -6,7 +6,7 @@ The comparables sorted by fastest to slowest: HYPERLUMINAL-MEM, CL-CONSPACK and 
 
 hyperluminal-mem is currently broken in quicklisp (though you can hit accept a couple times to get it compiled and running).
 
-In terms of feature comparable, cl-store has the best behavior out of the box without requiring anything of the user.  cl-conspack is really nice too, but has some different goals, and it requires adding specialized serializers for each structure or object you use.  It is faster than cl-store which is nice, but not fast enough, and as noted earlier doesn't work well with data containing many instances of structures or classes.  Hyperluminal-mem is a very optimized binary serializer made to write to SAP buffers directly.  It is somewhat extensible and again requires writing code for every struct or object you want to serialize.  It does not do reference or circularity tracking at all.  Hyperluminal-mem is currently broken in quicklisp unfortunately, but you can still load it by accepting the compilation errors (it's problems in stm library).  It's my benchmark for zippy raw data serialization.  We are almost as fast as it in many cases, faster in others, slower in others.
+In terms of feature comparable, cl-binary-store (and cl-store) has the best behavior out of the box without requiring anything of the user.  cl-conspack is really nice too, but has some different goals, and it requires adding specialized serializers for each structure or object you use.  It is faster than cl-store which is nice, but not fast enough, and as noted earlier doesn't work well with data containing many instances of structures or classes.  Hyperluminal-mem is a very optimized binary serializer made to write to SAP buffers directly.  It also requires writing code for every struct or object you want to serialize.  It does not do reference or circularity tracking at all.  Hyperluminal-mem is currently broken in quicklisp unfortunately, but you can still load it by accepting the compilation errors (it's problems in stm library).  It's my benchmark for zippy raw data serialization.  We are almost as fast as it in many cases, faster in others, slower in others.
 
 All the tests here are mainly using SBCL as that is (by far) the fastest implementation.  There is a section at the end where I run some on ECL, CCL, and Allegro.
 
@@ -48,7 +48,7 @@ Let's go farther into the synthetic zone.  Let's turn on reference tracking \*tr
     CL-STORE
      OUTPUT SIZE: 5.00MB
      WRITE: 72.79 ms at 69 MB/sec
-     READ : 76.39 ms at 65 MB/sec     
+     READ : 76.39 ms at 65 MB/sec
 
 Now let's turn on all the features, which adds support for any type of circularity you want (this is \*support-shared-list-structures\* t and \*track-references\* t).  We cannot elide cons markers in this case (at least not in a way that makes any sense from a performance view to me).  Here we are nominally #'eq hash-table speed dominated.  Nominally cl-store supports this mode too with precise-list-storage, but it blows the stack for any data set that is not tiny (so I had to scale the data set down for it).  We are now comparing now with conspack:tracking-refs which supports the same behavior as cl-binary-store:
 

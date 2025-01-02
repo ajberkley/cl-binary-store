@@ -3,8 +3,20 @@
 
 (in-package #:cl-binary-store-tests)
 
+(define-test error-if-weird-settings
+  (let ((*track-references* t)
+	(*support-shared-list-structures* nil))
+    (is '= (restore (store nil 1)) 1))
+  (let ((*track-references* nil)
+	(*support-shared-list-structures* t))
+    (fail (restore (store nil 1))))
+  (let ((*track-references* nil)
+	(*support-shared-list-structures* nil))
+    (is '= (restore (store nil 1)) 1)))
+
 (define-test test-very-basic-list-cdr-circularity
   (let ((a (list 123 456))
+	(*track-references* t)
 	(*support-shared-list-structures* t))
     (setf (cddr a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
@@ -12,16 +24,16 @@
       ;; 	(print result))
       (is '= (first result) 123)
       (is '= (second result) 456)
-      (is 'eq (cddr result) result)))
-  (let ((a (cons 1234 nil)))
-    (setf (cdr a) a)
-    (let ((result (restore (store nil a))))
-      (is '= 1234 (car result))
-      (is 'eq (cdr result) result))))
+      (is 'eq (cddr result) result))
+    (let ((a (cons 1234 nil)))
+      (setf (cdr a) a)
+      (let ((result (restore (store nil a))))
+	(is '= 1234 (car result))
+	(is 'eq (cdr result) result)))))
 
 (define-test test-very-basic-list-car-circularity
   (let ((a (list nil "abcd"))
-	(*support-shared-list-structures* nil))
+	(*support-shared-list-structures* t))
     (setf (first a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
       (is 'eq (first result) result)

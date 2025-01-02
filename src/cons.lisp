@@ -3,13 +3,7 @@
 (defvar *support-shared-list-structures* nil
   "If this is T, then circular lists of all types and structures that
  share list parts will be serialized correctly.  This is very
- expensive.  When this is NIL, only the heads of lists may be multiply
- referenced (by elements in the list itself or other objects).  If you
- aren't storing large lists this is not that expensive.
-
- If you are storing complex list data (with for example the tail of
- a list connected to something other than its head, or data structures
- that share conses), then you must let/set this to T.")
+ expensive.")
 
 ;; There is one trick we play here.  If we have *track-references* t
 ;; and *support-shared-list-structures* nil then we can determine the
@@ -49,12 +43,14 @@
 (declaim (inline store-cons/finite-length))
 (defun store-cons/finite (cons storage eq-refs store-object assign-new-reference-id list-lengths)
   "This is called during the actual storage output phase if we have already computed the list
- length.  track-references is true, but not *support-shared-list-structures*"
+ length.  This is not called when *support-shared-list-structures* is true."
   (declare (optimize (debug 3) safety) (type write-storage storage) (type function store-object))
   (maybe-store-reference-instead (cons storage eq-refs assign-new-reference-id)
     (let ((length (or (and list-lengths (gethash cons list-lengths))
 		      (length/detect-dotted cons))))
-      (when (not length)
+      (when (or (not length) (= length 1))
+	;; Dotted lists are usually just a single cons, and are more compact to store
+	;; with a cons tag than a finite-length-list of length 2.
 	(return-from store-cons/finite
 	  (store-cons/indefinite cons storage eq-refs store-object assign-new-reference-id)))
       (locally
@@ -76,7 +72,7 @@
 
 (declaim (inline search-cons/indefinite))
 (defun search-cons/indefinite (cons references store-object)
-  "This is only called when *track-references* is nil and *support-shared-list-structures* is nil."
+  "This is only called when *track-references* is t and *support-shared-list-structures* is t."
   (declare (optimize (speed 3) (safety 0) (debug 0)) (type function store-object))
   (tagbody start
      (when (check-reference cons references)

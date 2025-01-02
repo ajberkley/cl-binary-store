@@ -1,10 +1,10 @@
 # cl-binary-store
 
-A fast and customizable serializer/deserializer of Common Lisp objects to/from a binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.
+A super fast and customizable serializer/deserializer of Common Lisp objects to/from a very compact binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.  Specialized arrays (on SBCL) are stored/restore at lightning speed.
 
-> :warning: Note that this is not a serializer/deserializer for communication with other types of systems *yet*.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for messagepack support.
+> :warning: Since we support the full Common Lisp type system (in the default codespace), this is not a serializer/deserializer for communication with other types of systems.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for conspack or messagepack support.
 
-cl-binary-store works on SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and Lispworks.  The SBCL implementation is the fast one.  None of the rest have fast serializers / deserializers for simple-arrays and general performance is not amazing (Allegro, Lispworks, and CCL are about 4-5x slower than SBCL, ECL about 10x slower; ABCL is 100x slower).
+cl-binary-store works on SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and Lispworks.  The SBCL implementation is the fast one.  None of the rest have fast serializers / deserializers for simple-arrays and general performance is not amazing on them.  If you care about one of the platforms tell me and I can make it fast.
 
 ## Status
 
@@ -19,7 +19,7 @@ I expect it to be polished and 1.0 released mid-January 2025.
 - Data/objects that have multiple and circular references within them
   - List circularity and general circular references between objects
   - Preservation of equality amongst the serialized objects (objects are eq de-duplicated and referred to by references in the output)
-- Should do the right thing out of the box for structure-objects and standard-objects, but be extensible when you want to do more
+- Do the right thing out of the box for structure-objects and standard-objects, but be extensible when you want to do more
 - Versioned output
 - Ability to change the coding mechanism straight-forwardly
 - Should work out of the box without any effort with an easy programmer / user interface
@@ -37,7 +37,7 @@ symbols, hash-tables, and pathnames are supported.
 
 Multiply referenced objects are stored as references so equality among the restored objects is preserved across serialization / deserialization and circularity is supported.
 
-Large simple-arrays have dedicated (at least on sbcl) serializers / deserializers which should be close to disk/network/memory bandwidth limited.
+Large simple-arrays have dedicated (on sbcl) serializers / deserializers which are close to disk/network/memory bandwidth limited.
 
 Support for writing and reading from files, vectors, streams, and raw memory without having to jump through hoops.
 
@@ -56,7 +56,7 @@ If you disable reference tracking, serialization is quite fast, and otherwise se
 
 #### (store-to-sap sap size &rest data)
 #### (restore-from-sap sap size)
- If you have an mmap'ed file or a raw system-area-pointer, you can store to it and restore from it.
+ If you have a raw system-area-pointer on sbcl (or a sap pointer to a mmap'ed file), or a vector from the static-vectors package, you can store to it and restore directly from it.
 
  For storing to one, you don't need to know the size in advance as we throw a restartable error allow you to allocate more system memory and continue on.  See tests/cl-binary-store-tests.lisp test-sap-write/read for a silly example of how to use this.  Nominally you'll be updating mmap regions of files or something.
 
@@ -162,7 +162,7 @@ Let this to NIL around your calls to store / restore if you have simple data wit
 
 #### \*support-shared-list-structures\* default: NIL
 
-Set this to T if you have complex list structures where you share tails of lists, or have complex list circularity (tail to head circularity is fine with this NIL as we record the he) if you have no references to conses that are not the heads of lists.  Most of the time this is fine to leave at nil.  It's a significant performance hit if you set it to T as we have to track every cons we see.  If you set this to T, *track-references* must be T too.
+Set this to T if you have complex list structures where you share tails of lists, or have any list only circularity (circularity between lists, objects, etc in general is handled by \*track-references\*, this setting is just for conses.  Most of the time this is fine to leave at nil.  It's a significant performance hit if you set it to T as we have to track every cons we see.  If you set this to T, *track-references* must be T too.
 
 #### \*write-magic-number\* default: NIL
 
