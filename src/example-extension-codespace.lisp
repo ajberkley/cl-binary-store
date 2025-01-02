@@ -7,9 +7,3 @@
   ;; Add low-level support for something-else objects
   (defstore something-else (store-something-else obj storage store-object))
   (defrestore +test-code+ (restore-something-else restore-object)))
-
-;; If we do not want the original codespace to even exist
-;; (eval-when (:compile-toplevel :load-toplevel :execute)
-;;   (delete-codespace +basic-codespace+))
-;; But not sure about how good this will be if the above gets
-;; re-loaded.  Would have to investigate.
