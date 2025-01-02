@@ -183,7 +183,7 @@ Complex double float numbers.  cl-binary-store goes fast.  Same for complex sing
 
 ## Specialized vectors and arrays
 
-cl-binary-store does good work on specialized vectors.  It's just blitting the underlying store to whatever your target is, so hard to beat.  This is very much a reason to use cl-binary-store --- not only is it faster and smaller than the competition
+cl-binary-store does good work on specialized vectors.  It's just blitting the underlying store to whatever your target is, so hard to beat.  This is very much a reason to use cl-binary-store --- for specialized arrays it is way faster than anything else.
 
     CL-BINARY-STORE> (test-on-data (long-list-of-big-ub8-vectors))
     HYPERLUMINAL-MEM
