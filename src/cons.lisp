@@ -44,7 +44,8 @@
 (defun store-cons/finite (cons storage eq-refs store-object assign-new-reference-id list-lengths)
   "This is called during the actual storage output phase if we have already computed the list
  length.  This is not called when *support-shared-list-structures* is true."
-  (declare (optimize speed safety) (type write-storage storage) (type function store-object))
+  (declare (optimize (speed 3) (safety 0))
+	   (type write-storage storage) (type function store-object))
   (maybe-store-reference-instead (cons storage eq-refs assign-new-reference-id)
     (let ((length (or (and list-lengths (gethash cons list-lengths))
 		      (length/detect-dotted cons))))
@@ -144,15 +145,14 @@
 
 (declaim (inline restore-list/known-length))
 (defun restore-list/known-length (storage restore-object)
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 0)))
   (let* ((length (restore-tagged-unsigned-fixnum storage)))
-    (let* ((head (cons nil nil))
+    (let* ((head (make-list length))
 	   (cons head))
-      (dotimes (count length)
+      (dotimes (count (1- length))
 	(restore-object-to (car cons) restore-object)
-	(if (= count (- length 1)) ;; need to support dotted end
-	    (restore-object-to (cdr cons) restore-object)
-	    (let ((new-cons (cons nil nil)))
-	      (setf (cdr cons) new-cons)
-	      (setf cons new-cons))))
+	(setf cons (cdr cons)))
+      ;; Support dotted end of list
+      (restore-object-to (car cons) restore-object)
+      (restore-object-to (cdr cons) restore-object)
       head)))
