@@ -12,11 +12,11 @@ All the tests here are mainly using SBCL as that is (by far) the fastest impleme
 
 ## Reference tracking disabled
 
-Here we use hyperluminal-mem as the benchmark as it does no reference tracking.  Let's start with some very artificial tests, mainly focused on dispatch code and raw data writing speed.  In this section we disable reference-tracking.  Generally hyperluminal mem wins here (though it generates large files)
+There are three modes we do benchmarking in.  The first is with \*track-references\* nil, which means that every piece of data is considered unique and there is no circular or multiple referencing supported.  This is the only mode that hyperluminal-mem runs in.  Conspack and cl-store can be run in a mode like this as well, so the comparisons are fair.  The second is with \*track-references\* t and \*support-shared-list-structures\* nil, which is comparable to the default behavior of cl-store.  Conspack when not tracking-refs does determine lengths of lists in advance, but will explode if you give it a circular list; so either it does full circularity tracking or none.  So it's hard to do apples to apples here.  The third is with \*track-references\* t and \*support-shared-list-structures\* t which is comparable to the behavior of conspack when conspack:tracking-refs is enabled.
 
-### Numbers
+### Tiny numbers
 
-Note that here we are writing out 1M conses and 1M small integers in < 10 ms, that's roughly 200Mobjects per second.  Not too shabby!  The MB/sec numbers below are a bit skewed because hyperluminal-mem writes out 8 bytes per tiny integer.  On this test we have reference tracking disabled on cl-binary-store (\*track-references\* set to NIL) and similarly on cl-store (\*check-for-circs\* nil).
+Note that here we are writing out 1M conses and 1M small integers in < 10 ms, that's roughly 200Mobjects per second.  Not too shabby!  The MB/sec numbers below are a bit skewed because hyperluminal-mem writes out 8 bytes per tiny integer.  On this test we have reference tracking disabled on cl-binary-store (\*track-references\* set to NIL) and similarly on cl-store (\*check-for-circs\* nil) on cl-conspack.
 
     (defun long-list-of-tiny-integers (&optional (n 1000000))
       (loop repeat n collect (- (random 33) 16)))
@@ -26,12 +26,12 @@ Note that here we are writing out 1M conses and 1M small integers in < 10 ms, th
      OUTPUT SIZE: 8.00 MB
      WRITE: 2.28 ms at 3509 MB/sec
      READ : 5.36 ms at 1493 MB/sec
-    CL-BINARY-STORE <-- ~290 M objects / second (1 million conses, 1 million integers)
-     OUTPUT SIZE: 2.00 MB <--- tiny file!
-     WRITE: 6.24 ms at 320 MB/sec
-     READ : 4.84 ms at 413 MB/sec
+    CL-BINARY-STORE
+     OUTPUT SIZE: 1.00 MB  <-- tiny
+     WRITE: 10.28 ms at 97 MB/sec
+     READ : 5.20 ms at 192 MB/sec
     CL-CONSPACK
-     OUTPUT SIZE: 2.00MB  <--- tiny files too!
+     OUTPUT SIZE: 2.00MB
      WRITE: 38.80 ms at 52 MB/sec
      READ : 28.40 ms at 70 MB/sec
     CL-STORE
@@ -39,87 +39,128 @@ Note that here we are writing out 1M conses and 1M small integers in < 10 ms, th
      WRITE: 83.60 ms at 60 MB/sec
      READ : 56.00 ms at 89 MB/sec
 
-OK, so the tiny integers are silly.  Let's use random 8 bit unsigned numbers.  It's a bit
-faster than the above, but whatever.
+Let's go farther into the synthetic zone.  Let's turn on reference tracking \*track-references\* (which is the default behavior anyway).  This rules out hyperluminal-mem as a comparable, and conspack does a bit heavier reference tracking so shouldn't be compared with this mode.
 
-    CL-BINARY-STORE> (test-on-data (long-list-of-not-tiny-integers))
-    HYPERLUMINAL-MEM
-     OUTPUT SIZE: 8.00 MB
-     WRITE: 2.24 ms at 3571 MB/sec
-     READ : 4.68 ms at 1709 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 3.00 MB
-     WRITE: 2.76 ms at 1087 MB/sec
-     READ : 6.48 ms at 463 MB/sec
-    CL-CONSPACK
-     OUTPUT SIZE: 2.00MB  <--- cute doing un-boxed conses
-     WRITE: 36.40 ms at 55 MB/sec
-     READ : 18.40 ms at 109 MB/sec
+     OUTPUT SIZE: 1.00 MB
+     WRITE: 13.88 ms at 72 MB/sec
+     READ : 4.92 ms at 203 MB/sec
     CL-STORE
      OUTPUT SIZE: 5.00MB
-     WRITE: 77.60 ms at 64 MB/sec
-     READ : 52.80 ms at 95 MB/sec
+     WRITE: 72.79 ms at 69 MB/sec
+     READ : 76.39 ms at 65 MB/sec     
 
-OK, now onto fixnums.  Still not doing shabbily.  I am not sure why the read dispatch code isn't as fast as hyperluminal-mem, but tracking that down is low down on my list.  These are pretty good numbers.
+Now let's turn on all the features, which adds support for any type of circularity you want (this is \*support-shared-list-structures\* t and \*track-references\* t).  We cannot elide cons markers in this case (at least not in a way that makes any sense from a performance view to me).  Here we are nominally #'eq hash-table speed dominated.  Nominally cl-store supports this mode too with precise-list-storage, but it blows the stack for any data set that is not tiny (so I had to scale the data set down for it).  We are now comparing now with conspack:tracking-refs which supports the same behavior as cl-binary-store:
 
-    CL-BINARY-STORE> (test-on-data (long-list-of-random-fixnums))
+    CL-BINARY-STORE
+     OUTPUT SIZE: 2.00 MB <-- larger file because user has asserted complex list circularity
+     WRITE: 90.71 ms at 22 MB/sec
+     READ : 5.68 ms at 352 MB/sec
+    CL-CONSPACK
+     OUTPUT SIZE: 2.00MB
+     WRITE: 171.58 ms at 12 MB/sec
+     READ : 29.60 ms at 68 MB/sec
+    CL-STORE (run on a 50x smaller set of data, scaled results up)
+     OUTPUT SIZE: 5.00MB
+     WRITE: 200.00 ms at 25 MB/sec
+     READ : 180.00 ms at 28 MB/sec
+
+We can win back some performance by hinting at the amount of data we are looking at by let'ing \*eq-refs-table-size\* to 1.3 million as we spend a lot of time in grow-hash-table / rehash.  We can do the same thing for cl-store.
+
+    CL-BINARY-STORE
+     OUTPUT SIZE: 2.00 MB
+     WRITE: 55.59 ms at 36 MB/sec
+     READ : 5.32 ms at 376 MB/sec
+    CL-STORE
+     OUTPUT SIZE: 5.00MB
+     WRITE: 80.79 ms at 62 MB/sec
+     READ : 69.99 ms at 71 MB/sec
+
+In this case, though, the lists are simple, so using just \*track-references\* t is the right choice (it allows us to handle normal circularity and is generally the default right choice, the cost is small).
+
+Of course, who the heck would use a list for this sort of thing.  Here's a simple array of signed-byte 8 integers... obviously having a specialized serializer helps:
+
     HYPERLUMINAL-MEM
      OUTPUT SIZE: 8.00 MB
-     WRITE: 2.24 ms at 3571 MB/sec
-     READ : 4.88 ms at 1639 MB/sec
+     WRITE: 3.12 ms at 2564 MB/sec
+     READ : 3.20 ms at 2500 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 10.00 MB
-     WRITE: 3.24 ms at 3087 MB/sec
-     READ : 7.28 ms at 1374 MB/sec
+     OUTPUT SIZE: 1.00 MB
+     WRITE: 0.04 ms at 25000 MB/sec
+     READ : 0.24 ms at 4167 MB/sec
     CL-CONSPACK
-     OUTPUT SIZE: 9.00MB <-- cute, must be detecting proper lists and eliding cons tags
-     WRITE: 58.80 ms at 153 MB/sec
-     READ : 47.20 ms at 191 MB/sec
+     OUTPUT SIZE: 1.00MB
+     WRITE: 26.80 ms at 37 MB/sec
+     READ : 20.80 ms at 48 MB/sec
     CL-STORE
-     OUTPUT SIZE: 37.75MB
-     WRITE: 542.00 ms at 70 MB/sec
-     READ : 300.40 ms at 126 MB/sec
+     OUTPUT SIZE: 4.00MB
+     WRITE: 56.79 ms at 70 MB/sec
+     READ : 52.79 ms at 76 MB/sec
 
-Double floats are more interesting.  Here cl-binary-store pulls ahead in writing and reading (note again the smaller files as we are storing the double-floats raw with a one byte tag instead of an 8 byte tag as in the hyperluminal-mem case).
+## Integers
 
-    CL-BINARY-STORE> (test-on-data (long-list-of-random-double-floats))
+OK, now onto fixnums.  Still not doing shabbily.  I am not sure why the read dispatch code isn't as fast as hyperluminal-mem, but tracking that down is low down on my list.  These are pretty good numbers.  Note cl-binary-store is slower than hyperluminal-mem because we actually walk the list twice in this mode, trying to keep the output small.  Here is a simple vector of random fixnums... (we showed simple-arrays are no fun to benchmark with because cl-binary-store wins too easily):
+
     HYPERLUMINAL-MEM
-     OUTPUT SIZE: 16.00 MB
-     WRITE: 32.44 ms at 493 MB/sec
-     READ : 17.92 ms at 893 MB/sec
+     OUTPUT SIZE: 8.00 MB
+     WRITE: 1.84 ms at 4348 MB/sec
+     READ : 3.60 ms at 2222 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 10.00 MB  <-- 8MB of double-floats and 2MB of cons tags
-     WRITE: 4.16 ms at 2404 MB/sec
-     READ : 11.88 ms at 842 MB/sec
+     OUTPUT SIZE: 9.00 MB
+     WRITE: 2.32 ms at 3880 MB/sec
+     READ : 3.36 ms at 2679 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 9.00MB
-     WRITE: 100.80 ms at 89 MB/sec
-     READ : 55.60 ms at 162 MB/sec
+     WRITE: 52.79 ms at 170 MB/sec
+     READ : 46.80 ms at 192 MB/sec
     CL-STORE
-     OUTPUT SIZE: 48.00MB
-     WRITE: 805.20 ms at 60 MB/sec
-     READ : 880.80 ms at 54 MB/sec
+     OUTPUT SIZE: 36.75MB
+     WRITE: 416.36 ms at 88 MB/sec
+     READ : 289.17 ms at 127 MB/sec
 
-Single floats go very fast, no boxing required on restore
+A simple-vector of double floats:
+
+    HYPERLUMINAL-MEM
+     OUTPUT SIZE: 16.00 MB
+     WRITE: 31.72 ms at 504 MB/sec
+     READ : 15.08 ms at 1061 MB/sec
+    CL-BINARY-STORE
+     OUTPUT SIZE: 9.00 MB
+     WRITE: 3.28 ms at 2744 MB/sec
+     READ : 7.60 ms at 1184 MB/sec
+    CL-BINARY-STORE  <--- just to show what a (simple-array double-float (*)) gets
+     OUTPUT SIZE: 8.00 MB
+     WRITE: 0.56 ms at 14287 MB/sec
+     READ : 2.04 ms at 3922 MB/sec     
+    CL-CONSPACK
+     OUTPUT SIZE: 9.00MB
+     WRITE: 93.19 ms at 97 MB/sec
+     READ : 51.99 ms at 173 MB/sec
+    CL-STORE
+     OUTPUT SIZE: 47.00MB
+     WRITE: 553.55 ms at 85 MB/sec
+     READ : 860.72 ms at 55 MB/sec
+
+Here's a *list* of random single floats.  Here again for the case of long lists, we are making a small trade in speed for smaller size here (like conspack does).  But still very very fast.
 
     CL-BINARY-STORE> (test-on-data (long-list-of-random-single-floats))
     HYPERLUMINAL-MEM
      OUTPUT SIZE: 8.00 MB
-     WRITE: 3.08 ms at 2597 MB/sec
-     READ : 6.52 ms at 1227 MB/sec
+     WRITE: 3.00 ms at 2667 MB/sec
+     READ : 6.04 ms at 1325 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 6.00 MB
-     WRITE: 3.40 ms at 1765 MB/sec
-     READ : 6.60 ms at 909 MB/sec
+     OUTPUT SIZE: 5.00 MB
+     WRITE: 8.20 ms at 610 MB/sec
+     READ : 6.28 ms at 796 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 5.00MB
-     WRITE: 70.80 ms at 71 MB/sec
-     READ : 35.20 ms at 142 MB/sec
+     WRITE: 66.79 ms at 75 MB/sec
+     READ : 34.00 ms at 147 MB/sec
     CL-STORE
      OUTPUT SIZE: 22.00MB
-     WRITE: 472.80 ms at 47 MB/sec
-     READ : 524.00 ms at 42 MB/sec
-
+     WRITE: 310.77 ms at 71 MB/sec
+     READ : 499.55 ms at 44 MB/sec
+ 
 Complex double float numbers.  cl-binary-store goes fast.  Same for complex single floats.  Pretty niche until you starting doing heterodyning and mixing and then you have a large pile of them.
 
     CL-BINARY-STORE> (test-on-data (long-list-of-random-complex-double-floats))
@@ -128,9 +169,9 @@ Complex double float numbers.  cl-binary-store goes fast.  Same for complex sing
      WRITE: 38.40 ms at 625 MB/sec
      READ : 21.92 ms at 1095 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 18.00 MB
-     WRITE: 12.32 ms at 1461 MB/sec
-     READ : 16.28 ms at 1106 MB/sec
+     OUTPUT SIZE: 17.00 MB
+     WRITE: 15.12 ms at 1124 MB/sec
+     READ : 15.56 ms at 1093 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 19.00MB
      WRITE: 214.80 ms at 88 MB/sec
@@ -142,7 +183,7 @@ Complex double float numbers.  cl-binary-store goes fast.  Same for complex sing
 
 ## Specialized vectors and arrays
 
-cl-binary-store does good work on specialized vectors.  It's just blitting the underlying store to whatever your target is, so hard to beat.  This is on my laptop, so.
+cl-binary-store does good work on specialized vectors.  It's just blitting the underlying store to whatever your target is, so hard to beat.  This is very much a reason to use cl-binary-store --- not only is it faster and smaller than the competition
 
     CL-BINARY-STORE> (test-on-data (long-list-of-big-ub8-vectors))
     HYPERLUMINAL-MEM
@@ -212,11 +253,11 @@ simple-base-strings, we win again, it's just a simple specialized vector
      WRITE: 4.04 ms at 594 MB/sec
      READ : 2.56 ms at 938 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 0.89 MB
-     WRITE: 2.28 ms at 390 MB/sec
-     READ : 2.20 ms at 404 MB/sec
+     OUTPUT SIZE: 0.79 MB
+     WRITE: 2.44 ms at 323 MB/sec
+     READ : 2.24 ms at 352 MB/sec
     CL-CONSPACK
-     OUTPUT SIZE: 0.79MB  <--- specialized string encoding?
+     OUTPUT SIZE: 0.79MB
      WRITE: 13.60 ms at 58 MB/sec
      READ : 6.00 ms at 131 MB/sec
     CL-STORE
@@ -232,9 +273,9 @@ unicode strings.  Here cl-binary-store is doing utf-8 encoding, and you can see 
      WRITE: 4.64 ms at 517 MB/sec
      READ : 3.68 ms at 652 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 1.09 MB
-     WRITE: 3.76 ms at 290 MB/sec
-     READ : 8.72 ms at 125 MB/sec
+     OUTPUT SIZE: 0.99 MB
+     WRITE: 4.36 ms at 227 MB/sec
+     READ : 8.76 ms at 113 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 0.99MB
      WRITE: 14.40 ms at 69 MB/sec
@@ -251,56 +292,56 @@ Just a bunch of random crud in long list just to average out dispatch stuff.
     CL-BINARY-STORE> (test-on-data (long-complex-list))
     HYPERLUMINAL-MEM
      OUTPUT SIZE: 20.49 MB
-     WRITE: 34.04 ms at 602 MB/sec
-     READ : 29.92 ms at 685 MB/sec
+     WRITE: 33.68 ms at 608 MB/sec
+     READ : 29.40 ms at 697 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 8.14 MB
-     WRITE: 17.68 ms at 461 MB/sec
-     READ : 37.99 ms at 214 MB/sec
+     OUTPUT SIZE: 7.14 MB
+     WRITE: 24.00 ms at 297 MB/sec
+     READ : 39.32 ms at 182 MB/sec
     CL-CONSPACK
-     OUTPUT SIZE: 7.47MB
-     WRITE: 132.80 ms at 56 MB/sec
-     READ : 72.00 ms at 104 MB/sec
+     OUTPUT SIZE: 7.46MB
+     WRITE: 133.19 ms at 56 MB/sec
+     READ : 86.79 ms at 86 MB/sec
     CL-STORE
-     OUTPUT SIZE: 33.48MB
-     WRITE: 539.59 ms at 62 MB/sec
-     READ : 489.60 ms at 68 MB/sec
+     OUTPUT SIZE: 33.43MB
+     WRITE: 446.76 ms at 75 MB/sec
+     READ : 501.55 ms at 67 MB/sec
 
 ## structure-objects
 
-Both hyperluminal-mem and cl-conspack requires writing code to support each new struct.  First we test without reference tracking.  This means writing information out about the structures every time --- at least I think that's how these others all work.  Except hyperluminal-mem which has you write code so it doesn't have to figure structures out.  cl-conspack could do the same, but it doesn't.  cl-binary-store does not ever disable object type tracking, so switches to implicit referencing for object slot and type information.  You can see a big differerence here
+Both hyperluminal-mem and cl-conspack requires writing code to support each new struct.  First we test without reference tracking.  This means writing information out about the structures every time --- at least I think that's how these others all work.  Except hyperluminal-mem which has you write code so it doesn't have to figure structures out.  cl-conspack could do the same, but it doesn't.  cl-binary-store does not ever disable object type tracking, so switches to implicit referencing for object slot and type information.  You can see a big differerence here.  (This is #'lots-of-structure-objects in benchmarks.lisp)
 
     HYPERLUMINAL-MEM
      OUTPUT SIZE: 10.40 MB
-     WRITE: 26.88 ms at 387 MB/sec
-     READ : 25.56 ms at 407 MB/sec
+     WRITE: 26.04 ms at 399 MB/sec
+     READ : 25.12 ms at 414 MB/sec
     CL-BINARY-STORE
-     OUTPUT SIZE: 1.69 MB
-     WRITE: 8.56 ms at 197 MB/sec
-     READ : 11.36 ms at 149 MB/sec
+     OUTPUT SIZE: 1.59 MB  <--- much smaller
+     WRITE: 8.96 ms at 177 MB/sec
+     READ : 11.92 ms at 133 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 9.09MB
-     WRITE: 186.40 ms at 49 MB/sec
-     READ : 134.80 ms at 67 MB/sec
+     WRITE: 183.98 ms at 49 MB/sec
+     READ : 129.59 ms at 70 MB/sec
     CL-STORE
      OUTPUT SIZE: 13.69MB
-     WRITE: 272.40 ms at 50 MB/sec
-     READ : 237.20 ms at 58 MB/sec
+     WRITE: 232.78 ms at 59 MB/sec
+     READ : 231.98 ms at 59 MB/sec
 
 Now with reference tracking.  cl-conspack output size improves, but not a huge amount.
 
     CL-BINARY-STORE
-     OUTPUT SIZE: 1.59 MB
-     WRITE: 46.28 ms at 34 MB/sec
-     READ : 11.08 ms at 144 MB/sec
+     OUTPUT SIZE: 1.49 MB  <--- (there are some repeated strings in the structs, so even smaller)
+     WRITE: 41.28 ms at 36 MB/sec
+     READ : 10.60 ms at 141 MB/sec
     CL-CONSPACK
      OUTPUT SIZE: 4.89MB
-     WRITE: 182.80 ms at 27 MB/sec
-     READ : 74.00 ms at 66 MB/sec
+     WRITE: 209.98 ms at 23 MB/sec
+     READ : 74.39 ms at 66 MB/sec
     CL-STORE
-     OUTPUT SIZE: 6.69MB
-     WRITE: 224.00 ms at 30 MB/sec
-     READ : 183.20 ms at 37 MB/sec
+     OUTPUT SIZE: 6.59MB
+     WRITE: 169.98 ms at 39 MB/sec
+     READ : 179.98 ms at 37 MB/sec
 
 cl-conspack comes with some cool explain tool that lets you analyze the output.  For each structure it sees it repeats the structure symbol not as a reference even if it has seen that structure before.  Here is a bit of the output.  It's a typed-map.  (:ref 0) is the slot name of the first struct slot and (:ref 1) is the slot name of the second struct slot.  So, yeah, it just isn't aggressive enough about reference tracking.
 
@@ -374,7 +415,7 @@ Here hyperluminal mem explodes because of list circularity.  Enabling list circu
 
 ## ECL, CCL, Allegro, Lispworks and ABCL
 
-Allegro, Lispworks, and CCL are not terrible from a speed point of view, about 4-5x slower than SBCL.  ABCl is 100x slower, but I am sure somene can fix that up.  cl-binary-store is still the fastest among cl-store and cl-conspack.  I would do more optimization on Allegro and Lispworks but their heap/time limitations make it near impossible to do any real work.
+Allegro, Lispworks, and CCL are not terrible from a speed point of view, about 4-5x slower than SBCL.  ECL is about 10x slower, but this is due to some failures in structure inlining that is being fixed currently.  ABCl is 100x slower, but I am sure somene can fix that up.  cl-binary-store is still the fastest among cl-store and cl-conspack.  I would do more optimization on Allegro and Lispworks but their heap/time limitations make it near impossible to do any real work.
 
     ;; Using a 100x shorter list for this test because these implementations are slow
     CL-USER> (test-on-data (long-list-of-tiny-integers 10000))

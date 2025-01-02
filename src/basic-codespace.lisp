@@ -18,9 +18,18 @@
 
 (define-codespace ("basic codespace" +basic-codespace+)
   (register-references num-eq-refs (make-hash-table :test #'eq :size *num-eq-refs-table-size*))
-  (register-references double-float-refs
-                       (make-hash-table :test #+sbcl #'double-float-= #-sbcl #'eql :size *double-float-refs-table-size*))
+  (register-references
+   double-float-refs (make-hash-table :test #+sbcl #'double-float-= #-sbcl #'eql
+				      :size *double-float-refs-table-size*))
   (register-references eq-refs (make-hash-table :test #'eq :size *eq-refs-table-size*))
+  (register-store-state list-lengths (make-hash-table :test #'eq))
+  (register-store-state support-shared-list-structures
+			(progn
+			  (when *support-shared-list-structures*
+			    (assert *track-references* nil
+				    "To use *support-shared-list-structures* you must have ~
+                                    *track-references* t"))
+			  *support-shared-list-structures*))
 
   (defstore fixnum (store-fixnum obj storage) :call-during-reference-phase nil)
   (defrestore +ub8-code+ (restore-ub8 storage))
@@ -53,11 +62,13 @@
 
   ;; CONS
   
-  (defstore cons
-      (store-cons obj storage eq-refs store-object assign-new-reference-id)
-    :call-during-reference-phase (search-cons obj eq-refs store-object))
+  (defstore cons (store-cons obj storage eq-refs store-object assign-new-reference-id
+			     list-lengths support-shared-list-structures)
+    :call-during-reference-phase (search-cons obj eq-refs store-object list-lengths
+					      support-shared-list-structures))
   
-  (defrestore +cons-code+ (restore-cons storage restore-object))
+  (defrestore +cons-code+ (restore-cons/indefinite storage restore-object))
+  (defrestore +finite-length-list-code+ (restore-list/known-length storage restore-object))
   
   ;; T and NIL (STORED DISJOINT FROM SYMBOLS)
   

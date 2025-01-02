@@ -158,11 +158,11 @@ The specialized-serializer function will be called with parameters (object stora
 ### Configurable options
 #### \*track-references\* default: T
 
-Let this to NIL around your calls to store / restore if you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>200MB/sec / > 200 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).
+Let this to NIL around your calls to store / restore if you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>200MB/sec / > 200 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).  Even with this T speed is quite good.
 
-#### \*support-shared-list-structures\* default: T
+#### \*support-shared-list-structures\* default: NIL
 
-Let this to NIL if you have no list circularity (when it is NIL basic circular lists are supported as the first CONS we see in a list is recorded as a reference, so almost all data will work fine with this NIL; this is the same as cl-store:\*precise-list-storage\*. Setting this to NIL is a significant performance improvement if you have list heavy data.
+Set this to T if you have complex list structures where you share tails of lists, or have complex list circularity (tail to head circularity is fine with this NIL as we record the he) if you have no references to conses that are not the heads of lists.  Most of the time this is fine to leave at nil.  It's a significant performance hit if you set it to T as we have to track every cons we see.  If you set this to T, *track-references* must be T too.
 
 #### \*write-magic-number\* default: NIL
 

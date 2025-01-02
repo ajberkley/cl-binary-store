@@ -189,7 +189,8 @@
    #:delete-store
    #:delete-codespace
    #:*codespaces*
-   #:*allow-codespace-switching*))
+   #:*allow-codespace-switching*
+   #:*no-circular-lists*))
 
 
 (in-package :cl-binary-store)

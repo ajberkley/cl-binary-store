@@ -59,8 +59,8 @@
 	    (if (symbolp elt-type)
 		(store-symbol elt-type storage eq-refs store-object assign-new-reference-id)
 		(if storage
-		    (store-cons elt-type storage eq-refs store-object assign-new-reference-id)
-		    (search-cons elt-type eq-refs store-object)))))
+		    (store-cons/finite  elt-type storage eq-refs store-object assign-new-reference-id)
+		    (search-cons/finite elt-type eq-refs store-object)))))
       (cond
 	(next-array
 	 (when storage

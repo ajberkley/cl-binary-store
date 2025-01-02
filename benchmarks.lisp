@@ -38,9 +38,10 @@
 
 (defun test-cl-binary-store-on-data
     (data &key (track-references t) (support-shared-list-structures nil) (repeats 100)
-            (read t) (write t) (file nil))
+            (read t) (write t) (file nil) (no-circular-lists nil))
   (let* ((cl-binary-store:*support-shared-list-structures* support-shared-list-structures)
 	 (cl-binary-store:*track-references* track-references)
+	 (cl-binary-store:*no-circular-lists* no-circular-lists)
 	 (store (coerce
 		 (cl-binary-store:store nil data)
 		 '(simple-array (unsigned-byte 8) (*))))
@@ -146,6 +147,9 @@
 (defun long-list-of-tiny-integers (&optional (n 1000000))
   (loop repeat n collect (- (random 33) 16)))
 
+(defun long-simple-vector-of-tiny-integers (&optional (n 1000000))
+  (coerce (long-list-of-tiny-integers n) 'simple-vector))
+
 (defun long-list-of-not-tiny-integers (&optional (n 1000000))
   (make-list n :initial-element (random 256)))
 
@@ -246,8 +250,10 @@
      new-index)))
 
 (defun lots-of-structure-objects ()
-  (loop for i below 100000
-        collect (make-bench-blarg :a (random 1d0) :b (coerce (format nil "~A" (random 100)) 'simple-base-string))))
+  (coerce 
+   (loop for i below 100000
+         collect (make-bench-blarg :a (random 1d0) :b (coerce (format nil "~A" (random 100)) 'simple-base-string)))
+   'simple-vector))
 
 (defclass c-blarg
     ()
@@ -258,8 +264,10 @@
   a b)
 
 (defun lots-of-standard-objects ()
-  (loop for i below 100000
-	collect (make-instance 'c-blarg :a (random 256) :b "hello")))
+  (coerce 
+   (loop for i below 100000
+	 collect (make-instance 'c-blarg :a (random 256) :b "hello"))
+   'simple-vector))
 
 (defun simple-base-strings ()
   (loop for i below 100000

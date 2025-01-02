@@ -1,5 +1,6 @@
 (in-package :cl-binary-store)
 
+(declaim (inline store-simple-vector))
 (defun store-simple-vector (sv storage store-object)
   (declare (optimize speed safety) (type simple-vector sv) (type function store-object))
   (when storage
@@ -7,6 +8,7 @@
     (store-tagged-unsigned-fixnum (length sv) storage))
   (map nil store-object sv))
 
+(declaim (inline restore-simple-vector))
 (defun restore-simple-vector (storage restore-object)
   (declare (optimize speed safety))
   (let* ((num-elts (restore-tagged-unsigned-fixnum storage))

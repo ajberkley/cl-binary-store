@@ -12,15 +12,18 @@
       ;; 	(print result))
       (is '= (first result) 123)
       (is '= (second result) 456)
-      (is 'eq (cddr result) result))))
+      (is 'eq (cddr result) result)))
+  (let ((a (cons 1234 nil)))
+    (setf (cdr a) a)
+    (let ((result (restore (store nil a))))
+      (is '= 1234 (car result))
+      (is 'eq (cdr result) result))))
 
 (define-test test-very-basic-list-car-circularity
   (let ((a (list nil "abcd"))
 	(*support-shared-list-structures* nil))
     (setf (first a) a)
     (let ((result (restore-from-vector (store-to-vector a))))
-      ;; (let ((*print-circle* t))
-      ;; 	(print result))
       (is 'eq (first result) result)
       (is 'equalp (second result) "abcd")
       (false (cddr result)))))
@@ -40,6 +43,10 @@
     (is 'equal (first a) (first restored-a))
     (loop for elt in restored-a
 	  do (is 'eql elt (first restored-a)))))
+
+(define-test dotted-lists
+  (let ((a '(1 2 3 4 . 5)))
+    (is 'equal a (restore (store nil a)))))
 
 ;; This test uses too much memory and is too slow to run regularly...
 (define-test up-to-ub32-references-work

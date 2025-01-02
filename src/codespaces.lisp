@@ -41,6 +41,7 @@
   (ref-tables (make-hash-table :test 'eql)) ; Maps name -> ref-table
   (store-infos (make-hash-table :test 'equal)) ; Maps type -> `store-info'
   (restore-infos (make-hash-table :test 'eql)) ; Maps code -> `restore-info'
+  (store-state-info (make-hash-table :test 'eql)) ; Maps name -> store-state
   (restore-objects-source-code nil) ; the source code that was compiled to restore-objects
   (store-objects-source-code nil) ; the source code that was compiled to make store-objects
   (restore-objects #'invalid :type function)
@@ -49,7 +50,8 @@
 (defun deep-copy-codespace (target source-codespace)
   (setf (codespace-ref-tables target) (codespace-ref-tables source-codespace))
   (setf (codespace-store-infos target) (codespace-store-infos source-codespace))
-  (setf (codespace-restore-infos target) (codespace-restore-infos source-codespace)))
+  (setf (codespace-restore-infos target) (codespace-restore-infos source-codespace))
+  (setf (codespace-store-state-info target) (codespace-store-state-info source-codespace)))
 
 ;; To debug this stuff you might have to do:
 ;; (let ((*current-codespace/compile-time* (gethash 1 *codespaces*)))
@@ -121,11 +123,17 @@
 
 (defun build-store-objects ()
   `(let* ((track-references *track-references*)
+	  ;; TODO: move object-info and eql-refs to register-store-state statements
+	  ;; will have to add dynamic-extent stuffs?
 	  (object-info (make-hash-table :test 'eql))
 	  (*object-info* object-info)
 	  (ht (unless track-references (make-hash-table :test 'eql)))
 	  (*eql-refs-ref-id* (unless track-references 0))
-	  (*eql-refs* ht))
+	  (*eql-refs* ht)
+	  ,@(loop for store-state being the
+		  hash-values of (codespace-store-state-info *current-codespace/compile-time*)
+		  collect (list (store-state-name store-state)
+				(store-state-construction-code store-state))))
      (declare (dynamic-extent object-info ht))
      ,(with-reference-tables 'track-references
 	#+debug-cbs `(when track-references (format t "Starting reference counting pass on ~A objects~%" (length stuff)))
@@ -278,17 +286,27 @@
        (setf *current-codespace/compile-time* nil))))
 
 (defstruct restore-info
-  ;; If the dispatch code is a piece of lisp source code, then we do it
-  ;; after the basic case statement.
+  "Information about a defrestore statement"
   (restore-function-dispatch-code nil :type (or (unsigned-byte 8) list))
   (restore-function-source-code nil))
   
 (defstruct store-info
+  "Information about a defstore statement"
   (type nil)
   (reference-phase-code nil)
   (storage-phase-code nil))
 
+(defstruct store-state
+  "Something that is instantiated at the start of the store process, regardless
+ of whether track-references is true or not.  Like OBJECT-INFO, and LIST-LENGTHS."
+  (name nil)
+  (construction-code nil))
+
 (defstruct ref-table
+  "A ref-table is a hash table which is used solely to track references.  It will be nil
+ instantiated unless *track-references* is T.  After the reference counting phase, only
+ elements in it that are multiply referenced will be retained and have their value set to
+ T"
   (name nil)
   (construction-code nil))
 
@@ -304,7 +322,7 @@
 
 (defmacro register-references (table-name construction-code)
   `(register-references& *current-codespace/compile-time* ',table-name ',construction-code))
-  
+
 (defun with-reference-tables (track-references &rest body)
   "Wrap body with defined reference tables"
   (assert *current-codespace/compile-time*)
@@ -338,7 +356,14 @@
 		     code))
              (codespace-ref-tables *current-codespace/compile-time*))
     `(progn ,@code)))
-  
+
+(defun register-store-state& (name construction-code)
+  (setf (gethash name (codespace-store-state-info *current-codespace/compile-time*))
+	(make-store-state :name name :construction-code construction-code)))
+
+(defmacro register-store-state (name construction-code)
+  `(register-store-state& ',name ',construction-code))
+
 (defun update-store-info
     (codespace type store-function-signature
      &key (call-during-reference-phase nil call-during-reference-phase-provided-p)
@@ -355,12 +380,6 @@
                  `(unless (check-reference obj ,check-for-ref-in t)
                     ,code)
                  code)))
-    (loop for param in (cdr store-function-signature)
-          do (unless (or (member param '(obj storage store-object assign-new-reference-id t nil))
-			 (gethash param (codespace-ref-tables codespace)))
-               (error (format nil "While parsing DEFSTORE for ~A, ~A is an unknown parameter of DEFSTORE~%~
-                                   it must be one of OBJ, STORAGE, STORE-OBJECT or a reference table name from~%~
-                                   REGISTER-REFERENCES" type param))))
     (let* ((write-phase-code store-function-signature)
            (reference-phase-code (if call-during-reference-phase-provided-p
                                      call-during-reference-phase

@@ -82,8 +82,9 @@
 (declaim (inline referenced-already))
 (defun referenced-already (object storage references assign-new-reference-id)
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
- Otherwise returns NIL.  This should *ONLY* be called during the actual storage phase,
- not the reference counting phase."
+ Otherwise returns NIL if it is not a reference at all.  This should
+ *ONLY* be called during the actual storage phase, not the reference
+ counting phase."
   (declare (type write-storage storage) (optimize (speed 3) (safety 1)))
   (when references
     (let ((ref-idx (gethash object references)))

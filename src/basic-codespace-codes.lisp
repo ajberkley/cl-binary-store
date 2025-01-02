@@ -42,12 +42,14 @@
 (defconstant +action-code+ 31
   "A request to perform an action.  Used for checking codespace versions and for
  updating reference vector size and for marking the end of data")
-(defconstant +tagged-reference-code+ 32
+(defconstant +finite-length-list-code+ 32
+  "When tracking references, we know all list lengths in advance")
+(defconstant +tagged-reference-code+ 33
   "A reference to an object")
-(defconstant +new-reference-indicator-code+ 33
+(defconstant +new-reference-indicator-code+ 34
   "Note that the next object to be read should be assigned the next consecutive reference id")
-(defconstant +first-direct-reference-id-code+ 34
-  "[34 63] used for direct reference codes (tag only) ref id [1 30]")
+(defconstant +first-direct-reference-id-code+ 35
+  "[35 63] used for direct reference codes (tag only) ref id [1 29]")
 (defconstant +last-direct-reference-id-code+ 63)
 (defconstant +first-one-byte-reference-id-code+ 64
   "[64 127] used for the tag + one byte reference codes (6 bits)")
