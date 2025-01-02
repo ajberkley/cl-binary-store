@@ -196,7 +196,11 @@
    #:delete-store
    #:delete-codespace
    #:*codespaces*
-   #:*allow-codespace-switching*))
+   #:*allow-codespace-switching*
+   #:set-sap-ref-double
+   #:sap-ref-double
+   #:set-sap-ref-32
+   #:sap-ref-32))
 
 
 (in-package :cl-binary-store)

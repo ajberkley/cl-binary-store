@@ -43,7 +43,7 @@
 			 :store t :restore t :documentation "When *track-references* is nil,
                          still want to do some reference tracking.  To do that we use this
                          implicit-eql-refs table and the assign-new-reference-id function.
-                         This is used for object-info and symbols.")
+                         This is used for `object-info's.")
 
   (register-global-state implicit-ref-id (cons 0 nil) :type (cons fixnum null)
 			 :dynamic-extent t :restore t :store t
