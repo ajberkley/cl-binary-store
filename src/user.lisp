@@ -10,7 +10,6 @@
 (defvar *read-version* #x0001
   "The default codespace version to use if no versioning information is in the stream")
 
-
 ;;; STREAMS
 
 (defun store-to-stream (stream &rest elements)

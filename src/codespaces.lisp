@@ -9,34 +9,25 @@
 ;; A codespace is the collection of `defstore' / `defrestore' definitions
 ;; `register-references', and `register-store-state' definitions.  This
 ;; information is used to build two functions, one for serializing data and
-;; one for deserializing it.
+;; one for deserializing it.  Each codespace then defines a file format.
 
-;; Within a 'define-codespace top-level, one is working within your
-;; own namespace, and using a simple declarative language to describe
-;; how to serialize and deserialize things.  You can define global
-;; variables with register-store-state, and explicit reference tracking
+;; Within a `define-codespace' top-level, one is working within your
+;; own namespace, and using a declarative language to describe how to
+;; serialize and deserialize things.  You can define global variables
+;; with register-store-state, and explicit reference tracking
 ;; hash-tables with register-references.
 
-
-;; It defines the data structure written on disk.  So far, we use a
-;; single byte as the first dispatch mechanism for an object (without
-;; any means to override this, but it would be easy to do so), so the
-;; codespace defines a mapping from that byte to a deserialization
-;; routine or a serialization routine.  So, for example maybe all #s >
-;; 128 could be a single instruction using the high bit as a tag, so
-;; for example one could encode 0-127 by using the high bit thus
-;; achieving high density for small numbers.  But that might not be
-;; the best use of the codespace for some other application, thus we
-;; allow codespaces to be switched in and out based on what the user
-;; requests or what is requested within the deserialized data.  The
-;; version/magic number specifies a codespace.
+;; To debug this stuff you want to inspect *codespaces*.
+;; Find your codepsace, dump the source code stored in the -source-code slot
+;; into a file, compile it to a named function, and then put that named function
+;; into the codespace compiled function slots and you will have full debuggability.
 
 (defvar *codespaces* (make-hash-table :test 'eql)
   "a map from magic/version-number -> `codespace'")
 
 (defvar *current-codespace* nil "a `codespace' bound by store based on
  *write-version*.  This is also bound during restore operations once we
- know the format of the data stream, or else it is bound to *default-codespace*")
+ know the format of the data stream or is set to *read-version*.")
 
 (defvar *current-codespace/compile-time* nil
   "nil or a `codespace'.  This is bound while compiling each codespace.")
@@ -67,11 +58,6 @@
   (setf (codespace-restore-global-state-info target)
 	(codespace-restore-global-state-info source-codespace)))
 
-;; To debug this stuff you might have to do:
-;; (let ((*current-codespace/compile-time* (gethash 1 *codespaces*)))
-;;   (build-store-objects)) ;; or (build-restore-objects)
-;; Or just inspect *codespaces*, the source code stored in the -source-code slots
-;; can be put into a file and compiled and then you have full debuggability.
 
 (defvar *track-references* t
   "If you let this to NIL, then every object will be stored anew, and
@@ -79,15 +65,6 @@
  performance win (you can hit hundreds of MB/sec instead of 10s of
  MB/sec, but you need to make sure your data is safe to serialize and
  you don't care about EQL checks of data.")
-
-(defvar *eql-refs* nil
-  "Even when *track-references* is disabled, code can use this hash table to do its own
- reference tracking.  This is used for object / struct information and for symbols using
- an implicit reference counting scheme.  This is NIL during store when *track-references*
- is t")
-
-(defvar *eql-refs-ref-id* nil
-  "A implicit reference id counter for the always on eql-refs table below")
 
 (defvar *version-being-read* nil
   "During restore this is bound to any magic number found previous to
