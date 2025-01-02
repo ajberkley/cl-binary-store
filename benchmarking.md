@@ -358,13 +358,13 @@ cl-conspack comes with some cool explain tool that lets you analyze the output. 
 
 ## Lots of the same string
 
-Because cl-conspack behaves badly above for structures, here I am making sure that it is working.  It does.
+Because cl-conspack behaves badly above for structures, here I am making sure that it does OK with reference tracking.  It does.
 
     CL-BINARY-STORE> (test-on-data (lots-of-the-same-string) :hlmem nil)
     CL-BINARY-STORE
-     OUTPUT SIZE: 2.00 MB
-     WRITE: 36.16 ms at 55 MB/sec
-     READ : 5.56 ms at 360 MB/sec
+     OUTPUT SIZE: 1.00 MB
+     WRITE: 28.80 ms at 35 MB/sec
+     READ : 8.20 ms at 122 MB/sec    
     CL-CONSPACK
      OUTPUT SIZE: 1.00MB
      WRITE: 208.40 ms at 5 MB/sec
