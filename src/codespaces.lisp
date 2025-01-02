@@ -58,14 +58,13 @@
   (store-objects #'invalid :type function))
 
 (defun deep-copy-codespace (target source-codespace)
-  (setf (codespace-ref-tables target) (codespace-ref-tables source-codespace))
-  (setf (codespace-store-infos target) (codespace-store-infos source-codespace))
-  (setf (codespace-restore-infos target) (codespace-restore-infos source-codespace))
+  (setf (codespace-ref-tables target) (alexandria:copy-hash-table (codespace-ref-tables source-codespace)))
+  (setf (codespace-store-infos target) (alexandria:copy-hash-table (codespace-store-infos source-codespace)))
+  (setf (codespace-restore-infos target) (alexandria:copy-hash-table (codespace-restore-infos source-codespace)))
   (setf (codespace-store-global-state-info target)
-	(codespace-store-global-state-info source-codespace))
+	(alexandria:copy-hash-table (codespace-store-global-state-info source-codespace)))
   (setf (codespace-restore-global-state-info target)
-	(codespace-restore-global-state-info source-codespace)))
-
+	(alexandria:copy-hash-table (codespace-restore-global-state-info source-codespace))))
 
 (defvar *track-references* t
   "If you let this to NIL, then every object will be stored anew, and
