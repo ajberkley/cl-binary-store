@@ -19,7 +19,7 @@
 	for count fixnum from 1
 	for next = (cdr c)
 	unless (typep next '(or null cons))
-	  do (return-from length/detect-dotted nil)
+	  do (return-from length/detect-dotted count)
 	finally (return count)))
 
 (declaim (inline store-cons/indefinite))
@@ -49,11 +49,6 @@
   (maybe-store-reference-instead (cons storage eq-refs assign-new-reference-id)
     (let ((length (or (and list-lengths (gethash cons list-lengths))
 		      (length/detect-dotted cons))))
-      (when (or (not length) (= (the fixnum length) 1))
-	;; Dotted lists are usually just a single cons, and are more compact to store
-	;; with a cons tag than a finite-length-list of length 2.
-	(return-from store-cons/finite
-	  (store-cons/indefinite cons storage eq-refs store-object assign-new-reference-id)))
       (locally
 	  (declare (type fixnum length))
 	(with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
