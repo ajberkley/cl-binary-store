@@ -58,9 +58,7 @@
 	    (when storage (store-t storage))
 	    (if (symbolp elt-type)
 		(store-symbol elt-type storage eq-refs store-object assign-new-reference-id)
-		(if storage
-		    (store-cons/finite  elt-type storage eq-refs store-object assign-new-reference-id)
-		    (search-cons/finite elt-type eq-refs store-object)))))
+		(funcall store-object elt-type))))
       (cond
 	(next-array
 	 (when storage
