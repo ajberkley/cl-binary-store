@@ -16,7 +16,8 @@
 (defconstant +basic-codespace+ #x0001
   "This is the basic codespace of cl-binary-store.")
 
-(define-codespace ("basic codespace" +basic-codespace+ :debug t)
+;; Add :debug t here if you are debugging this code
+(define-codespace ("basic codespace" +basic-codespace+)
   (register-references num-eq-refs (make-hash-table :test #'eq :size *num-eq-refs-table-size*))
   (register-references
    double-float-refs (make-hash-table :test #+sbcl #'double-float-= #-sbcl #'eql
