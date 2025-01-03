@@ -271,6 +271,7 @@ See [benchmarking.md](benchmarking.md).
 - [ ] A codespace for conspack or messagepack (for example; for a limited subset of types).  This is mainly as an exercise as cl-messagepack is fine.
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
 - [ ] Speed up cl-binary-store on ABCL and ECL so it is less than 10x slower than on XBCL
-- [ ] Compile the storage / restore functions on demand instead of up front.  If you don't use a reference table why wait for it to compile on load (so far not a problem, I only use two).
 - [ ] Specialize store / restore functions on global settings to avoid so many parameters being passed around.
 - [ ] When using implicit reference tracking, use a vector on restore like we do for the explicit case instead of overloading the reference ht
+- [ ] 1D simple-array storage routines for CCL, ECL, Lispworks, Allegro, and ABCL (in progress)
+- [ ] simple-array storage routines for CCL, ECL, Lispworks, Allegro, and ABCL
