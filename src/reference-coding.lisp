@@ -38,7 +38,7 @@
   "Number ranges from -16 to wherever.  This uses the reference-tag byte plus the tagged integer
  which can be anywhere from 1 byte direct tagged to arbitrarily large."
   (declare (optimize (speed 3) (safety 1)) (type fixnum number))
-  (truly-the fixnum
+  (the fixnum
     (+ (- +minimum-untagged-signed-integer+) number 1 +reference-two-byte-max-ref-id+)))
 
 (declaim (inline encode-reference-direct))

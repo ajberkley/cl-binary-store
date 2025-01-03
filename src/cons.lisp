@@ -44,7 +44,7 @@
 (defun store-cons/finite (cons storage eq-refs store-object assign-new-reference-id list-lengths)
   "This is called during the actual storage output phase if we have already computed the list
  length.  This is not called when *support-shared-list-structures* is true."
-  (declare (optimize (speed 3) (safety 0))
+  (declare (optimize (speed 3) (safety 3) (debug 3))
 	   (type write-storage storage) (type function store-object))
   (maybe-store-reference-instead (cons storage eq-refs assign-new-reference-id)
     (let ((length (or (and list-lengths (gethash cons list-lengths))
@@ -53,7 +53,7 @@
 	  (declare (type fixnum length))
 	(with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
 	  (set-sap-ref-8 sap offset +finite-length-list-code+))
-	(store-tagged-unsigned-fixnum length storage)
+	(store-tagged-unsigned-fixnum/interior length storage)
 	(dotimes (count length)
 	  (cond
 	    ((= count (- length 1))
@@ -141,7 +141,7 @@
 (declaim (inline restore-list/known-length))
 (defun restore-list/known-length (storage restore-object)
   (declare (optimize (speed 3) (safety 0)))
-  (let* ((length (restore-tagged-unsigned-fixnum storage)))
+  (let* ((length (restore-tagged-unsigned-fixnum/interior storage)))
     (let* ((head (make-list length))
 	   (cons head))
       (dotimes (count (1- length))

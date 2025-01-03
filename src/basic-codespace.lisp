@@ -141,9 +141,7 @@
       (restore-new-reference-indicator references restore-object))
 
   ;; SIMPLE VECTORS
-  #+sbcl
   (defstore (simple-array * (*)) (store-simple-specialized-vector obj storage) :check-for-ref-in eq-refs)
-  #+sbcl
   (defrestore +simple-specialized-vector-code+ (restore-simple-specialized-vector storage))
   
   (defstore simple-vector (store-simple-vector obj storage store-object) :check-for-ref-in eq-refs)

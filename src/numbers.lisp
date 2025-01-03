@@ -253,6 +253,41 @@
 	          (store-ub32 fixnum storage)
 	          (store-only-fixnum fixnum storage))))))
 
+(declaim (inline store-tagged-unsigned-fixnum/interior))
+(defun store-tagged-unsigned-fixnum/interior (fixnum storage)
+  "Use this paired with restore-tagged-unsigned-fixnum if you are inside another tagged
+ region for storing unsigned numbers.  Somewhat more dense as we only need tags 0-3 for
+ tagging unsigned numbers."
+  (declare (type fixnum fixnum) (type write-storage storage))
+  (if (<= fixnum +interior-coded-max-integer+)
+      (store-ub8/no-tag (+ +first-direct-unsigned-integer-interior-code+ fixnum)
+			storage) ;; direct coded
+      (let ((fixnum (- fixnum +interior-coded-max-integer+ 1))) ;; code shifted
+	(if (< fixnum 256)
+            (store-ub8/tag (truly-the fixnum fixnum) storage)
+            (if (< fixnum 65536)
+		(store-ub16 fixnum storage)
+		(if (< fixnum #.(expt 2 32))
+	            (store-ub32 fixnum storage)
+	            (store-only-fixnum fixnum storage)))))))
+
+
+(declaim (inline restore-tagged-unsigned-fixnum/interior))
+(defun restore-tagged-unsigned-fixnum/interior (storage)
+  "Use this if you know that this is an unsigned number (so after
+ another tag bit).  This opens up the direct coding space for up to
+ +interior-coded-max-integer+."
+  (declare (type read-storage storage))
+  (let ((tag (restore-ub8 storage)))
+    (if (> tag +first-direct-unsigned-integer-interior-code+)
+	(- tag +first-direct-unsigned-integer-interior-code+)
+	(+ (ecase tag
+	     (#.+ub8-code+ (restore-ub8 storage))
+	     (#.+ub16-code+ (restore-ub16 storage))
+	     (#.+ub32-code+ (restore-ub32 storage))
+	     (#.+fixnum-code+ (restore-fixnum storage)))
+	   +interior-coded-max-integer+ 1))))
+
 (declaim (ftype (function (read-storage)
 			  #+sbcl (values fixnum &optional)
 			  #-sbcl fixnum)
@@ -261,7 +296,6 @@
   "Read back a number written by `store-tagged-unsigned-fixnum'."
   (declare (optimize (speed 3) (safety 1)))
   (let ((tag (restore-ub8 storage)))
-    (declare (type (unsigned-byte 8) tag))
     (if (<= +small-integer-zero-code+ tag +last-small-integer-code+)
 	(- tag +small-integer-zero-code+)
 	(ecase tag
@@ -289,7 +323,7 @@
 
 (declaim (inline store-fixnum))
 (defun store-fixnum (fixnum storage)
-  "Store and tag a fixnum; "
+  "Store and tag a fixnum; if inside another tag"
   (declare (type fixnum fixnum) (optimize (speed 3) (safety 1)) (type write-storage storage))
   (if (>= fixnum 0)
       (store-tagged-unsigned-fixnum fixnum storage)

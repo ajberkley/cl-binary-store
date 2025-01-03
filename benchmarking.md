@@ -223,6 +223,26 @@ Here are simple-bit-vectors, one of my favorite data structures in Common Lisp
      WRITE: 664.40 ms at 60 MB/sec
      READ : 504.80 ms at 79 MB/sec
 
+Just all the specialized vectors I can think of.  It goes fast on sbcl.
+
+    CL-BINARY-STORE> (test-on-data (a-bunch-of-specialized-arrays 100000))
+    HYPERLUMINAL-MEM
+     OUTPUT SIZE: 12.81 MB
+     WRITE: 11.04 ms at 1161 MB/sec
+     READ : 9.64 ms at 1329 MB/sec
+    CL-BINARY-STORE
+     OUTPUT SIZE: 5.09 MB
+     WRITE: 0.32 ms at 15899 MB/sec
+     READ : 0.64 ms at 7949 MB/sec
+    CL-CONSPACK
+     OUTPUT SIZE: 5.70MB
+     WRITE: 58.00 ms at 98 MB/sec
+     READ : 47.20 ms at 121 MB/sec
+    CL-STORE
+     OUTPUT SIZE: 20.10MB
+     WRITE: 338.80 ms at 59 MB/sec
+     READ : 222.00 ms at 91 MB/sec
+
 The rest of the story is the same here, for specialized vectors and specialized arrays we are very very fast because we are just blitting them.  This means cl-binary-store is a good choice for serializing double float matrices, for example:
 
     CL-BINARY-STORE> (test-on-data (list-of-double-float-matrices))

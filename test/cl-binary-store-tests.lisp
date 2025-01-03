@@ -103,12 +103,13 @@
        (subtypep t2 t1)))
 
 (define-test test-simple-arrays
-    (let* ((elt-types
-	     #+sbcl'(bit fixnum base-char character single-float
+  (let* ((elt-types
+	     '(bit
+	       fixnum base-char character single-float
 	       double-float (signed-byte 8) (signed-byte 16)
 	       (signed-byte 32) (signed-byte 64)
-	       (unsigned-byte 2)
-	       (unsigned-byte 4)
+	       (unsigned-byte 2) ;; lispworks and sbcl
+	       (unsigned-byte 4) ;; lispworks and sbcl
 	       (unsigned-byte 7)
 	       (unsigned-byte 8)
 	       (unsigned-byte 15)
@@ -116,23 +117,10 @@
 	       (unsigned-byte 31)
 	       (unsigned-byte 32)
 	       (unsigned-byte 62)
-		     (unsigned-byte 64))
-	     ;; character fails on CCL
-	     #-sbcl '(bit
-		      #-(or abcl ecl lispworks) fixnum ;; lispworks uses signed-byte 64
-		      base-char
-		      #-ccl character ;; no character arrays, just base strings?
-		      #-abcl single-float
-		      #-abcl double-float
-		      (unsigned-byte 8)
-		      (unsigned-byte 16)
-		      (unsigned-byte 32)
-		      #+lispworks (signed-byte 64)
-		      #-abcl (unsigned-byte 64)
-		      ))
+	       (unsigned-byte 64)))
 	   (sizes
 	     (loop repeat (length elt-types)
-		   collect (+ 1 (random 10))))
+		   collect (+ 1 (random 100))))
 	   (fill-values
 	     (loop for elt-type in elt-types
 		   for size in sizes
@@ -140,7 +128,7 @@
 		   (loop repeat size collect
 				     (case elt-type
 				       (bit (random 1))
-				       (fixnum #+ccl
+				       (fixnum #+(or ccl allegro)
 					       (random (- (expt 2 59) (expt 2 58)))
 					       #-ccl
 					       (random (- (expt 2 62) (expt 2 61))))
@@ -153,22 +141,22 @@
 					    (- (random 128))
 					    (random (expt 2 (second elt-type))))))))))
       (assert (= (length elt-types) (length fill-values) (length sizes)))
-      (let ((input (store-to-vector 
-		    (loop for elt-type in elt-types
-			  for fill in fill-values
-			  for size in sizes
-			  collect
-			  (make-array size :element-type elt-type :initial-contents fill)))))
+    (let* ((input-data (loop for elt-type in elt-types
+			     for fill in fill-values
+			     for size in sizes
+			     collect
+			     (make-array size :element-type elt-type :initial-contents fill)))
+	   (input (store-to-vector input-data)))
 	(loop for elt-type in elt-types
-	      for fill in fill-values
 	      for size in sizes
+	      for input-array in input-data
 	      for result in (restore-from-vector input)
 	      do
-		 ;; (format t "~A with ~A elements, result is a ~A and is~% ~A~%"
-		 ;; 	 elt-type size (type-of result) result)
+		 ;; (format t "~A with ~A elements, (~A) result is a ~A and is~% ~A~%"
+		 ;; 	 elt-type size input-array (type-of result) result)
 		 (is 'type-equal (upgraded-array-element-type (array-element-type result))
-		     elt-type)
-		 (true (every (lambda (x fill-value) (eql x fill-value)) result fill))
+		     (upgraded-array-element-type elt-type))
+		 (is 'equalp input-array result)
 		 (true (= (length result) size))))))
   
 (define-test test-strings
@@ -366,7 +354,7 @@
     (is '= num (restore-from-vector (store-to-vector num)))))
 
 (define-test test-fixnum
-  (let* ((num (expt 2 59))
+  (let* ((num (expt 2 58))
 	 (mnum (- num)))
     (is '= num (restore-from-vector (store-to-vector num)))
     (is '= mnum (restore-from-vector (store-to-vector mnum)))))
@@ -607,3 +595,14 @@
 	     (is '= (length restored-result-2) length)
 	     (is 'equal data restored-result)
 	     (is 'equal data restored-result-2))))
+
+(define-test test-interior-unsigned-fixnum
+  (dotimes (list-length 300)
+    (is '= (length (restore (store nil (make-list list-length)))) list-length)))
+	
+(define-test test-strings-longer-than-buffer
+  (dolist (element-type '(base-char character))
+    (let* ((input (make-string 40000 :element-type element-type :initial-element (code-char 42)))
+	   (restored (restore (store nil input))))
+      (is 'equalp restored input)
+      (is 'eql (array-element-type input) (array-element-type restored)))))

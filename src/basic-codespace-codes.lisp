@@ -12,6 +12,12 @@
 (defconstant +ub16-code+ 1)
 (defconstant +ub32-code+ 2)
 (defconstant +fixnum-code+ 3)
+(defconstant +first-direct-unsigned-integer-interior-code+ 4)
+(defconstant +interior-coded-max-integer+ (- 255 +first-direct-unsigned-integer-interior-code+))
+;; Inside of another tag region, when encoding an unsigned integer, 0
+;; - 3 is a tag for an extended number, and 4-255 are direct coded
+;; lengths.  If 0-3 is used, then the number encoded is shifted down
+;; by +interior-coded-max-integer+.
 (defconstant +cons-code+ 4)
 (defconstant +nil-code+ 5)
 (defconstant +sb8-code+ 6)
@@ -68,3 +74,4 @@
 						    +small-integer-zero-code+))
 (defconstant +minimum-untagged-signed-integer+ (- +first-small-integer-code+
 						  +small-integer-zero-code+))
+

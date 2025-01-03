@@ -1,23 +1,22 @@
 (in-package :cl-binary-store)
 
-#+sbcl
+;; TODO CHECK INTEROP, DID I REVERSE BITS ON BIT VECTORS, ETC.
+
 (declaim (ftype (function (t &optional (unsigned-byte 58))
 			  (values (unsigned-byte 50) (unsigned-byte 8) &optional))
-		sbcl-specialized-array-element-size/bits))
+		specialized-array-element-size/bits))
 
-#+sbcl
-(declaim (inline sbcl-specialized-array-element-size/bits))
-#+sbcl
-(defun sbcl-specialized-array-element-size/bits (array &optional (length (length array)))
-  "Returns (values bits/elt ub8-encoded-array-type)"
-  (declare (optimize speed safety) (type (unsigned-byte 58) length))
+(declaim (inline specialized-array-element-size/bits))
+(defun specialized-array-element-size/bits (array &optional (length (length array)))
+  "Returns (values bits/elt ub8-encoded-array-type).  64 bit specific.  This is used during
+ serialization.  Inverse of encoded-element-type-to-type/packing"
+  (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 58) length))
   (let ((upgraded (upgraded-array-element-type (array-element-type array))))
     ;; lowest three bits are the element type; upper bits are the bit size if needed
     (case upgraded
       (bit (values (ceiling length 8) 0))
       (base-char (values length 1))
       (character (values (* 4 length) 2))
-      ;; TODO We could store the character arrays more compactly with UTF-8 encoding
       (fixnum (values (* 8 length) 3))
       (single-float (values (* 4 length) 4))
       (double-float (values (* 8 length) 5))
@@ -32,6 +31,7 @@
 	 (unsigned-byte
 	  (multiple-value-bind (encoded-value actual-bits)
 	      (ecase (second upgraded)
+		(1 0)
 		(2 10)
 		(4 11)
 		(7 (values 12 8))
@@ -46,45 +46,49 @@
 					    (the fixnum (or actual-bits (second upgraded)))))
 			     8)
 		  encoded-value))))))))
-#+sbcl
-(declaim (inline sbcl-make-simple-array-from-encoded-element-type))
-#+sbcl
-(defun sbcl-make-simple-array-from-encoded-element-type (encoded-element-type num-elts &optional array-dimensions)
+
+(declaim (inline encoded-value-to-type/packing))
+(defun encoded-element-type-to-type/packing (encoded-element-type)
+  "How many bits per element when reading back in data.  We may be reading data that
+ was stored from an array type that does not exist in the reader implementation, so
+ consider this a definition of our serialization scheme."
+  (ecase encoded-element-type
+    (0 (values 'bit 1))
+    (1 (values 'base-char 8))
+    (2 (values 'character 32))
+    (3 (values 'fixnum 64))
+    (4 (values 'single-float 32))
+    (5 (values 'double-float 64))
+    (6 (values '(signed-byte 8) 8))
+    (7 (values '(signed-byte 16) 16))
+    (8 (values '(signed-byte 32) 32))
+    (9 (values '(signed-byte 64) 64))
+    (10 (values '(unsigned-byte 2) 2)) ;; sbcl actually stores things as 2 bits
+    (11 (values '(unsigned-byte 4) 4)) ;; sbcl actually stores things as 4 bits
+    (12 (values '(unsigned-byte 7) 8))
+    (13 (values '(unsigned-byte 8) 8))
+    (14 (values '(unsigned-byte 15) 16))
+    (15 (values '(unsigned-byte 16) 16))
+    (16 (values '(unsigned-byte 31) 32))
+    (17 (values '(unsigned-byte 32) 32))
+    (18 (values '(unsigned-byte 62) 64))
+    (19 (values '(unsigned-byte 64) 64))))
+
+(defconstant +first-direct-unsigned-integer+ 20)
+(defconstant +max-direct-encoded-unsigned-integer+ (- 255 +first-direct-unsigned-integer+))
+
+(declaim (inline make-simple-array-from-encoded-element-type))
+(defun make-simple-array-from-encoded-element-type (encoded-element-type num-elts &optional array-dimensions)
   "Returns (values new-array array-bytes)"
-  (declare (optimize speed safety) (type (unsigned-byte 8) encoded-element-type)
+  (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 8) encoded-element-type)
 	   (type (unsigned-byte 59) num-elts))
-  (if (< encoded-element-type 6)
-      (multiple-value-bind (element-type array-bytes)
-	  (case encoded-element-type
-	    (0 (values 'bit (ceiling num-elts 8)))
-	    (1 (values 'base-char num-elts))
-	    (2 (values 'character (* 4 num-elts)))
-	    (3 (values 'fixnum (* 8 num-elts)))
-	    (4 (values 'single-float (* 4 num-elts)))
-	    (5 (values 'double-float (* 8 num-elts))))
-	(values (make-array (or array-dimensions num-elts) :element-type element-type)
-		array-bytes))
-      (multiple-value-bind (type actual-bits)
-	  (case encoded-element-type
-	    (6 '(signed-byte 8))
-	    (7 '(signed-byte 16))
-	    (8 '(signed-byte 32))
-	    (9 '(signed-byte 64))
-	    (10 '(unsigned-byte 2))
-	    (11 '(unsigned-byte 4))
-	    (12 (values '(unsigned-byte 7) 8))
-	    (13 '(unsigned-byte 8))
-	    (14 (values '(unsigned-byte 15) 16))
-	    (15 '(unsigned-byte 16))
-	    (16 (values '(unsigned-byte 31) 32))
-	    (17 '(unsigned-byte 32))
-	    (18 (values '(unsigned-byte 62) 64))
-	    (19 '(unsigned-byte 64)))
-	(values (make-array (or array-dimensions num-elts) :element-type type)
-		(ceiling (the fixnum
-			      (* num-elts
-				 (the (integer 0 64) (or actual-bits (second type)))))
-			 8)))))
+  (multiple-value-bind (type actual-bits)
+      (encoded-element-type-to-type/packing encoded-element-type)
+    (values (make-array (or array-dimensions num-elts) :element-type type)
+	    (ceiling (the fixnum
+			  (* num-elts
+			     (the (integer 0 64) actual-bits)))
+		     8))))
 
 #+sbcl
 (defun write-sap-data-to-storage (sap num-bytes storage)
@@ -93,7 +97,6 @@
     (loop
       with num-bytes-remaining fixnum = num-bytes
       with sap-offset fixnum = 0
-      for storage-offset = (write-storage-offset storage)
       while (> num-bytes-remaining 0)
       do
 	 (let ((write-length (min storage-size num-bytes-remaining)))
@@ -107,22 +110,23 @@
 
 (declaim (notinline store-simple-base-string))
 (defun store-simple-base-string (string storage &optional references assign-new-reference-id)
-  (declare (optimize speed safety) (type simple-base-string string))
+  (declare (optimize (speed 3) (safety 1)) (type simple-base-string string))
   (labels ((write-it ()
 	     (when storage
 	       (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
 		 (set-sap-ref-8 sap offset +simple-base-string-code+))
 	       (let ((string-length (length string)))
-		 (store-tagged-unsigned-fixnum string-length storage)
+		 (store-tagged-unsigned-fixnum/interior string-length storage)
 		 #+sbcl (with-pinned-objects (string)
 			  (write-sap-data-to-storage (vector-sap string)
 						     string-length storage))
 		 #-sbcl
-		 (with-write-storage (storage :offset offset :reserve-bytes string-length :sap sap)
-		   (loop
-		     for char of-type base-char across string
-		     for sap-offset fixnum from offset
-		     do (setf (sap-ref-8 sap sap-offset) (char-code char))))))))
+		 (chunked/write storage string-length
+				(lambda (sap sap-offset-original string-start string-end)
+				  (loop
+				    for idx fixnum from string-start below string-end
+				    for sap-offset fixnum from sap-offset-original
+				    do (setf (sap-ref-8 sap sap-offset) (char-code (aref string idx))))))))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -131,24 +135,24 @@
 
 (declaim (notinline restore-simple-base-string))
 (defun restore-simple-base-string (storage)
-  (declare (optimize speed safety))
-  (let* ((num-bytes (restore-tagged-unsigned-fixnum storage))
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((num-bytes (restore-tagged-unsigned-fixnum/interior storage))
 	 (string (make-string num-bytes :element-type 'base-char)))
-    (ensure-enough-data storage num-bytes)
-    (let ((offset (read-storage-offset storage))
-	  (sap (read-storage-sap storage)))
-      #+sbcl (with-pinned-objects (string)
-               (copy-sap (vector-sap string) 0 sap offset num-bytes))
-      #-sbcl (loop for string-offset from 0 below num-bytes
-		   for sap-offset from offset
-		   do (setf (aref string string-offset)
-			    (code-char (cffi:mem-ref sap :uint8 sap-offset))))
-      (setf (read-storage-offset storage) (truly-the fixnum (+ num-bytes offset)))
-      string)))
+    (chunked/read storage num-bytes
+		  (lambda (sap sap-offset-original string-start string-end)
+		    #+sbcl
+		    (with-pinned-objects (string)
+		      (copy-sap (vector-sap string) string-start sap offset (- string-end string-start)))
+		    #-sbcl
+		    (loop
+		      for idx fixnum from string-start below string-end
+		      for sap-offset fixnum from sap-offset-original
+		      do (setf (aref string idx) (code-char (sap-ref-8 sap sap-offset))))))
+    string))
 
 (declaim (notinline store-simple-string))
 (defun store-simple-string (string storage &optional references assign-new-reference-id)
-  (declare (optimize speed safety) (type simple-string string))
+  (declare (optimize (speed 3) (safety 1)) (type simple-string string))
   (labels ((write-it ()
 	     #+(or (not sbcl) (and sbcl sb-unicode))
 	     (when storage
@@ -158,17 +162,18 @@
 	       (let* ((output #+sbcl (sb-ext:string-to-octets string :external-format :utf-8)
 			      #-sbcl (babel:string-to-octets string :encoding :utf-8))
 		      (num-bytes (length output))) 
-		 (store-tagged-unsigned-fixnum num-bytes storage)
-		 (with-write-storage (storage :sap sap :offset offset :reserve-bytes num-bytes)
-		   #+sbcl
-		   (with-pinned-objects (output)
-                     (copy-sap (write-storage-sap storage) offset (vector-sap output) 0 num-bytes))
-		   #-sbcl
-		   (loop
-		     for uint8 across output
-		     for sap-offset from offset
-		     do (setf (sap-ref-8 sap sap-offset) uint8)))))
-	       #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil)))
+		 (store-tagged-unsigned-fixnum/interior num-bytes storage)
+		 (chunked/write storage num-bytes
+				(lambda (sap offset string-start string-end)
+				  #+sbcl
+				  (with-pinned-objects (output)
+				    (copy-sap sap offset (vector-sap output) string-start (- string-end string-start)))
+				  #-sbcl
+				  (loop
+				    for idx fixnum from string-start below string-end
+				    for sap-offset fixnum from offset
+				    do (setf (sap-ref-8 sap sap-offset) (char-code (aref string idx))))
+				  #+(and sbcl (not sb-unicode)) (store-simple-base-string string storage nil)))))))
     (declare (inline write-it))
     (if references
 	(maybe-store-reference-instead (string storage references assign-new-reference-id)
@@ -177,24 +182,18 @@
 
 (declaim (notinline restore-simple-string))
 (defun restore-simple-string (storage)
-  (declare (optimize speed safety))
-  (let* ((num-bytes (restore-tagged-unsigned-fixnum storage)))
-    (ensure-enough-data storage num-bytes)
-    (let ((offset (read-storage-offset storage))
-          (store (read-storage-store storage))
-	  (sap (read-storage-sap storage)))
-      (setf (read-storage-offset storage) (truly-the fixnum (+ num-bytes offset)))
-      (if (> (length store) 0)
-          (babel:octets-to-string store :encoding :utf-8 :start offset
-				         :end (the fixnum (+ offset num-bytes)))
-          (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
-            (declare (dynamic-extent a))
-            #+sbcl (with-pinned-objects (a)
-		     (copy-sap (vector-sap a) 0 sap offset num-bytes))
-	    #-sbcl (loop for sap-offset from offset
-			 for string-offset from 0 below num-bytes
-			 do (setf (aref a string-offset) (cffi:mem-ref sap :uint8 sap-offset)))
-            (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes))))))
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((num-bytes (restore-tagged-unsigned-fixnum/interior storage)))
+    (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
+      (declare (dynamic-extent a))
+      (chunked/read storage num-bytes
+		    (lambda (sap offset string-start string-end)
+		      #+sbcl (with-pinned-objects (a)
+			       (copy-sap (vector-sap a) string-start sap offset (- string-end string-start)))
+		      #-sbcl (loop for sap-offset from offset
+				   for string-offset from string-start below string-end
+				   do (setf (aref a string-offset) (sap-ref-8 sap sap-offset)))))
+      (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes))))
 
 (declaim (notinline store-string))
 (defun store-string (string storage references assign-new-reference-id)
@@ -212,71 +211,224 @@
 (defun restore-string (storage)
   "Can only be used if you are sure that the strings are not references,
  so that means they must have been stored with store-string/no-refs"
-  (declare (optimize speed safety))
+  (declare (optimize (speed 3) (safety 1)))
   (let ((code (restore-ub8 storage)))
     (ecase code
       (#.+simple-base-string-code+ (restore-simple-base-string storage))
       (#.+simple-string-code+ (restore-simple-string storage)))))
 
-#-sbcl
+(declaim (inline chunked/write))
+(defun chunked/write (storage num-bytes function)
+  (declare (optimize (speed 3) (safety 1)))
+  "Used when we cannot do this directly from the sap"
+  (let ((storage-size (write-storage-max storage)))
+    (declare (type (and (integer 1) fixnum) storage-size))
+    (loop
+      with num-bytes-remaining fixnum = num-bytes
+      with data-start-bytes fixnum = 0
+      while (> num-bytes-remaining 0)
+      do
+	 (let ((write-length/bytes (min storage-size num-bytes-remaining)))
+	   (ensure-enough-room-to-write storage write-length/bytes)
+	   (let ((sap-offset (write-storage-offset storage))
+		 (sap (write-storage-sap storage)))
+	     (funcall function sap sap-offset data-start-bytes
+		      (the fixnum (+ data-start-bytes write-length/bytes)))
+	     (incf data-start-bytes write-length/bytes)
+	     (setf (write-storage-offset storage) (truly-the fixnum
+						    (+ sap-offset write-length/bytes)))
+	     (decf num-bytes-remaining write-length/bytes))))))
+
+(declaim (inline chunked/read))
+(defun chunked/read (storage num-bytes function)
+  (declare (optimize (speed 3) (safety 1)))
+  (let ((storage-size (read-storage-max storage)))
+    (declare (type (and (integer 1) fixnum) storage-size))
+    (loop
+      with num-bytes-remaining fixnum = num-bytes
+      with data-start-bytes fixnum = 0
+      while (> num-bytes-remaining 0)
+      do
+	 (let ((read-length/bytes (min storage-size num-bytes-remaining)))
+	   (ensure-enough-data storage read-length/bytes)
+	   (let ((sap-offset (read-storage-offset storage))
+		 (sap (read-storage-sap storage)))
+	     (funcall function sap sap-offset data-start-bytes
+		      (the fixnum (+ data-start-bytes read-length/bytes)))
+	     (incf data-start-bytes read-length/bytes)
+	     (setf (read-storage-offset storage) (truly-the fixnum
+						    (+ sap-offset read-length/bytes)))
+	     (decf num-bytes-remaining read-length/bytes))))))
+
+(defmacro make-writer/reader (size-bits signed &key name-override reader array-type)
+  (let* ((writer (not reader))
+	 (set/get (if (>= size-bits 8)
+		      (or name-override (intern (format nil "~A~ASAP-REF-~A" (if writer "SET-" "") (if signed "SIGNED-" "") size-bits)))
+		      (intern (format nil "~A~ASAP-REF-8" (if writer "SET-" "") (if signed "SIGNED-" ""))))))
+    `(locally (declare (type ,(or array-type `(simple-array ,(list (if signed 'signed-byte 'unsigned-byte) size-bits) (*))) sv))
+       (,(if reader 'chunked/read 'chunked/write)
+	storage ,(if (>= size-bits 8)
+		     `(* ,(ash size-bits -3) (length sv))
+		     `(floor (* (length sv) ,size-bits) 8))
+	(lambda (sap sap-offset data-start/bytes data-end/bytes)
+	  (declare (type fixnum sap-offset data-start/bytes data-end/bytes) (optimize (speed 3) (safety 1)))
+	  (loop for data-offset fixnum from ,(if (>= size-bits 8) `(ash data-start/bytes ,(* -1 (round (log (ash size-bits -3) 2)))) `data-start/bytes)
+		  below ,(if (>= size-bits 8) `(ash data-end/bytes ,(* -1 (round (log (ash size-bits -3) 2)))) `data-end/bytes)
+		do
+		,(if reader
+		     (if (>= size-bits 8)
+			 `(setf (aref sv data-offset) (,set/get sap sap-offset))
+			 `(let ((result (,set/get sap sap-offset)))
+			    (dotimes (chunk ,(/ 8 size-bits))
+			      (setf (aref sv (+ (* data-offset ,(/ 8 size-bits)) chunk)) (logand result ,(dpb 255 (byte size-bits 0) 0)))
+			      (setf result (ash result ,(- size-bits))))))
+		     `(,set/get
+		       sap sap-offset
+		       ,(if (>= size-bits 8)
+			    `(aref sv data-offset)
+			    `(let ((result 0))
+			       (declare (type (unsigned-byte 8) result))
+			       (dotimes (chunk ,(/ 8 size-bits))
+				 (incf result (the fixnum (ash (aref sv (+ (* data-offset ,(/ 8 size-bits)) chunk)) (* chunk ,size-bits)))))
+			       result))))
+		 (the fixnum (incf sap-offset ,(if (>= size-bits 8) (ash size-bits -3) 1))))))
+       ;; Left over bits
+       ,(when (< size-bits 8)
+	  `(let ((elt-offset (* ,(/ 8 size-bits) (floor (length sv) ,(/ 8 size-bits)))))
+	     (unless (= elt-offset (length sv))
+	       ,(if reader
+		    `(progn
+		       (ensure-enough-data storage 1)
+		       (let* ((offset (read-storage-offset storage))
+			      (result (sap-ref-8 (read-storage-sap storage) offset)))
+			 (setf (read-storage-offset storage) (+ 1 offset))
+			 (loop for elt from elt-offset below (length sv)
+			       for count fixnum from 0 by ,size-bits
+			       do (setf (aref sv elt) (logand result ,(dpb 255 (byte size-bits 0) 0)))
+				  (setf result (the fixnum (ash (the fixnum result) ,(- size-bits)))))))
+		    `(with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+		       (,(intern (format nil "~A~ASAP-REF-8" (if writer "SET-" "") (if signed "SIGNED-" "")))
+			sap offset (loop for elt from elt-offset below (length sv)
+					 for count fixnum from 0 by ,size-bits
+					 summing (the fixnum (ash (the fixnum (aref sv elt)) count)) fixnum))))))))))
+
+(defmacro writer (bits signed &optional name-override array-type)
+  `(make-writer/reader ,bits ,signed :name-override ,name-override :reader nil :array-type ,array-type))
+
+(defmacro reader (bits signed &optional name-override array-type)
+  `(make-writer/reader ,bits ,signed :name-override ,name-override :reader t :array-type ,array-type))
+
+(defun store-elts (storage sv encoded-element-type)
+  (declare (optimize (speed 3) (safety 1)))
+  (multiple-value-bind (type size/bits)
+      (encoded-element-type-to-type/packing encoded-element-type)
+    (cond
+      ((consp type)
+       (ecase (first type)
+	 (unsigned-byte
+	  (ecase size/bits
+	    (1 (writer 1 nil))
+	    (2 (writer 2 nil))
+	    (4 (writer 4 nil))
+	    (8 (writer 8 nil))
+	    (16 (writer 16 nil))
+	    (32 (writer 32 nil))
+	    (64 (writer 64 nil))))
+	 (signed-byte
+	  (ecase size/bits
+	    (1 (writer 1 nil))
+	    (2 (writer 2 nil))
+	    (4 (writer 4 nil))
+	    (8 (writer 8 t))
+	    (16 (writer 16 t))
+	    (32 (writer 32 t))
+	    (64 (writer 64 t))))))
+      (t
+       (ecase type
+	 (bit (writer 1 nil))
+	 (base-char (error "Should be handled by string store functions"))
+	 (character (error "Should be handled by string store functions"))
+	 (fixnum (writer 64 t set-signed-sap-ref-64 (simple-array fixnum (*))))
+	 (single-float (writer 32 nil set-sap-ref-single (simple-array single-float (*))))
+	 (double-float (writer 64 nil set-sap-ref-double (simple-array double-float (*)))))))))
+
 (defun store-simple-specialized-vector (sv storage &optional (tag t))
-  (declare (ignorable sv storage tag))
-  (error "implement me"))
-#+sbcl
-(defun store-simple-specialized-vector (sv storage &optional (tag t))
-  (declare (optimize speed safety) (type (simple-array * (*)) sv))
+  (declare (optimize (speed 3) (safety 1)) (type (simple-array * (*)) sv))
   (when storage
     (when tag
       (with-write-storage (storage :offset offset :sap sap :reserve-bytes 1)
 	(set-sap-ref-8 sap offset +simple-specialized-vector-code+)))
     (let ((sv-length (length sv)))
-      (store-tagged-unsigned-fixnum sv-length storage)
+      (store-tagged-unsigned-fixnum/interior sv-length storage)
       (multiple-value-bind (bytes-to-write encoded-element-type)
-	  (sbcl-specialized-array-element-size/bits sv)
-	#+debug-cbs (format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
+	  (specialized-array-element-size/bits sv)
+	#-sbcl(declare (ignorable bytes-to-write))
+	#+debug-cbs
+	(format t "~&SV: Writing a ~A (~A bytes encoded element-type ~A)~%"
 			    (type-of sv) bytes-to-write encoded-element-type)
 	(storage-write-byte storage encoded-element-type)
+	#-sbcl
+	(store-elts storage sv encoded-element-type)
+	#+sbcl
 	(sb-sys:with-pinned-objects (sv)
 	  (write-sap-data-to-storage
 	   (sb-sys:vector-sap sv) bytes-to-write storage))))))
 
-#+sbcl
-(defun read-chunked (target-sap storage num-bytes-remaining)
-  (declare (optimize speed safety) (type fixnum num-bytes-remaining))
-  (loop
-    with storage-size = (read-storage-size storage)
-    with sap = (read-storage-sap storage)
-    with num-bytes-read fixnum = 0
-    while (> num-bytes-remaining 0)
-    for bytes-to-read fixnum = (if (/= (read-storage-offset storage) (read-storage-max storage))
-                                   (min (the fixnum (- (read-storage-max storage) (read-storage-offset storage)))
-                                        num-bytes-remaining)
-                                   (min storage-size num-bytes-remaining))
-    do
-       #+debug-cbs(format t "At storage offset ~A and storage-max ~A, asking for ~A bytes to read, ~A bytes remaining~%"
-               (read-storage-offset storage) (read-storage-max storage) bytes-to-read num-bytes-remaining)
-       (ensure-enough-data storage bytes-to-read)
-       (let ((offset (read-storage-offset storage)))
-         (copy-sap target-sap num-bytes-read sap offset bytes-to-read)
-         (incf num-bytes-read bytes-to-read)
-         (decf num-bytes-remaining bytes-to-read)
-	 (setf (read-storage-offset storage) (truly-the fixnum (+ bytes-to-read offset))))))
+(defmacro with-read-storage ((storage &key offset sap reserve-bytes) &body body)
+  (let ((original-offset (gensym)))
+    `(progn
+       (ensure-enough-data ,storage ,reserve-bytes)
+       (let* ((,offset (read-storage-offset ,storage))
+	      (,original-offset ,offset)
+	      (,sap (read-storage-sap ,storage)))
+	 (multiple-value-prog1
+	     ,@body
+	   (setf (read-storage-offset ,storage) (+ ,original-offset ,reserve-bytes)))))))
 
-#-sbcl
 (defun restore-simple-specialized-vector (storage)
-  (declare (ignorable storage))
-  (error "write me"))
-#+sbcl
-(defun restore-simple-specialized-vector (storage)
-  (declare (optimize speed safety))
-  (let ((num-elts (restore-tagged-unsigned-fixnum storage)))
+  (declare (optimize (speed 3) (safety 1)))
+  (let ((num-elts (restore-tagged-unsigned-fixnum/interior storage)))
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
-	  (sbcl-make-simple-array-from-encoded-element-type encoded-element-info num-elts)
-	#+debug-cbs (format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
+	  (make-simple-array-from-encoded-element-type encoded-element-info num-elts)
+	#-sbcl (declare (ignorable num-bytes))
+	#+debug-cbs
+	(format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
 			    (type-of sv) num-bytes num-elts encoded-element-info)
-        (with-pinned-objects (sv)
-          (read-chunked (vector-sap sv) storage num-bytes))
+	#-sbcl
+	(multiple-value-bind (type bits-per-elt)
+	    (encoded-element-type-to-type/packing encoded-element-info)
+	  (cond
+	    ((consp type)
+	     (ecase (car type)
+	       (unsigned-byte
+		(ecase bits-per-elt
+		  (1 (reader 1 nil))
+		  (2 (reader 2 nil)) ;; supported on lispworks/sbcl
+		  (4 (reader 4 nil)) ;; supported on lispworks/sbcl
+		  (8 (reader 8 nil))
+		  (16 (reader 16 nil))
+		  (32 (reader 32 nil))
+		  (64 (reader 64 nil))))
+	       (signed-byte
+		(ecase bits-per-elt
+		  (8 (reader 8 t))
+		  (16 (reader 16 t))
+		  (32 (reader 32 t))
+		  (64 (reader 64 t))))))
+	    (t
+	     (ecase type
+	       (bit (reader 1 nil))
+	       (single-float (reader 32 nil sap-ref-single (simple-array single-float (*))))
+	       (double-float (reader 64 nil sap-ref-double (simple-array double-float (*))))
+	       (fixnum (reader 64 t signed-sap-ref-64 (simple-array fixnum (*))))))))
+        #+sbcl
+	(with-pinned-objects (sv)
+	  (let ((target-sap (vector-sap sv)))
+	    (chunked/read
+	     storage num-bytes
+	     (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
+	       (copy-sap target-sap data-start/bytes source-sap source-sap-offset (the fixnum (- data-end-bytes data-start/bytes)))))))
         sv))))
 
 #-sbcl
@@ -288,15 +440,14 @@
   (declare (optimize speed safety)
 	   (type (simple-array * *) sa))
   (when storage
-    (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
-      (storage-write-byte storage +simple-specialized-array-code+))
+    (storage-write-byte storage +simple-specialized-array-code+)
     (let* ((array-dimensions (array-dimensions sa))
 	   (num-elts (array-total-size sa)))
       (storage-write-byte storage (length array-dimensions))
       (dolist (a array-dimensions)
 	(store-tagged-unsigned-fixnum (the fixnum a) storage))
       (multiple-value-bind (bytes-to-write encoded-element-type)
-	  (sbcl-specialized-array-element-size/bits sa num-elts)
+	  (specialized-array-element-size/bits sa num-elts)
 	(storage-write-byte storage encoded-element-type)
 	#+debug-cbs (format t "~&SA: Writing a ~A (~A bytes encoded element-type ~A)~%"
 	 		    (type-of sa) bytes-to-write encoded-element-type)
@@ -304,8 +455,11 @@
           (assert (= end num-elts))
 	  (assert (zerop start))
 	  (sb-sys:with-pinned-objects (backing-array)
-	    (write-sap-data-to-storage (sb-sys:vector-sap backing-array) bytes-to-write
-				       storage)))
+	    (let ((source-sap (vector-sap backing-array)))
+	    (chunked/write
+	     storage bytes-to-write
+	     (lambda (storage-sap storage-sap-offset data-start/bytes data-end-bytes)
+	       (copy-sap storage-sap storage-sap-offset source-sap data-start/bytes (- data-end-bytes data-start/bytes)))))))
 	(values)))))
 
 #+sbcl
@@ -317,10 +471,14 @@
 				 collect (restore-tagged-unsigned-fixnum storage)))
 	 (encoded-element-info (restore-ub8 storage)))
     (multiple-value-bind (sa num-bytes)
-	(sbcl-make-simple-array-from-encoded-element-type
+	(make-simple-array-from-encoded-element-type
 	 encoded-element-info (reduce #'* array-dimensions) array-dimensions)
       #+debug-cbs (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
 	                  (type-of sa) num-bytes array-dimensions encoded-element-info)
-      (with-pinned-objects (sa)
-        (read-chunked (array-sap sa) storage num-bytes))
+      	(with-pinned-objects (sa)
+	  (let ((target-sap (array-sap sa)))
+	    (chunked/read
+	     storage num-bytes
+	     (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
+	       (copy-sap target-sap data-start/bytes source-sap source-sap-offset (- data-end-bytes data-start/bytes))))))
       sa)))
