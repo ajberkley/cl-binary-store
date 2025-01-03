@@ -54,8 +54,8 @@
   (restore-global-state-info (make-hash-table :test 'eql)) ; Maps name -> `global-state'
   (restore-objects-source-code nil) ; the source code that was compiled to restore-objects
   (store-objects-source-code nil) ; the source code that was compiled to make store-objects
-  (restore-objects #'invalid :type function)
-  (store-objects #'invalid :type function))
+  (restore-objects nil :type (or null function))
+  (store-objects nil :type (or null function)))
 
 (defun deep-copy-codespace (target source-codespace)
   (setf (codespace-ref-tables target) (alexandria:copy-hash-table (codespace-ref-tables source-codespace)))
@@ -231,7 +231,10 @@
                                                 (format nil "~%")))))))
 			data)))))
 
-(defun compile-codespace (codespace debug)
+(defun build-source-code (codespace debug)
+  (format t "~&CL-BINARY-STORE: Building source code for codespace ~A: #x~4,'0x~%"
+	  (codespace-name codespace)
+	  (codespace-magic-number codespace))
   (let* ((store-function-name (if debug '(defun store-objects/debug) '(lambda)))
 	 (restore-function-name (if debug '(defun restore-objects/debug) '(lambda)))
 	 (declarations
@@ -249,9 +252,24 @@
               (declare (type read-storage storage))
 	     ,(macroexpand (build-restore-objects codespace)))))
     (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
-    (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)
+    (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)))
+
+(defun compiled-p (codespace)
+  (and (functionp (codespace-store-objects codespace))
+       (functionp (codespace-restore-objects codespace))))
+
+(defun compile-codespace (codespace debug)
+  (unless (and (codespace-store-objects-source-code codespace)
+	       (codespace-restore-objects-source-code codespace))
+    (build-source-code codespace debug))
+  (format t "~&CL-BINARY-STORE: Compiling codespace ~A: #x~4,'0x~%"
+	  (codespace-name codespace)
+	  (codespace-magic-number codespace))
+  (let ((store-objects-source-code (codespace-store-objects-source-code codespace))
+	(restore-objects-source-code (codespace-restore-objects-source-code codespace)))
     (cond
       (debug
+       (format t "~&CL-BINARY-STORE: Debugging enabled, source is in codespace-debug.lisp~%")
        (let ((filename "codespace-debug.lisp"))
 	 (with-open-file (str filename
 			      :if-exists :supersede :direction :output
@@ -264,9 +282,11 @@
        (setf (codespace-restore-objects codespace) (fdefinition 'restore-objects/debug)))
       (t
        (setf (codespace-store-objects codespace) (compile nil store-objects-source-code))
-       (setf (codespace-restore-objects codespace) (compile nil restore-objects-source-code))))
-    codespace))
-
+       (setf (codespace-restore-objects codespace) (compile nil restore-objects-source-code)))))
+  (format t "~&CL-BINARY-STORE: Done compiling ~A: #x~4,'0x~%"
+	  (codespace-name codespace)
+	  (codespace-magic-number codespace))
+  (values))
 
 (defmacro define-codespace ((name magic-number &key inherits-from (debug nil)) &body body)
   "Creates and registers a codespace into *codespaces*.  Within this environment
@@ -279,15 +299,22 @@
  counting phase (you can provide a separate function for that phase too).
  RESTORE-OBJECT is a (lambda ()) -> object that can be passed to a function during the restore phase
  STORE-OBJECT is a (lambda (object)) -> writes stuff out"
-  `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (let ((codespace (make-codespace :magic-number ,magic-number :name ,name)))
+  `(let ((codespace (make-codespace :magic-number ,magic-number :name ,name)))
+     (eval-when (:compile-toplevel :load-toplevel :execute)
        ,(when inherits-from
 	  `(deep-copy-codespace codespace (gethash ,inherits-from *codespaces*)))
        (macrolet ((get-current-codespace/compile-time () 'codespace))
 	 ,@body)
-       (when (gethash ,magic-number *codespaces*)
-	 (format t "WARNING: redefining code-space ~A~%" ,magic-number))
-       (setf (gethash ,magic-number *codespaces*) (compile-codespace codespace ,debug)))))
+       (build-source-code codespace ,debug))
+     (eval-when (:compile-toplevel)
+       (unless (compiled-p codespace)
+	 (compile-codespace codespace ,debug)))
+     (eval-when (:load-toplevel :execute)
+       (unless (compiled-p codespace)
+	 (compile-codespace codespace ,debug))
+       (format t "CL-BINARY-STORE: Installing code-space ~A: #x~4,'0x~%" (codespace-name codespace)
+	       ,magic-number)
+       (setf (gethash ,magic-number *codespaces*) codespace))))
 
 (defstruct restore-info
   "Information about a defrestore statement"
