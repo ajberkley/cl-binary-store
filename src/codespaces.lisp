@@ -268,7 +268,7 @@
     codespace))
 
 
-(defmacro define-codespace ((name magic-number &key inherits-from debug) &body body)
+(defmacro define-codespace ((name magic-number &key inherits-from (debug nil)) &body body)
   "Creates and registers a codespace into *codespaces*.  Within this environment
  there are a three pre-defined symbols:
  TRACK-REFERENCES is bound to *track-references*
