@@ -11,19 +11,15 @@
   (:documentation "A package that exports tools used inside cl-binary-store for use by
  someone writing their own specialized serialization or deserialization routine.")
   (:export
-   #:register-code
-
    ;; Complex circularity handling during restore
    #:restore-object-to
 
    ;; Normal circularity handling
-   #:record-reference ; during restore
    #:check/store-reference ; during store
 
    #:store-boolean
    #:store-t
    #:store-nil
-   
    #:store-ub8/tag
    #:store-ub8/no-tag   
    #:store-ub16
@@ -52,10 +48,10 @@
    #:store-array
    #:restore-array
 
-   #:store-simple-specialized-array
-   #:restore-simple-specialized-array
-   #:store-simple-specialized-vector
-   #:restore-simple-specialized-vector
+   #+sbcl #:store-simple-specialized-array
+   #+sbcl #:restore-simple-specialized-array
+   #+sbcl #:store-simple-specialized-vector
+   #+sbcl #:restore-simple-specialized-vector
 
    #:store-string
    #:store-string/no-refs
@@ -66,19 +62,6 @@
 
    #:store-standard/structure-object
    #:restore-standard/structure-object
-
-   #:slot-info
-   #:slot-info-class
-   #:slot-info-slot-names
-   #:slot-info-call-initialize-instance
-   #:make-slot-info
-   #:compute-slot-info
-   
-   #:ensure-enough-room-to-write
-   #:storage-store
-   #:storage-offset
-   #:storage-max
-   #:storage-size
 
    #:action
    #:action-code
@@ -129,18 +112,35 @@
    #:obj
    #:store-object
    #:restore-object
-   #:rebuild-dispatch
    #:make-end-marker
-   #:with-write-storage
-   #:copy-sap
-   #:ensure-enough-data
-   #:copy-n-bytes
-   #:write-storage-offset
-   #:write-storage-store
-   #:read-storage-offset
-   #:read-storage-store
+
+   ;; Low level stuff for serializing/deserializing data from read-storage-sap and write-storage-sap
+   #:set-sap-ref-double
+   #:sap-ref-double
+   #:set-sap-ref-single
+   #:sap-ref-single
+   #:set-signed-sap-ref-64
+   #:signed-sap-ref-64
+   #:set-sap-ref-64
+   #:sap-ref-64
+   #:set-sap-ref-32
+   #:sap-ref-32
+   #:set-sap-ref-16
+   #:sap-ref-16
    #:set-sap-ref-8
-   #:read-storage-sap   
+   #:sap-ref-8
+   #:ensure-enough-data
+   #:with-write-storage
+   #:write-storage-offset
+   #:read-storage-offset
+   #:write-storage-sap
+   #:read-storage-sap
+   #:write-storage-store
+   #:read-storage-store
+   #:copy-sap
+   #:copy-n-bytes
+
+   ;; Basic codespace names
    #:eq-refs
    #:double-float-refs
    #:num-eq-refs
@@ -192,15 +192,14 @@
    #:serializable-object-info
    #:specialized-object-constructor
    #:specialized-serializer/deserializer
+
+   ;; Codespace manipulations
    #:delete-restore
    #:delete-store
    #:delete-codespace
    #:*codespaces*
    #:*allow-codespace-switching*
-   #:set-sap-ref-double
-   #:sap-ref-double
-   #:set-sap-ref-32
-   #:sap-ref-32))
+))
 
 
 (in-package :cl-binary-store)
