@@ -4,7 +4,7 @@ A super fast and customizable serializer/deserializer of Common Lisp objects to/
 
 > :warning: Since we support the full Common Lisp type system (in the default codespace), this is not a serializer/deserializer for communication with other types of systems.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for conspack or messagepack support.
 
-cl-binary-store works on SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and Lispworks.  The SBCL implementation is the fast one.  None of the rest have fast serializers / deserializers for simple-arrays and general performance is not amazing on them.  If you care about one of the platforms tell me and I can make it fast.
+cl-binary-store works on SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and Lispworks.  The SBCL implementation is the fast one.  None of the rest have fast serializers / deserializers for simple-arrays (that is in progress currently) and general performance is not amazing on them.  If you care about one of the platforms tell me and I can make it fast.
 
 ## Status
 
