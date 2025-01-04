@@ -134,16 +134,79 @@
   (alexandria:once-only (x)
     `(logior ,x (- (mask-field (byte 1 (1- ,size)) ,x)))))
 
+(defmacro negative-to-twos-complement/8 (x)
+  (alexandria:once-only (x)
+    `(progn
+       (assert (< ,x 0))
+       (logand (+ 1 (logxor (- ,x) #xFF)) #xFF))))
+
+(defmacro negative-to-twos-complement/16 (x)
+  (alexandria:once-only (x)
+    `(progn
+       (assert (< ,x 0))
+       (logand (+ 1 (logxor (- ,x) #xFFFF)) #xFFFF))))
+
+(defmacro negative-to-twos-complement/32 (x)
+  (alexandria:once-only (x)
+    `(progn
+       (assert (< ,x 0))
+       (logand (+ 1 (logxor (- ,x) #xFFFFFFFF)) #xFFFFFFFF))))
+
 (defmacro negative-to-twos-complement/64 (x)
   (alexandria:once-only (x)
     `(progn
        (assert (< ,x 0))
        (logand (+ 1 (logxor (- ,x) #xFFFFFFFFFFFFFFFF)) #xFFFFFFFFFFFFFFFF))))
 
+(defmacro signed-sap-ref-8 (sap offset)
+  #+sbcl `(sb-sys:signed-sap-ref-8 ,sap ,offset)
+  #-(or sbcl allegro) `(cffi:mem-ref ,sap :int8 ,offset)
+  #+allegro `(mask-signed (sap-ref-8 ,sap ,offset) 8))
+
+(defmacro signed-sap-ref-16 (sap offset)
+  #+sbcl `(sb-sys:signed-sap-ref-16 ,sap ,offset)
+  #-(or sbcl allegro) `(cffi:mem-ref ,sap :int16 ,offset)
+  #+allegro `(mask-signed (sap-ref-16 ,sap ,offset) 16))
+
+(defmacro signed-sap-ref-32 (sap offset)
+  #+sbcl `(sb-sys:signed-sap-ref-32 ,sap ,offset)
+  #-(or sbcl allegro) `(cffi:mem-ref ,sap :int32 ,offset)
+  #+allegro `(mask-signed (sap-ref-32 ,sap ,offset) 32))
+
 (defmacro signed-sap-ref-64 (sap offset)
   #+sbcl `(sb-sys:signed-sap-ref-64 ,sap ,offset)
   #-(or sbcl allegro) `(cffi:mem-ref ,sap :int64 ,offset)
   #+allegro `(mask-signed (sap-ref-64 ,sap ,offset) 64))
+
+(defmacro set-signed-sap-ref-8 (sap offset value)
+  #+sbcl `(setf (sb-sys:signed-sap-ref-8 ,sap ,offset) ,value)
+  #-(or sbcl allegro) `(setf (cffi:mem-ref ,sap :int8 ,offset) ,value)
+  #+allegro
+  (alexandria:once-only (sap offset value)
+    ` (set-sap-ref-8 ,sap ,offset
+		      (if (< ,value 0)
+			  (negative-to-twos-complement/8 ,value)
+			  ,value))))
+
+(defmacro set-signed-sap-ref-16 (sap offset value)
+  #+sbcl `(setf (sb-sys:signed-sap-ref-16 ,sap ,offset) ,value)
+  #-(or sbcl allegro) `(setf (cffi:mem-ref ,sap :int16 ,offset) ,value)
+  #+allegro
+  (alexandria:once-only (sap offset value)
+    ` (set-sap-ref-16 ,sap ,offset
+		      (if (< ,value 0)
+			  (negative-to-twos-complement/16 ,value)
+			  ,value))))
+
+(defmacro set-signed-sap-ref-32 (sap offset value)
+  #+sbcl `(setf (sb-sys:signed-sap-ref-32 ,sap ,offset) ,value)
+  #-(or sbcl allegro) `(setf (cffi:mem-ref ,sap :int32 ,offset) ,value)
+  #+allegro
+  (alexandria:once-only (sap offset value)
+    ` (set-sap-ref-32 ,sap ,offset
+		      (if (< ,value 0)
+			  (negative-to-twos-complement/32 ,value)
+			  ,value))))
 
 (defmacro set-signed-sap-ref-64 (sap offset value)
   #+sbcl `(setf (sb-sys:signed-sap-ref-64 ,sap ,offset) ,value)

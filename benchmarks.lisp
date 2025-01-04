@@ -1,5 +1,5 @@
 (quicklisp:quickload "cl-store")
-#-allegro(quicklisp:quickload "hyperluminal-mem")
+#-(or lispworks allegro)(quicklisp:quickload "hyperluminal-mem")
 (quicklisp:quickload "cl-conspack")
 #+sbcl (require 'sb-sprof)
 
@@ -21,7 +21,7 @@
                         "")))))))
 
 
-#-(or allegro abcl) ;; crashes on abcl
+#-(or allegro abcl lispworks) ;; crashes on abcl
 (defun test-hlmem-on-data (data &key (repeats 100))
   (let* ((words (hyperluminal-mem:msize 0 data))
          (output-size (/ (* 8 words) 1e6)))
@@ -130,7 +130,7 @@
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
 (defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
-  #-(or allegro abcl)
+  #-(or allegro abcl lispworks)
   (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
@@ -294,6 +294,27 @@
 	     (setf (cdr (svref a (random number)))
 		  (svref a (random number))))
     a))
+
+(defun a-bunch-of-specialized-arrays (&optional (n 10000))
+  (loop for type in '((unsigned-byte 1)
+		      (unsigned-byte 2)
+		      (unsigned-byte 4)
+		      (unsigned-byte 8)
+		      (unsigned-byte 16)
+		      (unsigned-byte 32)
+		      fixnum
+		      (unsigned-byte 64)
+		      (signed-byte 8)
+		      (signed-byte 16)
+		      (signed-byte 32)
+		      (signed-byte 64)
+		      single-float
+		      double-float)
+	for elt in (list 1 2 15 255 65535 (1- (expt 2 32)) (expt 2 50) (1- (expt 2 64))
+		     -1 -128 -32768 -100000 1f0 -1d0)
+	collect
+	(make-array n :element-type type :initial-element elt)))
+
 
 (defstruct address
   (street "Ave Greene" :type simple-string)
