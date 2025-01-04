@@ -12,7 +12,7 @@
   "Set this to the magic number you wish to write into the file.  It may
  be queried by serialization routines if desired.")
 
-(defvar *allow-codespace-switching* t
+(defvar *allow-codespace-switching* nil
   "Set this to NIL if you want to specify the format of file you want to load and
  not allow it to be set automatically based on the data format of the file.")
 

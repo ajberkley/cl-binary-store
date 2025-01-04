@@ -50,11 +50,13 @@ A range of tag numbers are reserved for users if they want more efficient or com
 ## User interface
 #### (store place data &key track-references support-shared-list-structures max-to-write as-separate-objects output-end-marker output-magic-number write-version load/save-progress-indicator)
 
-**place** can be string or pathname referring to a file, or a stream, or a vector, or NIL (in which case you will be returned a vector of data).  Track-references is T by default and ensures if two objects are eql in data, they will be eql in the restored output (that is, it allows you to have references between objects in your data).  Support-shared-list-structures is NIL by default and if T allows you to share tails of lists or have circular lists in your data.  Max-to-write is a number in bytes which limits the output size, it defaults to 10GB.  As-separate-objects specifies that data is a (short) list of objects and they should be written so a subsequent call to restore returns them as multiple values.  Output-end-marker means that an end marker will be written on the output which will stop further restoration (the stream may still be advanced past that point).  Output-magic-number means a magic/version number equal to write-version will be written on the output which will instruct the system how to restore the data (or be validated against the allowed encodings).  Write-version is the codespace version to write with, the default being the basic-codespace.  Load/save-progress-indicator prints some stuff so you can tell what is happening in case you have huge complex data sets and get bored. 
+**place** can be string or pathname referring to a file, or a stream, or a vector, or NIL (in which case you will be returned a vector of data).  Track-references is T by default and ensures if two objects are eql in data, they will be eql in the restored output (that is, it allows you to have references between objects in your data).  Support-shared-list-structures is NIL by default and if T allows you to share tails of lists or have circular lists in your data.  Max-to-write is a number in bytes which limits the output size, it defaults to 10GB.  As-separate-objects specifies that data is a (short) list of objects and they should be written so a subsequent call to restore returns them as multiple values.  Output-end-marker means that an end marker will be written on the output which is useful if working with raw buffers or sending stuff on the network.  Output-magic-number means a magic/version number equal to write-version will be written on the output which will instruct the system how to restore the data (or be validated against the allowed encodings).  Write-version is the codespace version to write with, the default being the basic-codespace which supports all Common Lisp objects.  Load/save-progress-indicator prints some stuff so you can tell what is happening in case you have huge complex data sets and get bored. 
 
-#### (restore place)
+#### (restore place &key allow-codespace-switching max-to-read read-version load/save-progress-indicator)
 
 **place** can be a string or pathname referring to a file, or a stream, or a vector.  For restoring to a system-area-pointer use restore-from-sap as you have to note how much data is available (good for mmap'ed files and large arrays).
+
+Max-to-read specifies a number in bytes to signal an error after during restore (to prevent poisonous data files).  Allow-codespace-switching means if the file has a magic-number/version indicator that does not match read-version, we will switch to the correct version (if it exists), otherwise we signal an error.  Read-version is the default codespace number to use while restoring (the default is the basic-codespace that supports the full Common Lisp type space).  load/save-progress-indicator is for when you are bored.
 
 #### (store-to-sap sap size &rest data)
 #### (restore-from-sap sap size)
@@ -183,7 +185,7 @@ If T we will write out a magic number and the \*write-version\* to the output, w
 
 #### \*output-end-marker*\* default: NIL
 
-If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.  It also means you can write multiple chunks of objects to a stream and have restore-objects return between each chunk.
+If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.
 
 #### \*max-to-write\* default: 10GB
 
@@ -192,6 +194,18 @@ The default limit on the amount of data we will write.  Maybe overridden in each
 #### \*max-to-read\* default: 2GB
 
 The default amount of data we will restore.  This is approximate, it is checked every 8K or so (or on a big cons'ing operation).
+
+#### \*allow-codespace-switching*\* default: NIL
+
+This adjusts the codespace based on what the restored file says it was written with instead of just using \*read-version\*
+
+#### \*read-version\* default: #x0001 the basic codespace for all Common Lisp objects
+
+This can be used to override the restoration with a user provided codespace in case the version was not written to the file.
+
+#### \*write-version\* default: #x0001 the basic codespace for all Common Lisp objects
+
+Specify what codespace to use during writing.  Use \*output-magic-number\* so the file records what was used during writing.
 
 ### Extending the codespace
 

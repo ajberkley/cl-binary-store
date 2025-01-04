@@ -160,7 +160,8 @@
 
 (defun restore (place &key 
 			(load/save-progress-indicator *load/save-progress-indicator*)
-			(allow-codespace-switching t) (max-to-read *max-to-read*)
+			(allow-codespace-switching *allow-codespace-switching*)
+			(max-to-read *max-to-read*)
 			(read-version *read-version*))
   "PLACE may be a string or pathname designating a file to read from, or a stream to
  read from (must have element type (unsigned-byte 8)), or a vector.
