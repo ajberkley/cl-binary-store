@@ -142,7 +142,8 @@
 		  (lambda (sap sap-offset-original string-start string-end)
 		    #+sbcl
 		    (with-pinned-objects (string)
-		      (copy-sap (vector-sap string) string-start sap offset (- string-end string-start)))
+		      (copy-sap (vector-sap string) string-start sap sap-offset-original
+				(- string-end string-start)))
 		    #-sbcl
 		    (loop
 		      for idx fixnum from string-start below string-end

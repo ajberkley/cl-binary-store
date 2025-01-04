@@ -606,3 +606,10 @@
 	   (restored (restore (store nil input))))
       (is 'equalp restored input)
       (is 'eql (array-element-type input) (array-element-type restored)))))
+
+(define-test test-empty-strings-and-vectors
+  (true (zerop (length (restore (store nil #())))))
+  (true (zerop (length (restore (store nil (make-array 0 :element-type 'single-float))))))
+  (true (zerop (length (restore (store nil (coerce "" 'simple-string))))))
+  (true (zerop (length (restore (store nil (coerce "" 'simple-base-string))))))
+  (true (zerop (length (restore (store nil nil))))))

@@ -279,7 +279,7 @@
  +interior-coded-max-integer+."
   (declare (type read-storage storage))
   (let ((tag (restore-ub8 storage)))
-    (if (> tag +first-direct-unsigned-integer-interior-code+)
+    (if (>= tag +first-direct-unsigned-integer-interior-code+)
 	(- tag +first-direct-unsigned-integer-interior-code+)
 	(+ (ecase tag
 	     (#.+ub8-code+ (restore-ub8 storage))

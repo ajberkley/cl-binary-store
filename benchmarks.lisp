@@ -255,9 +255,9 @@
      (make-bench-blarg :a a :b b)
      new-index)))
 
-(defun lots-of-structure-objects ()
+(defun lots-of-structure-objects (&optional (n 100000))
   (coerce 
-   (loop for i below 100000
+   (loop for i below n
          collect (make-bench-blarg :a (random 1d0) :b (coerce (format nil "~A" (random 100)) 'simple-base-string)))
    'simple-vector))
 
@@ -269,9 +269,9 @@
 (conspack:defencoding c-blarg
   a b)
 
-(defun lots-of-standard-objects ()
+(defun lots-of-standard-objects (&optional (n 100000))
   (coerce 
-   (loop for i below 100000
+   (loop for i below n
 	 collect (make-instance 'c-blarg :a (random 256) :b "hello"))
    'simple-vector))
 
