@@ -652,7 +652,7 @@
 	    in (list input-ht input-list input-simple-vector input-specialized-array)
 	  for lots-of-data = (store nil input)
 	  do
-	     (print (list (type-of input) estimated-output-size estimated-input-size))
+	     ;;(print (list (type-of input) estimated-output-size estimated-input-size))
 	     (fail (restore lots-of-data :max-to-read (floor estimated-input-size 2)))
 	     (fail (restore lots-of-data :max-to-read (- estimated-input-size 1)))
 	     (is 'equalp (restore lots-of-data :max-to-read (+ 10000 estimated-input-size)) input)
