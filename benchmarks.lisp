@@ -11,18 +11,22 @@
     `(let ((,start (get-internal-real-time)))
        (multiple-value-prog1
            ,@body
-         (let* ((,end (get-internal-real-time))
-                (ms-per (/ (- ,end ,start)
-                           (* 0.001f0 internal-time-units-per-second)
-                           ,repeats)))
-           (format t "~A ~,2f ms ~A~%" ,annotation ms-per
-                   ,(if output-size-MB
-                        `(format nil "at ~d MB/sec" (round (/ ,output-size-MB ms-per 1f-3)))
-                        "")))))))
+         (let* ((,end (get-internal-real-time)))
+	   (cond
+	     ((= ,end ,start)
+	      (format t "~A too fast to resolve~%" ,annotation))
+	     (t
+	      (let ((ms-per (/ (- ,end ,start)
+                               (* 0.001f0 internal-time-units-per-second)
+                               ,repeats)))
+		(format t "~A ~,2f ms ~A~%" ,annotation ms-per
+			,(if output-size-MB
+                             `(format nil "at ~d MB/sec" (round (/ ,output-size-MB ms-per 1f-3)))
+                        ""))))))))))
 
 
 #-(or allegro abcl lispworks) ;; crashes on abcl
-(defun test-hlmem-on-data (data &key (repeats 100))
+(defun test-hlmem-on-data (data &key (repeats 20))
   (let* ((words (hyperluminal-mem:msize 0 data))
          (output-size (/ (* 8 words) 1e6)))
     (format t "HYPERLUMINAL-MEM~%")
@@ -37,7 +41,7 @@
 	  (hyperluminal-mem:mread (static-vectors:static-vector-pointer a-store) 0 words))))))
 
 (defun test-cl-binary-store-on-data
-    (data &key (track-references t) (support-shared-list-structures nil) (repeats 100)
+    (data &key (track-references t) (support-shared-list-structures nil) (repeats 20)
             (read t) (write t) (file nil))
   (let* ((cl-binary-store:*support-shared-list-structures* support-shared-list-structures)
 	 (cl-binary-store:*track-references* track-references)
@@ -285,7 +289,7 @@
 			#+(or abcl allegro) (code-char #x03b1)
 			#-(or abcl allegro) #\U+03b1)))
 
-(defun a-pile-of-tangled-conses (&optional (number 20000))
+(defun a-pile-of-tangled-conses (&optional (number 1000))
   (let ((a (make-array number)))
     (loop for n below number do (setf (svref a n) (cons nil nil)))
     (loop repeat (* 10 number)
