@@ -40,7 +40,7 @@
       output-vector)))
 
 (defun store-to-extant-vector (vector &rest data)
-  (declare (optimize (debug 3))) ;;speed safety))
+  (declare (optimize (speed 3) (safety 1)))
   (let* ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*)))
 	 (offset 0)
 	 ;; We cannot pin objects on other lisps, so copy in those cases

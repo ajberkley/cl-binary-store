@@ -44,7 +44,7 @@
 (defun store-cons/finite (cons storage eq-refs store-object assign-new-reference-id list-lengths)
   "This is called during the actual storage output phase if we have already computed the list
  length.  This is not called when *support-shared-list-structures* is true."
-  (declare (optimize (speed 3) (safety 3) (debug 3))
+  (declare (optimize (speed 3) (safety 1))
 	   (type write-storage storage) (type function store-object))
   (maybe-store-reference-instead (cons storage eq-refs assign-new-reference-id)
     (let ((length (or (and list-lengths (gethash cons list-lengths))
