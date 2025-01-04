@@ -12,7 +12,18 @@
  serialization.  Inverse of encoded-element-type-to-type/packing"
   (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 58) length))
   (let ((upgraded (upgraded-array-element-type (array-element-type array))))
-    ;; lowest three bits are the element type; upper bits are the bit size if needed
+    #+ecl
+    (setf upgraded
+	  (case upgraded
+	    (ext:integer64 '(signed-byte 64))
+	    (ext:integer32 '(signed-byte 32))
+	    (ext:integer16 '(signed-byte 16))
+	    (ext:integer8 '(signed-byte 8))
+	    (ext:byte8 '(unsigned-byte 8))
+	    (ext:byte16 '(unsigned-byte 16))
+	    (ext:byte32 '(unsigned-byte 32))
+	    (ext:byte64 '(unsigned-byte 64))
+	    (otherwise upgraded)))
     (case upgraded
       (bit (values (ceiling length 8) 0))
       (base-char (values length 1))
