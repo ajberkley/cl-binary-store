@@ -1,5 +1,5 @@
 (defsystem #:cl-binary-store
-  :version "0.9.0"
+  :version "1.0.0"
   :description "Fast serialization / deserialization library"
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :long-name "Fast serialization / deserialization library"
