@@ -25,6 +25,7 @@ I expect it to be polished and 1.0 released mid-January 2025.
 - Ability to change the coding mechanism straight-forwardly, but also have room in the basic codespace for user tags
 - Should work out of the box without any effort with an easy programmer / user interface
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
+- Ability to limit amount of data written or read (safety rails)
 
 ## General features
 
