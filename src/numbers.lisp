@@ -277,16 +277,17 @@
   "Use this if you know that this is an unsigned number (so after
  another tag bit).  This opens up the direct coding space for up to
  +interior-coded-max-integer+."
-  (declare (type read-storage storage))
+  (declare (type read-storage storage) (optimize (speed 3) (safety 1)))
   (let ((tag (restore-ub8 storage)))
     (if (>= tag +first-direct-unsigned-integer-interior-code+)
 	(- tag +first-direct-unsigned-integer-interior-code+)
-	(+ (ecase tag
-	     (#.+ub8-code+ (restore-ub8 storage))
-	     (#.+ub16-code+ (restore-ub16 storage))
-	     (#.+ub32-code+ (restore-ub32 storage))
-	     (#.+fixnum-code+ (restore-fixnum storage)))
-	   +interior-coded-max-integer+ 1))))
+	(truly-the fixnum
+	     (+ (ecase tag
+		  (#.+ub8-code+ (restore-ub8 storage))
+		  (#.+ub16-code+ (restore-ub16 storage))
+		  (#.+ub32-code+ (restore-ub32 storage))
+		  (#.+fixnum-code+ (restore-fixnum storage)))
+		+interior-coded-max-integer+ 1)))))
 
 (declaim (ftype (function (read-storage)
 			  #+sbcl (values fixnum &optional)

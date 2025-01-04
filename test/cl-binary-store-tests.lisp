@@ -388,7 +388,7 @@
   (true (null (restore
 	       (let ((*output-magic-number* t)
 		     (*write-version* 999999))
-		 (store nil "check")))))
+		 (store nil "check")) :allow-codespace-switching t)))
   (is 'equalp
       "check"
       (restore
