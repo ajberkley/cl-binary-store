@@ -172,7 +172,7 @@
 		 (is 'type-equal (upgraded-array-element-type (array-element-type result))
 		     (upgraded-array-element-type elt-type))
 		 (is 'equalp input-array result)
-		 (true (equal (array-dimensions result) size))))))
+		 (true (= (length result) size))))))
   
 (define-test test-strings
   (let ((a-string "asdffdsa")
@@ -628,3 +628,15 @@
   (true (zerop (length (restore (store nil (coerce "" 'simple-string))))))
   (true (zerop (length (restore (store nil (coerce "" 'simple-base-string))))))
   (true (zerop (length (restore (store nil nil))))))
+
+(let ((stuff (list -123 -1234 -123456 -34247823946234923864
+		   -1f0 -2d0 -1.234d0 (expt 2 64) (/ (expt 2 128) (expt 2 12))
+		   (complex 1d0 1d0)
+		   (make-array 123 :element-type 'double-float :initial-element 1.23d0)
+		   (make-array 123 :element-type '(signed-byte 32) :initial-element -123984))))
+  (define-test test-interop-write
+    ;; this writes a file with a bunch of stuff
+    (store "blarg.bin" stuff)
+    (is 'equalp (restore "blarg.bin") stuff))
+  (define-test test-interop-read
+    (is 'equalp (restore "blarg.bin") stuff)))
