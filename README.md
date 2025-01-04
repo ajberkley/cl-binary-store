@@ -82,7 +82,7 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
                                  (u (make-array 1))
                                  (v (make-array 1 :initial-element u)))
                              (setf (svref u 0) v)
-                             (store "blarg.bin" (list 'a 'b 'c u v) :data-is-list-of-separate-objects t)
+                             (store "blarg.bin" (list 'a 'b 'c u v) :as-separate-objects t)
                              (format nil "~A" (multiple-value-list (restore "blarg.bin"))))
     "(A B C #1=#(#2=#(#1#)) #2#)"
     ;; Below we enable the optional list circularity detection (general circularity as above is supported by default)
@@ -164,7 +164,7 @@ The specialized-serializer function will be called with parameters (object stora
 
 ### Configurable options
 
-All of these can be set in the calls to STORE and RESTORE directly, the global variables are just the default values if not specified.
+All of these can be set in the calls to STORE and RESTORE directly via keyword parameters with the same names, the global variables are just the default values if not specified.
 
 #### \*track-references\* default: T
 
