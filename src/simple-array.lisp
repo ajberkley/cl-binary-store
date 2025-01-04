@@ -89,17 +89,19 @@
 (defconstant +max-direct-encoded-unsigned-integer+ (- 255 +first-direct-unsigned-integer+))
 
 (declaim (inline make-simple-array-from-encoded-element-type))
-(defun make-simple-array-from-encoded-element-type (encoded-element-type num-elts &optional array-dimensions)
+(defun make-simple-array-from-encoded-element-type (storage encoded-element-type num-elts &optional array-dimensions)
   "Returns (values new-array array-bytes)"
   (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 8) encoded-element-type)
 	   (type (unsigned-byte 59) num-elts))
   (multiple-value-bind (type actual-bits)
       (encoded-element-type-to-type/packing encoded-element-type)
-    (values (make-array (or array-dimensions num-elts) :element-type type)
-	    (ceiling (the fixnum
+    (let ((total-bytes (ceiling (the fixnum
 			  (* num-elts
 			     (the (integer 0 64) actual-bits)))
-		     8))))
+				8)))
+      (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
+      (values (make-array (or array-dimensions num-elts) :element-type type)
+	      total-bytes))))
 
 #+sbcl
 (defun write-sap-data-to-storage (sap num-bytes storage)
@@ -301,7 +303,7 @@
 			    `(let ((result 0))
 			       (declare (type (unsigned-byte 8) result))
 			       (dotimes (chunk ,(/ 8 size-bits))
-				 (incf result (the fixnum (ash (aref sv (+ (* data-offset ,(/ 8 size-bits)) chunk)) (* chunk ,size-bits)))))
+				 (incf result (the fixnum (ash (aref sv (+ (truly-the fixnum (* data-offset ,(/ 8 size-bits))) chunk)) (* chunk ,size-bits)))))
 			       result))))
 		 (the fixnum (incf sap-offset ,(if (>= size-bits 8) (ash size-bits -3) 1))))))
        ;; Left over bits
@@ -402,7 +404,7 @@
   (let ((num-elts (restore-tagged-unsigned-fixnum/interior storage)))
     (let* ((encoded-element-info (restore-ub8 storage)))
       (multiple-value-bind (sv num-bytes)
-	  (make-simple-array-from-encoded-element-type encoded-element-info num-elts)
+	  (make-simple-array-from-encoded-element-type storage encoded-element-info num-elts)
 	#-sbcl (declare (ignorable num-bytes))
 	#+debug-cbs
 	(format t "~&SV: ~A (~A bytes from ~A elts ~A encoded element-type)~%"
@@ -486,7 +488,7 @@
 	 (encoded-element-info (restore-ub8 storage)))
     (multiple-value-bind (sa num-bytes)
 	(make-simple-array-from-encoded-element-type
-	 encoded-element-info (reduce #'* array-dimensions) array-dimensions)
+	 storage encoded-element-info (reduce #'* array-dimensions) array-dimensions)
       #+debug-cbs (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
 	                  (type-of sa) num-bytes array-dimensions encoded-element-info)
       	(with-pinned-objects (sa)

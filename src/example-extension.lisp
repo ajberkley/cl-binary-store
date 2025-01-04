@@ -62,13 +62,13 @@
   (format t "Example of writing something completely different for a 'something-else object:~%~%")
   (format t "First example writing a version number into the stream to switch codespaces~%")
   (let ((*write-version* +extension-codespace+)
-	(*write-magic-number* t))
+	(*output-magic-number* t))
     (print (restore (store nil (make-instance 'something-else)))))
   (format t "~%~%Second example forcing the right codespace~%")
   ;; Option two just keep track of it yourself
   (let ((*write-version* +extension-codespace+)
 	(*read-version* +extension-codespace+)
-	(*write-magic-number* nil))
+	(*output-magic-number* nil))
     (restore (store nil (make-instance 'something-else)))))
 
 ;; Note that in extension-codespace we have explicitly deleted support for double-floats
@@ -77,7 +77,7 @@
 (defun test-unable-to-restore-double-floats ()
   (let ((bad-output
 	  (let ((*write-version* +basic-codespace+)
-		(*write-magic-number* t))
+		(*output-magic-number* t))
 	    (store nil 1.23d0))))
     (let ((*read-version* +extension-codespace+)
 	  (*allow-codespace-switching* nil))
@@ -87,7 +87,7 @@
 	  (format t "Successfully denied codespace switching!~%Error was: ~A~%" e))))
     (let ((output-with-double-float
 	    (let ((*write-version* +basic-codespace+)
-		  (*write-magic-number* nil))
+		  (*output-magic-number* nil))
 	      (store nil 1.23d0))))
       (handler-case
 	  (let ((*read-version* +extension-codespace+))

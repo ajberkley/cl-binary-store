@@ -3,12 +3,15 @@
 ;; User facing interface is generally just `restore' and `store' except
 ;; for SAPs which would be `restore-from-sap' `store-to-sap' and `replace-store-sap-buffer'
 
-(defvar *write-magic-number* nil
-  "If T we will write out a magic number and *write-version* to the stream, which will be
- validated against our existing *codespaces* when we read it back")
+(defvar *output-magic-number* nil
+  "If T we will write out a magic number and *write-version* to the output, which will be
+ validated against our existing *codespaces* when we read it back.")
 
 (defvar *read-version* #x0001
   "The default codespace version to use if no versioning information is in the stream")
+
+(defvar *load/save-progress-indicator* t
+  "If T information will be printed about data read / written")
 
 ;;; STREAMS
 
@@ -160,15 +163,22 @@
 
 ;;; General interface
 
-(defun restore (place)
+(defun restore (place &key 
+			(load/save-progress-indicator *load/save-progress-indicator*)
+			(allow-codespace-switching t) (max-to-read *max-to-read*)
+			(read-version *read-version*))
   "(restore #(14 39 37 0 2 72 73 15)) -> (values :hi))
  (store filename (list :hi :bye) :something)
  (restore filename/stream/place) -> (values (list :hi :bye) :something)
  (restore-from-vector (store nil :hi :bye)) -> (values :hi :bye)
 
- Note that if you specified *write-magic-number* then a `magic-number' will be the first value
+ Note that if you specified *output-magic-number* then a `magic-number' will be the first value
  returned.  It will be asserted against available decoders in *codespaces*"
-  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
+  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*)))
+	(*load/save-progress-indicator* load/save-progress-indicator)
+	(*allow-codespace-switching* allow-codespace-switching)
+	(*max-to-read* max-to-read)
+	(*read-version* read-version))
     (etypecase place
       ((or string pathname)
        (restore-from-file place))
@@ -177,7 +187,12 @@
       (vector
        (restore-from-vector place)))))
 
-(defun store (place &rest data)
+(defun store (place data &key (track-references *track-references*)
+			   (support-shared-list-structures *support-shared-list-structures*)
+			   (max-to-write *max-to-write*)
+			   (data-is-list-of-separate-objects nil)
+			   (output-magic-number *output-magic-number*)
+			   (write-version *write-version*))
   "When place is NIL, returns a (vector (unsigned-byte 8) (*)) with fill-pointer
  ex: (store nil :hi) -> #(39 37 0 2 72 73)
 
@@ -193,12 +208,22 @@
 
  ex: (restore (store filename :hi :bye)) -> (values :hi :bye).
 
- If *write-magic-number* we write out *write-version* at the beginning of the stream and
+ If *output-magic-number* we write out *write-version* at the beginning of the stream and
  it will then be validated on restore."
-  (declare (dynamic-extent data) (optimize speed safety))
+  (declare (optimize speed safety))
   (let* ((magic-number (make-magic-number :number *write-version*))
 	 (*current-codespace* (gethash *write-version* *codespaces*))
-	 (data* (if *write-magic-number* (cons magic-number data) data)))
+	 (*write-version* write-version)
+	 (*max-to-write* max-to-write)
+	 (*support-shared-list-structures* support-shared-list-structures)
+	 (*track-references* track-references)
+	 (data* (if output-magic-number
+		    (if data-is-list-of-separate-objects
+			(cons magic-number data)
+			(list magic-number data))
+		    (if data-is-list-of-separate-objects
+			data
+			(list data)))))
     (declare (dynamic-extent magic-number data*))
     (assert *current-codespace* nil
 	    (format nil "Write-version ~A does not have an existing codespace, we have ~A"

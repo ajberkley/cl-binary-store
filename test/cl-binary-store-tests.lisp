@@ -185,8 +185,8 @@
     (true (apply #'eql (restore (store nil (list a-string a-string)))))
     (is 'equalp (restore (store nil (list a-string a-string b-string)))
 	(list a-string a-string b-string))
-    (true (< (length (store nil a-string a-string))
-	     (length (store nil a-string b-string))))))
+    (true (< (length (store nil (list a-string a-string)))
+	     (length (store nil (list a-string b-string)))))))
 
 (define-test test-symbols
   (let ((symbols (list (intern "HI" "CL-BINARY-STORE-TESTS")
@@ -386,18 +386,18 @@
 
 (define-test test-versioning
   (true (null (restore
-	       (let ((*write-magic-number* t)
+	       (let ((*output-magic-number* t)
 		     (*write-version* 999999))
 		 (store nil "check")))))
   (is 'equalp
       "check"
       (restore
-       (let ((*write-magic-number* nil))
+       (let ((*output-magic-number* nil))
 	 (store nil "check"))))
   (is 'equalp
       "check"
       (restore
-       (let ((*write-magic-number* t))
+       (let ((*output-magic-number* t))
 	 (store nil "check")))))
   
 #+sbcl(define-test test-condition-serialization
@@ -442,21 +442,21 @@
   (let ((data1 (make-array 398423 :initial-element 3))
         (data2 (make-list 1234 :initial-element "hi")))
     (multiple-value-bind (d1 d2)
-        (restore (store "/tmp/blarg-test-cl-store.bin" data1 data2))
+        (restore (store "/tmp/blarg-test-cl-store.bin" (list data1 data2) :data-is-list-of-separate-objects t))
       (is 'equalp data1 d1)
       (is 'equalp data2 d2))))
 
 (define-test test-end-marker
   (is 'equal (multiple-value-list
 	      (restore (concatenate 'vector
-				    (let ((*write-end-marker* t))
-				      (store nil 1 2))
+				    (let ((*output-end-marker* t))
+				      (store nil '(1 2) :data-is-list-of-separate-objects t))
 				    (store nil 3))))
       '(1 2))
   (is 'equal (multiple-value-list
 	      (restore (concatenate 'vector
-				    (let ((*write-end-marker* nil))
-				      (store nil 1 2))
+				    (let ((*output-end-marker* nil))
+				      (store nil '(1 2) :data-is-list-of-separate-objects t))
 				    (store nil 3))))
       '(1 2 3)))
 
@@ -467,9 +467,9 @@
 (define-test test-double-float-references
   ;; Have to use globals so the compiler doesn't make our double floats eq
   (let ((len-just-a (length (store nil *a*))) ;; 9 bytes
-	(len-two-as (length (store nil *a* *a*))) ;; 13 bytes
-	(len-a-and-b/4 (length (store nil *a* (/ *b* 4d0)))) ;; 13 bytes
-	(len-a-and-c (length (store nil *a* *c*)))) ;; 18 bytes
+	(len-two-as (length (store nil (list *a* *a*) :data-is-list-of-separate-objects t))) ;; 13 bytes
+	(len-a-and-b/4 (length (store nil (list *a* (/ *b* 4d0)) :data-is-list-of-separate-objects t))) ;; 13 bytes
+	(len-a-and-c (length (store nil (list *a* *c*) :data-is-list-of-separate-objects t)))) ;; 18 bytes
     (true (> len-two-as len-just-a))
     (true (= len-two-as len-a-and-b/4))
     (true (= len-a-and-b/4 len-two-as))
@@ -640,3 +640,22 @@
     (is 'equalp (restore "/tmp/blarg.bin") stuff))
   (define-test test-interop-read
     (is 'equalp (restore "/tmp/blarg.bin") stuff)))
+
+(define-test test-max-to-read/write
+  (let* ((n 100000)
+	 (input-specialized-array (list (make-array n :element-type '(unsigned-byte 8))
+					n n))
+	 (input-simple-vector (list (make-array n) n (* 8 n)))
+	 (input-list (list (make-list n) n (* 16 n)))
+	 (input-ht (list (make-hash-table :size n) nil (* 16 n))))
+    (loop for (input estimated-output-size estimated-input-size)
+	    in (list input-ht input-list input-simple-vector input-specialized-array)
+	  for lots-of-data = (store nil input)
+	  do
+	     (print (list (type-of input) estimated-output-size estimated-input-size))
+	     (fail (restore lots-of-data :max-to-read (floor estimated-input-size 2)))
+	     (fail (restore lots-of-data :max-to-read (- estimated-input-size 1)))
+	     (is 'equalp (restore lots-of-data :max-to-read (+ 10000 estimated-input-size)) input)
+	     (when estimated-output-size
+	       (fail (store nil input :max-to-write (- estimated-output-size 1000))))
+	     (finish (store nil input :max-to-write (round (* 1.1 (or estimated-output-size 1024))))))))

@@ -94,12 +94,12 @@
    ;; Do any sort of reference tracking
    #:*track-references*
    ;; Write an end marker
-   #:*write-end-marker*
+   #:*output-end-marker*
 
    ;; Versioning
    #:*write-version*
    #:*version-being-read*
-   #:*write-magic-number*
+   #:*output-magic-number*
    #:*current-codespace*
 
    #:out-of-space-current-offset
@@ -138,7 +138,6 @@
    #:write-storage-store
    #:read-storage-store
    #:copy-sap
-   #:copy-n-bytes
 
    ;; Basic codespace names
    #:eq-refs
@@ -199,7 +198,9 @@
    #:delete-codespace
    #:*codespaces*
    #:*allow-codespace-switching*
-))
+   #:*max-to-write*
+   #:*max-to-read*
+   #:*output-magic-number*))
 
 
 (in-package :cl-binary-store)

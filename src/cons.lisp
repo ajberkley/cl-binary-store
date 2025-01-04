@@ -142,6 +142,10 @@
 (defun restore-list/known-length (storage restore-object)
   (declare (optimize (speed 3) (safety 0)))
   (let* ((length (restore-tagged-unsigned-fixnum/interior storage)))
+    (check-if-too-much-data (read-storage-max-to-read storage)
+			    (truly-the fixnum 
+			      (+ (read-storage-total-read storage)
+				 (truly-the fixnum (* 16 length)))))
     (let* ((head (make-list length))
 	   (cons head))
       (dotimes (count (1- length))

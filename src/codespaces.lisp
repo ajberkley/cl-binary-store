@@ -77,7 +77,7 @@
   "During restore this is bound to any magic number found previous to
  this in the file.")
 
-(defvar *write-end-marker* nil
+(defvar *output-end-marker* nil
   "If T, once all objects are stored an end marker will be written to the output.
  This will trigger the end of restore (for use in cases where there
  isn't an obvious end of file)")
@@ -182,7 +182,7 @@
 		  (write-reference-count (1+ max-ref-id) #'store-object))
 		(dolist (elt stuff)
 		  (store-object elt))
-		(when *write-end-marker* (store-object (make-end-marker)))))
+		(when *output-end-marker* (store-object (make-end-marker)))))
 	    (flush-write-storage storage))))))
 
 (defun analyze-references-hash-table (table-name references)

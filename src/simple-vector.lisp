@@ -11,12 +11,13 @@
 (declaim (inline restore-simple-vector))
 (defun restore-simple-vector (storage restore-object)
   (declare (optimize speed safety))
-  (let* ((num-elts (restore-tagged-unsigned-fixnum/interior storage))
-	 (sv (make-array num-elts)))
-    ;; It's possible that we can refer to an
-    ;; object that is not fully reified yet
-    ;; (the only possibility is an array displaced
-    ;; to us to which we hold a reference)
-    (dotimes (idx num-elts)
-      (restore-object-to (svref sv idx) restore-object))
-    sv))
+  (let* ((num-elts (restore-tagged-unsigned-fixnum/interior storage)))
+    (check-if-too-much-data (read-storage-max-to-read storage) (* num-elts 8))
+    (let ((sv (make-array num-elts)))
+      ;; It's possible that we can refer to an
+      ;; object that is not fully reified yet
+      ;; (the only possibility is an array displaced
+      ;; to us to which we hold a reference)
+      (dotimes (idx num-elts)
+	(restore-object-to (svref sv idx) restore-object))
+      sv)))

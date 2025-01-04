@@ -171,13 +171,21 @@ Let this to NIL around your calls to store / restore if you have simple data wit
 
 Set this to T if you have complex list structures where you share tails of lists, or have any list only circularity (circularity between lists, objects, etc in general is handled by \*track-references\*, this setting is just for conses.  Most of the time this is fine to leave at nil.  It's a significant performance hit if you set it to T as we have to track every cons we see.  If you set this to T, *track-references* must be T too.
 
-#### \*write-magic-number\* default: NIL
+#### \*output-magic-number\* default: NIL
 
 If T we will write out a magic number and the \*write-version\* to the output, which will be used on restore to load the correct codespace (or error if it does not exist).
 
-#### \*write-end-marker*\* default: NIL
+#### \*output-end-marker*\* default: NIL
 
 If T we will write an end marker at the end of every call to STORE.  This helps for use when sending data across the network or reading from raw memory to avoid tracking lengths around.  It also means you can write multiple chunks of objects to a stream and have restore-objects return between each chunk.
+
+#### \*max-to-write\* default: 10GB
+
+The default limit on the amount of data we will write.  Maybe overridden in each call to store.  This is approximate (it is checked every 8K or so).
+
+#### \*max-to-read\* default: 2GB
+
+The default amount of data we will restore.  This is approximate, it is checked every 8K or so (or on a big cons'ing operation).
 
 ### Extending the codespace
 
@@ -273,5 +281,6 @@ See [benchmarking.md](benchmarking.md).
 - [ ] Speed up cl-binary-store on ABCL and ECL so it is less than 10x slower than on XBCL
 - [ ] Specialize store / restore functions on global settings to avoid so many parameters being passed around.
 - [ ] When using implicit reference tracking, use a vector on restore like we do for the explicit case instead of overloading the reference ht
-- [ ] 1D simple-array storage routines for CCL, ECL, Lispworks, Allegro, and ABCL (in progress)
-- [ ] simple-array storage routines for CCL, ECL, Lispworks, Allegro, and ABCL
+- [ ] Allow limits on max output size
+- [ ] Turn versioned output on by default when reading/writing to a file
+- [ ] Short specialized arrays use three available bits for length encoding

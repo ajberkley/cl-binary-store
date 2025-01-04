@@ -26,12 +26,3 @@
 	     (cffi:inc-pointer target-sap target-offset)
 	     (cffi:inc-pointer source-sap source-offset)
 	     n))))
-
-(declaim (inline copy-n-bytes))
-(defun copy-n-bytes (target target-offset source source-offset n)
-  (declare (optimize speed safety))
-  (with-pinned-objects (source target)
-    (let ((source-sap (vector-sap source))
-	  (target-sap (vector-sap target)))
-      (copy-sap target-sap target-offset source-sap source-offset n)))
-  (values))

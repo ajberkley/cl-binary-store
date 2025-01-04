@@ -1,8 +1,18 @@
 (in-package :cl-binary-store)
 
+(defvar *max-to-write* 10000000000
+  "The default maximum of data to write to disk (10GB) before complaining.")
+
+(defvar *max-to-read* 2000000000
+  "The maximum amount of data to restore (2GB) before complaining.")
+
+(defvar *load/save-progress-indicator* t
+  "If T will write out some progress while loading and saving")
+
 (declaim (inline make-read-storage read-storage-offset read-storage-max read-storage-sap
 		 read-storage-flusher read-storage-store read-storage-size
-		 read-storage-underlying-stream
+		 read-storage-underlying-stream read-storage-total-read
+		 read-storage-max-to-read
 		 (setf read-storage-offset)))
 
 (defstruct read-storage
@@ -17,7 +27,9 @@
  (simple-array (unsigned-byte 8) (SIZE)) which the static memory
  buffer is based on (used only to speed up utf8 encoding).
  UNDERLYING-STREAM which will be a stream if we are just a buffer in
- front of a stream (unused)."
+ front of a stream (unused).
+
+ The flusher is responsible for updating total-read and checking against max-to-read"
   (offset 0 :type fixnum)
   (max 0 :type fixnum)
   (sap nil #+sbcl :type #+sbcl sb-alien::system-area-pointer
@@ -25,8 +37,9 @@
   (size 0 :type fixnum)
   (flusher nil :type function) ;; reads more data (lambda (storage))
   (store nil :type (or null (simple-array (unsigned-byte 8) (*))))
-  (underlying-stream nil :type (or null stream)))
-  
+  (underlying-stream nil :type (or null stream))
+  (total-read 0 :type fixnum)
+  (max-to-read *max-to-read* :type fixnum))
 
 (declaim (inline make-write-storage write-storage-offset write-storage-max write-storage-sap
 		 write-storage-flusher write-storage-store write-storage-size
@@ -94,77 +107,107 @@
 	    (read-storage-offset s) (read-storage-max s)
             (read-storage-sap s))))
 
-(defmacro with-tracking-rates ((&optional (leader-default "Read ")) &body body)
-  "Provides a function (update bytes) which should be called when new
- bytes are read or written.  ONLY ACTIVE if #+info-cbs, so do not call unless
- #+info-cbs."
+(defun ask-for-new-amount ()
+  (format t "Enter a new number of allowed bytes: ")
+  (list (read)))
+
+(defmacro check-if-too-much-data (max-byte-place total-bytes)
+  `(let ((max ,max-byte-place))
+     (declare (type (or null fixnum) max))
+     (when max
+       (when (> (the fixnum ,total-bytes) (the fixnum max))
+	 (restart-case
+	     (error 'too-much-data :max-bytes max :bytes ,total-bytes)
+	   (double-allowed-amount ()
+	     :report "Double allowed amount"
+	     (setf ,max-byte-place (the fixnum (* 2 (the fixnum ,max-byte-place)))))
+	   (increase-allowed-amount-to (new-amount)
+	     :report "Set allowed amount to version input interactively"
+	     :interactive ask-for-new-amount
+	     (setf ,max-byte-place (the fixnum new-amount))))))))
+
+(defmacro with-tracking-data ((total-bytes update-fcn &optional (leader-default "Read "))
+			      &body body)
+  "Provides a function (update bytes &optional eof) which should be called when new
+ bytes are read or written.  Used for *load/save-progress-indicator*"
   (declare (ignorable leader-default))
-  `(let* (#+info-cbs(total-bytes 0)
-	  #+info-cbs(start-time (get-universal-time))
-	  #+info-cbs(last-time start-time))
+  `(let* ((,total-bytes 0)
+	  (start-time (get-universal-time))
+	  (last-time start-time))
+     (declare (type fixnum ,total-bytes start-time last-time))
      (labels
-	 (#+info-cbs(print-update (now &optional (leader ,leader-default leader-provided-p))
-            (when (or leader-provided-p (> now (+ 10 last-time)))
+	 ((print-update (now &optional (leader ,leader-default leader-provided-p))
+            (when (or leader-provided-p (> now (truly-the fixnum (+ 10 last-time))))
               (setf last-time now)
 	      (unless (= last-time start-time)
                 (format t "~A~,2f MB in ~A seconds (~,2f MB/sec)~%"
                         leader
-                        (/ total-bytes 1d6) (- last-time start-time)
-			(/ total-bytes 1d6 (- last-time start-time))))))
-	  #+info-cbs(update (bytes &optional eof)
-	    (let ((now (get-universal-time)))
-	      (incf total-bytes bytes)
-	      (if eof (print-update now "Finished ") (print-update now)))))
+                        (/ ,total-bytes 1f6) (- last-time start-time)
+			(/ ,total-bytes 1f6 (- last-time start-time))))))
+	  (,update-fcn (bytes &optional eof)
+	    (incf ,total-bytes bytes)
+	    (when *load/save-progress-indicator*
+	      (let ((now (get-universal-time)))
+		(if eof (print-update now "Finished ") (print-update now))))))
        ,@body)))
+
+(define-condition too-much-data (error)
+  ((bytes-read :initarg :bytes :reader too-much-data-bytes)
+   (max-bytes :initarg :max-bytes :reader too-much-data-max-bytes))
+  (:documentation "Tried to read / write more than allowed amount of data.  If you choose
+ any of the continue options, the current operation will continue (which might be a make-array
+ or make-list call which may exceed what you input)"))
+
+(defmethod print-object ((obj too-much-data) str)
+  (format str "TOO-MUCH-DATA: ~A bytes, allowed ~A bytes" (too-much-data-bytes obj)
+	  (too-much-data-max-bytes obj)))
 
 (defun make-read-into-storage/stream (stream)
   (declare (optimize (speed 3) (safety 1)))
-  (with-tracking-rates ("Read ")
+  (with-tracking-data (total-bytes update "Read ")
     (lambda (storage)
       (let ((seq (read-storage-store storage)))
-        #+dribble-cbs(format t "We currently have ~A..~A valid data (~A bytes)~%"
-	                   (read-storage-offset storage) (read-storage-max storage)
-	                   (- (read-storage-max storage) (read-storage-offset storage)))
         (let ((new-bytes-end-at (read-sequence seq stream :start (read-storage-max storage))))
-	  #+info-cbs (update (- new-bytes-end-at (read-storage-max storage))
-			     (= new-bytes-end-at (read-storage-offset storage)))
+	  (update (- new-bytes-end-at (read-storage-max storage))
+		  (= new-bytes-end-at (read-storage-offset storage)))
+	  (setf (read-storage-total-read storage) total-bytes)
+	  (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
 	  (setf (read-storage-max storage) new-bytes-end-at)
-	  (- new-bytes-end-at (read-storage-offset storage)))))))
+	  (truly-the fixnum (- new-bytes-end-at (read-storage-offset storage))))))))
 
 (defun make-write-into-storage/stream (stream)
   (declare (optimize (speed 3) (safety 1)))
-  (with-tracking-rates ("Write ")
+  (with-tracking-data (total-bytes update "Write ")
     (lambda (storage)
       (declare (optimize (speed 3) (safety 1)))
       (let ((seq (write-storage-store storage)))
-	#+debug-cbs (format t "Writing bytes ~A..~A out to stream~%" 0 (storage-offset storage))
 	(write-sequence seq stream :end (write-storage-offset storage))
-	#+info-cbs (update (write-storage-offset storage))
+	(update (write-storage-offset storage))
+	(check-if-too-much-data *max-to-write* total-bytes)
 	(setf (write-storage-offset storage) 0)))))
 
 (defun make-write-into-adjustable-ub8-vector (vector)
   (assert (adjustable-array-p vector))
-  (lambda (storage)
-    #+dribble-cbs(format t "Flushing to adjustable ub8 vector~%")
-    (let* ((num-bytes (write-storage-offset storage))
-	   (bytes-available (- (array-total-size vector) (fill-pointer vector))))
-      #+dribble-cbs
-      (format t "NUM-BYTES in buffer is ~A / ~A, bytes-available in storage vector is ~A~%"
-	      num-bytes (length (write-storage-store storage)) bytes-available)
-      (unless (>= bytes-available num-bytes)
-	(setf vector
-	      (adjust-array vector
-			    (let ((current-size (array-total-size vector)))
-			      (max (* 2 current-size)
-				   (+ current-size (- num-bytes bytes-available)))))))
-      (let ((start (fill-pointer vector)))
-	(incf (fill-pointer vector) (write-storage-offset storage))
-	(replace vector (write-storage-store storage)
-		 :start1 start
-		 :end1 (+ start num-bytes)
-		 :start2 0
-		 :end2 (write-storage-offset storage)))
-      (setf (write-storage-offset storage) 0))))
+  (with-tracking-data (total-bytes update "Write ")
+    (lambda (storage)
+      (let* ((num-bytes (write-storage-offset storage))
+	     (bytes-available (- (array-total-size vector) (fill-pointer vector))))
+	(unless (>= bytes-available num-bytes)
+	  (setf vector
+		(adjust-array vector
+			      (let ((current-size (array-total-size vector)))
+				(max (* 2 current-size)
+				     (+ current-size (- num-bytes bytes-available)))))))
+	(let ((start (fill-pointer vector)))
+	  (incf (fill-pointer vector) (write-storage-offset storage))
+	  (replace vector (write-storage-store storage)
+		   :start1 start
+		   :end1 (+ start num-bytes)
+		   :start2 0
+		   :end2 (write-storage-offset storage))
+	  (update (write-storage-offset storage) nil)
+	  (check-if-too-much-data *max-to-write* total-bytes)
+	  (setf (write-storage-offset storage) 0))))))
 
 (defmacro with-storage/read ((storage &key stream (buffer-size 8192)
 					sap flusher store max size) &body body)

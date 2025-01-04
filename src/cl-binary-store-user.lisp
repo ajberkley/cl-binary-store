@@ -57,14 +57,21 @@
    ;; Do any sort of reference tracking
    #:*track-references*
    ;; Write an end marker
-   #:*write-end-marker*
+   #:*output-end-marker*
 
    ;; Versioning
    #:*current-codespace*
    #:*write-version*
    #:*version-being-read*
-   #:*write-magic-number*
+   #:*output-magic-number*
 
+   ;; Safety rails
+   #:*max-to-write*
+   #:*max-to-read*
+
+   ;; Fun
+   #:*load/save-progress-indicator*
+   
    ;; Error if symbol package does not exist
    #:missing-package-during-restore
    ;; Restarts to recover from the above error

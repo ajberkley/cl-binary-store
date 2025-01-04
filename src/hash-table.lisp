@@ -31,6 +31,8 @@
              #-sbcl (declare (ignore synchronized weakness))
 	     ;; weakness works as far as I can discern
 	     ;; because of how we do reference restoration
+	     (check-if-too-much-data (read-storage-max-to-read storage)
+				     (* 16 size)) ;; an estimate
 	     (make-hash-table :test test :size size
 			      :rehash-size rehash-size
 			      :rehash-threshold rehash-threshold
