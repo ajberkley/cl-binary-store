@@ -45,10 +45,12 @@ Support for writing and reading from files, vectors, streams, and raw memory wit
 
 A simple versioning scheme is implemented.
 
-## User interface
-#### (store place &rest data)
+A range of tag numbers are reserved for users if they want more efficient or compact output.
 
-**place** can be string or pathname referring to a file, or a stream, or a vector, or NIL (in which case you will be returned a vector of data).
+## User interface
+#### (store place data &key track-references support-shared-list-structures max-to-write as-separate-objects output-end-marker output-magic-number write-version load/save-progress-indicator)
+
+**place** can be string or pathname referring to a file, or a stream, or a vector, or NIL (in which case you will be returned a vector of data).  Track-references is T by default and ensures if two objects are eql in data, they will be eql in the restored output (that is, it allows you to have references between objects in your data).  Support-shared-list-structures is NIL by default and if T allows you to share tails of lists or have circular lists in your data.  Max-to-write is a number in bytes which limits the output size, it defaults to 10GB.  As-separate-objects specifies that data is a (short) list of objects and they should be written so a subsequent call to restore returns them as multiple values.  Output-end-marker means that an end marker will be written on the output which will stop further restoration (the stream may still be advanced past that point).  Output-magic-number means a magic/version number equal to write-version will be written on the output which will instruct the system how to restore the data (or be validated against the allowed encodings).  Write-version is the codespace version to write with, the default being the basic-codespace.  Load/save-progress-indicator prints some stuff so you can tell what is happening in case you have huge complex data sets and get bored. 
 
 #### (restore place)
 
