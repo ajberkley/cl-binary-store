@@ -432,6 +432,8 @@
 	       (copy-sap target-sap data-start/bytes source-sap source-sap-offset (the fixnum (- data-end-bytes data-start/bytes)))))))
         sv))))
 
+;; for ccl ccl::array-data-and-offset would be fine... it's been a stable interface
+;; forever.
 #-sbcl
 (defun store-simple-specialized-array (sa storage)
   (declare (ignorable sa storage))

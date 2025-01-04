@@ -103,6 +103,21 @@
        (subtypep t2 t1)))
 
 (define-test test-simple-arrays
+  (loop for input-type in '(single-float double-float (signed-byte 8) fixnum)
+	for generator in (list (lambda () (random 1f0))
+			       (lambda () (random 1d0))
+			       (lambda () (- (random 256) 128))
+			       (lambda () (- (random 12345) 123)))
+	do
+	   (let ((input (make-array (list (+ 1 (random 1000))
+					  (+ 1 (random 1000))) :element-type input-type)))
+	     (loop for idx below (array-rank input)
+		   do (setf (row-major-aref input idx) (funcall generator)))
+	     (let ((restored (restore (store nil input))))
+	       (true (equalp restored input))
+	       (true (equal (type-of input) (type-of restored)))))))
+
+(define-test test-simple-vectors
   (let* ((elt-types
 	     '(bit
 	       fixnum base-char character single-float
@@ -157,7 +172,7 @@
 		 (is 'type-equal (upgraded-array-element-type (array-element-type result))
 		     (upgraded-array-element-type elt-type))
 		 (is 'equalp input-array result)
-		 (true (= (length result) size))))))
+		 (true (equal (array-dimensions result) size))))))
   
 (define-test test-strings
   (let ((a-string "asdffdsa")
