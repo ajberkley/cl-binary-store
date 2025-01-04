@@ -10,9 +10,6 @@
 (defvar *read-version* #x0001
   "The default codespace version to use if no versioning information is in the stream")
 
-(defvar *load/save-progress-indicator* t
-  "If T information will be printed about data read / written")
-
 ;;; STREAMS
 
 (defun store-to-stream (stream &rest elements)
@@ -20,7 +17,6 @@
   (let ((*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
     (with-storage/write (storage :flusher (make-write-into-storage/stream stream))
       (apply #'store-objects storage elements)
-      (flush-write-storage storage)
       (values))))
 
 (defun restore-from-stream (stream)
@@ -39,7 +35,6 @@
 	 (*current-codespace* (or *current-codespace* (gethash *write-version* *codespaces*))))
     (with-storage/write (storage :flusher (make-write-into-adjustable-ub8-vector output-vector))
       (apply #'store-objects storage elements)
-      (flush-write-storage storage)
       output-vector)))
 
 (defun store-to-extant-vector (vector &rest data)
@@ -158,7 +153,7 @@
   (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*))))
     (with-open-file (str filename :direction :input :element-type '(unsigned-byte 8))
       (with-storage/read (storage :flusher (make-read-into-storage/stream str) :max 0
-			     :stream str)
+				  :stream str)
 	(restore-objects storage)))))
 
 ;;; General interface
@@ -167,13 +162,20 @@
 			(load/save-progress-indicator *load/save-progress-indicator*)
 			(allow-codespace-switching t) (max-to-read *max-to-read*)
 			(read-version *read-version*))
-  "(restore #(14 39 37 0 2 72 73 15)) -> (values :hi))
- (store filename (list :hi :bye) :something)
+  "PLACE may be a string or pathname designating a file to read from, or a stream to
+ read from (must have element type (unsigned-byte 8)), or a vector.
+
+ (restore #(14 39 37 0 2 72 73 15)) -> (values :hi))
+ (store filename (list (list :hi :bye) :something) :as-separate-objects t)
  (restore filename/stream/place) -> (values (list :hi :bye) :something)
  (restore-from-vector (store nil :hi :bye)) -> (values :hi :bye)
 
- Note that if you specified *output-magic-number* then a `magic-number' will be the first value
- returned.  It will be asserted against available decoders in *codespaces*"
+ If ALLOW-CODESPACE-SWITCHING then the file can specify a version different from
+ READ-VERSION and we will switch to it if it is available.
+
+ MAX-TO-READ specifies the maximum amount of data in bytes we should load.
+
+ LOAD/SAVE-PROGRESS-INDICATOR, if T, shows you some indications while loading"
   (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*)))
 	(*load/save-progress-indicator* load/save-progress-indicator)
 	(*allow-codespace-switching* allow-codespace-switching)
@@ -190,26 +192,35 @@
 (defun store (place data &key (track-references *track-references*)
 			   (support-shared-list-structures *support-shared-list-structures*)
 			   (max-to-write *max-to-write*)
-			   (data-is-list-of-separate-objects nil)
+			   (as-separate-objects nil)
+			   (output-end-marker *output-end-marker*)
 			   (output-magic-number *output-magic-number*)
-			   (write-version *write-version*))
-  "When place is NIL, returns a (vector (unsigned-byte 8) (*)) with fill-pointer
- ex: (store nil :hi) -> #(39 37 0 2 72 73)
+			   (write-version *write-version*)
+			   (load/save-progress-indicator *load/save-progress-indicator*))
+  "When PLACE is NIL, returns a (vector (unsigned-byte 8) (*)) with fill-pointer
+ ex: (store nil (list 1.234d56)) #(32 5 11 90 215 48 169 108 33 148 75 5)
 
- When place is a filename/string/pathname writes data to the respective file.
+ When PLACE is a filename/string/pathname writes data to the respective file.
 
- When place is a vector writes data to it and returns num used bytes... if vector is
+ When PLACE is a vector writes data to it and returns num used bytes... if vector is
  adjustable, it may be adjusted.  Otherwise we error if we run out of space.
 
- When place is a system-area-pointer writes into it and returns num used bytes (NOT IMPLEMENTED)
+ If you provide a list of objects in DATA and you specify AS-SEPARATE-OBJECTS
+ they will come back from RESTORE as multiple values.  Otherwise we just store the list.
 
- Note that if you provide more than one data object, they will come back from RESTORE as
- multiple values.
+ ex: (restore (store filename (list :hi :bye) :data-is-list-of-separate-objects t)) -> (values :hi :bye).
 
- ex: (restore (store filename :hi :bye)) -> (values :hi :bye).
+ If OUTPUT-MAGIC-NUMBER we write out WRITE-VERSION at the beginning of the stream and
+ it will then be validated on restore.
 
- If *output-magic-number* we write out *write-version* at the beginning of the stream and
- it will then be validated on restore."
+ MAX-TO-WRITE is the maximum number of bytes you want to write out before erroring.
+
+ SUPPORT-SHARED-LIST-STRUCTURES should be T if you have circular lists or share tails of lists and
+ want them to come back properly EQL.
+
+ TRACK-REFERENCES should be T if you have references between the elements in data.
+
+ LOAD/SAVE-PROGRESS-INDICATOR, if T, shows you some indications while loading"
   (declare (optimize speed safety))
   (let* ((magic-number (make-magic-number :number *write-version*))
 	 (*current-codespace* (gethash *write-version* *codespaces*))
@@ -217,11 +228,13 @@
 	 (*max-to-write* max-to-write)
 	 (*support-shared-list-structures* support-shared-list-structures)
 	 (*track-references* track-references)
+	 (*load/save-progress-indicator* load/save-progress-indicator)
+	 (*output-end-marker* output-end-marker)
 	 (data* (if output-magic-number
-		    (if data-is-list-of-separate-objects
+		    (if as-separate-objects
 			(cons magic-number data)
 			(list magic-number data))
-		    (if data-is-list-of-separate-objects
+		    (if as-separate-objects
 			data
 			(list data)))))
     (declare (dynamic-extent magic-number data*))

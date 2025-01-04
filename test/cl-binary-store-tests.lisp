@@ -442,21 +442,19 @@
   (let ((data1 (make-array 398423 :initial-element 3))
         (data2 (make-list 1234 :initial-element "hi")))
     (multiple-value-bind (d1 d2)
-        (restore (store "/tmp/blarg-test-cl-store.bin" (list data1 data2) :data-is-list-of-separate-objects t))
+        (restore (store "/tmp/blarg-test-cl-store.bin" (list data1 data2) :as-separate-objects t))
       (is 'equalp data1 d1)
       (is 'equalp data2 d2))))
 
 (define-test test-end-marker
   (is 'equal (multiple-value-list
 	      (restore (concatenate 'vector
-				    (let ((*output-end-marker* t))
-				      (store nil '(1 2) :data-is-list-of-separate-objects t))
+				    (store nil '(1 2) :as-separate-objects t :output-end-marker t)
 				    (store nil 3))))
       '(1 2))
   (is 'equal (multiple-value-list
 	      (restore (concatenate 'vector
-				    (let ((*output-end-marker* nil))
-				      (store nil '(1 2) :data-is-list-of-separate-objects t))
+				    (store nil '(1 2) :as-separate-objects t :output-end-marker nil)
 				    (store nil 3))))
       '(1 2 3)))
 
@@ -467,9 +465,9 @@
 (define-test test-double-float-references
   ;; Have to use globals so the compiler doesn't make our double floats eq
   (let ((len-just-a (length (store nil *a*))) ;; 9 bytes
-	(len-two-as (length (store nil (list *a* *a*) :data-is-list-of-separate-objects t))) ;; 13 bytes
-	(len-a-and-b/4 (length (store nil (list *a* (/ *b* 4d0)) :data-is-list-of-separate-objects t))) ;; 13 bytes
-	(len-a-and-c (length (store nil (list *a* *c*) :data-is-list-of-separate-objects t)))) ;; 18 bytes
+	(len-two-as (length (store nil (list *a* *a*) :as-separate-objects t))) ;; 13 bytes
+	(len-a-and-b/4 (length (store nil (list *a* (/ *b* 4d0)) :as-separate-objects t))) ;; 13 bytes
+	(len-a-and-c (length (store nil (list *a* *c*) :as-separate-objects t)))) ;; 18 bytes
     (true (> len-two-as len-just-a))
     (true (= len-two-as len-a-and-b/4))
     (true (= len-a-and-b/4 len-two-as))

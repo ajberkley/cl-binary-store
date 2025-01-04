@@ -82,7 +82,7 @@ git clone the repo into your local quicklisp directory (usually ~/quicklisp/loca
                                  (u (make-array 1))
                                  (v (make-array 1 :initial-element u)))
                              (setf (svref u 0) v)
-                             (store "blarg.bin" 'a 'b 'c u v)
+                             (store "blarg.bin" (list 'a 'b 'c u v) :data-is-list-of-separate-objects t)
                              (format nil "~A" (multiple-value-list (restore "blarg.bin"))))
     "(A B C #1=#(#2=#(#1#)) #2#)"
     ;; Below we enable the optional list circularity detection (general circularity as above is supported by default)
@@ -163,9 +163,12 @@ This method should return as two values two functions which will replace the def
 The specialized-serializer function will be called with parameters (object storage eq-refs store-object assign-new-reference-id) which should have the side effect of modifying storage, eq-refs, calling store-object and or assign-new-reference-id. Correspondingly, the specialized-deserializer function will be called with (storage restore-object)
 
 ### Configurable options
+
+All of these can be set in the calls to STORE and RESTORE directly, the global variables are just the default values if not specified.
+
 #### \*track-references\* default: T
 
-Let this to NIL around your calls to store / restore if you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>200MB/sec / > 200 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).  Even with this T speed is quite good.
+If you have simple data with no references between them at all (so lists of data, no circularity, no repeated objects).  This then goes very fast (>200MB/sec / > 200 Mobjects/second for lists of numbers; > 5000 MB/sec for big simple arrays chunks).  Even with this T speed is quite good.
 
 #### \*support-shared-list-structures\* default: NIL
 

@@ -6,7 +6,7 @@
 (defvar *max-to-read* 2000000000
   "The maximum amount of data to restore (2GB) before complaining.")
 
-(defvar *load/save-progress-indicator* t
+(defvar *load/save-progress-indicator* nil
   "If T will write out some progress while loading and saving")
 
 (declaim (inline make-read-storage read-storage-offset read-storage-max read-storage-sap
@@ -132,23 +132,29 @@
  bytes are read or written.  Used for *load/save-progress-indicator*"
   (declare (ignorable leader-default))
   `(let* ((,total-bytes 0)
-	  (start-time (get-universal-time))
-	  (last-time start-time))
-     (declare (type fixnum ,total-bytes start-time last-time))
+	  (start-time (get-internal-real-time))
+	  (last-time start-time)
+	  (print-time-seconds 0.1f0)
+	  (done nil))
+     (declare (type fixnum ,total-bytes start-time last-time) (type single-float print-time-seconds) (type boolean done))
      (labels
 	 ((print-update (now &optional (leader ,leader-default leader-provided-p))
-            (when (or leader-provided-p (> now (truly-the fixnum (+ 10 last-time))))
+            (when (or leader-provided-p (> now (+ (* internal-time-units-per-second
+						     print-time-seconds) last-time)))
+	      (setf print-time-seconds (* 2f0 print-time-seconds))
               (setf last-time now)
 	      (unless (= last-time start-time)
                 (format t "~A~,2f MB in ~A seconds (~,2f MB/sec)~%"
                         leader
-                        (/ ,total-bytes 1f6) (- last-time start-time)
-			(/ ,total-bytes 1f6 (- last-time start-time))))))
+                        (/ ,total-bytes 1f6) (/ (- last-time start-time) internal-time-units-per-second 1f0)
+			(/ ,total-bytes 1f6 (/ (- last-time start-time) internal-time-units-per-second 1f0))))))
 	  (,update-fcn (bytes &optional eof)
 	    (incf ,total-bytes bytes)
 	    (when *load/save-progress-indicator*
-	      (let ((now (get-universal-time)))
-		(if eof (print-update now "Finished ") (print-update now))))))
+	      (let ((now (get-internal-real-time)))
+		(if eof
+		    (unless done (print-update now "Finished ") (setf done t))
+		    (print-update now))))))
        ,@body)))
 
 (define-condition too-much-data (error)
@@ -177,18 +183,19 @@
 
 (defun make-write-into-storage/stream (stream)
   (declare (optimize (speed 3) (safety 1)))
-  (with-tracking-data (total-bytes update "Write ")
+  (with-tracking-data (total-bytes update "Wrote ")
     (lambda (storage)
       (declare (optimize (speed 3) (safety 1)))
-      (let ((seq (write-storage-store storage)))
-	(write-sequence seq stream :end (write-storage-offset storage))
-	(update (write-storage-offset storage))
+      (let ((seq (write-storage-store storage))
+	    (bytes-to-write (write-storage-offset storage)))
+	(update bytes-to-write (= bytes-to-write 0))
+	(write-sequence seq stream :end bytes-to-write)
 	(check-if-too-much-data *max-to-write* total-bytes)
 	(setf (write-storage-offset storage) 0)))))
 
 (defun make-write-into-adjustable-ub8-vector (vector)
   (assert (adjustable-array-p vector))
-  (with-tracking-data (total-bytes update "Write ")
+  (with-tracking-data (total-bytes update "Wrote ")
     (lambda (storage)
       (let* ((num-bytes (write-storage-offset storage))
 	     (bytes-available (- (array-total-size vector) (fill-pointer vector))))
@@ -205,7 +212,7 @@
 		   :end1 (+ start num-bytes)
 		   :start2 0
 		   :end2 (write-storage-offset storage))
-	  (update (write-storage-offset storage) nil)
+	  (update (write-storage-offset storage) (= num-bytes 0))
 	  (check-if-too-much-data *max-to-write* total-bytes)
 	  (setf (write-storage-offset storage) 0))))))
 
@@ -256,7 +263,7 @@
 (defmacro with-storage/write ((storage &key stream (buffer-size 8192)
 					 sap flusher store max
 					 (offset 0)) &body body)
-  "Used to create a write-storage from user provided sap, store, or stream"
+  "Used to create a write-storage from user provided sap, store, or stream."
   ;; If you pass in store, it better be a static-vector (or otherwise on
   ;; sbcl where we can
   (cond
@@ -269,7 +276,10 @@
 			:sap ,sap
 			:underlying-stream ,stream)))
 	(declare (dynamic-extent ,storage))
-	,@body))
+	(multiple-value-prog1
+	    (progn ,@body)
+	  (flush-write-storage storage)
+	  (when *load/save-progress-indicator* (flush-write-storage storage)))))
     (store
      (let ((storesym (gensym))
 	   (sapsym (gensym)))
@@ -284,7 +294,11 @@
 			      :sap ,sapsym
 			      :underlying-stream ,stream)))
 	      (declare (dynamic-extent ,storage))
-	      ,@body)))))
+	      (multiple-value-prog1
+		  (progn
+		    ,@body)
+		(flush-write-storage storage)
+		(when *load/save-progress-indicator* (flush-write-storage storage))))))))
     (t	
       (let ((vector (gensym)))
 	`(static-vectors:with-static-vector
@@ -297,7 +311,11 @@
 			    :sap ,(or sap `(static-vectors:static-vector-pointer ,vector))
 			    :underlying-stream ,stream)))
 	     (declare (dynamic-extent ,storage))
-	     ,@body))))))
+	     (multiple-value-prog1
+		 (progn
+		   ,@body)
+	       (flush-write-storage ,storage)
+	       (when *load/save-progress-indicator* (flush-write-storage ,storage)))))))))
 		
 (defun shift-data-to-beginning (read-storage)
   "Move the data in seq to the beginning and update storage-offset and storage-max.
