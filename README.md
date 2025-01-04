@@ -23,7 +23,7 @@ I expect it to be polished and 1.0 released mid-January 2025.
 - Do the right thing out of the box for structure-objects and standard-objects, but be extensible for those who want to do more
 - Versioned output
 - Ability to change the coding mechanism straight-forwardly, but also have room in the basic codespace for user tags
-- Should work out of the box without any effort with an easy programmer / user interface
+- Should work out of the box without any effort with an easy programmer / user interface (no need to write code for each class/struct you use!)
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 - Ability to limit amount of data written or read (safety rails)
 
