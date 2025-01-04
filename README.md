@@ -1,18 +1,10 @@
-# cl-binary-store
+# cl-binary-store (v1.0.0)
 
 A super fast and customizable serializer/deserializer of Common Lisp objects to/from a very compact binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.  Specialized arrays (on SBCL) are stored/restore at lightning speed.
 
 > :warning: Since we support the full Common Lisp type system (in the default codespace), this is not a serializer/deserializer for communication with other types of systems.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for conspack or messagepack support.
 
 cl-binary-store works on 64-bit SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and Lispworks.  The SBCL implementation is the fast one.  If you care about one of the platforms tell me and I can make it faster.  Binary files are compatible between different lisps.
-
-## Status
-
-Everything seems to work well, but I'm not cutting a first release tag until I get some mileage in my production use case.  Once release, backwards compatibility will be guaranteed (the versioned codespaces should make that straightforward enough).
-
-I expect it to be polished and 1.0 released mid-January 2025.
-
-> :warning: This is still very much a work in progress, do not rely on it yet!
 
 ## Focus
 - Speed and compact output
