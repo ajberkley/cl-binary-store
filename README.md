@@ -290,9 +290,9 @@ See [benchmarking.md](benchmarking.md).
 ## TODO ideas
 - [ ] A codespace for conspack or messagepack (for example; for a limited subset of types).  This is mainly as an exercise as cl-messagepack is fine.
 - [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)  (look at what hyperluminal-mem does or find some package somewhere)
-- [ ] Speed up cl-binary-store on ABCL and ECL so it is less than 10x slower than on XBCL
+- [ ] Speed up cl-binary-store on ABCL and ECL so it is less than 10x slower than on SBCL
 - [ ] Specialize store / restore functions on global settings to avoid so many parameters being passed around.
 - [ ] When using implicit reference tracking, use a vector on restore like we do for the explicit case instead of overloading the reference ht
-- [ ] Allow limits on max output size
 - [ ] Turn versioned output on by default when reading/writing to a file
 - [ ] Short specialized arrays use three available bits for length encoding
+- [ ] Handle specialized multi-dimensional array data on non-SBCL faster.  See babel for all the variants on with-array-data
