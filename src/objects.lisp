@@ -204,7 +204,7 @@
 
 (defun use-custom-building-function ()
   (format t "Enter a function which will build instances from slot-values~%~
-             That is with signature (lambda (slot-names slot-values) constructed-object): ")
+             That is with signature (lambda (object-info slot-values) constructed-object): ")
   (let ((read (read)))
     (list (eval read))))
 
