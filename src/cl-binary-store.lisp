@@ -1,5 +1,6 @@
 (defpackage :cl-binary-store
-  (:use :common-lisp
+  (:use #:common-lisp
+        #:40ants-doc
 	#+sbcl #:sb-mop
 	#+allegro #:mop
 	#+abcl #:mop

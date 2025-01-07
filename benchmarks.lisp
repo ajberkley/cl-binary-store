@@ -260,10 +260,8 @@
      new-index)))
 
 (defun lots-of-structure-objects (&optional (n 100000))
-  (coerce 
-   (loop for i below n
-         collect (make-bench-blarg :a (random 1d0) :b (coerce (format nil "~A" (random 100)) 'simple-base-string)))
-   'simple-vector))
+  (loop for i below n
+        collect (make-bench-blarg :a (random 1d0) :b (coerce (format nil "~A" (random 100)) 'simple-base-string))))
 
 (defclass c-blarg
     ()
@@ -279,13 +277,13 @@
 	 collect (make-instance 'c-blarg :a (random 256) :b "hello"))
    'simple-vector))
 
-(defun simple-base-strings ()
-  (loop for i below 100000
-        collect (coerce (format nil "~A" (random 1000000)) 'simple-base-string)))
+(defun simple-base-strings (&optional (n 500000))
+  (loop for i below n
+        collect (coerce (format nil "~A" (random (* 10 n))) 'simple-base-string)))
 
-(defun simple-strings ()
-  (loop for i below 100000
-        collect (format nil "~A~A" (random 1000000)
+(defun simple-strings (&optional (n 500000))
+  (loop for i below n
+        collect (format nil "~A~A" (random (* 10 n))
 			#+(or abcl allegro) (code-char #x03b1)
 			#-(or abcl allegro) #\U+03b1)))
 

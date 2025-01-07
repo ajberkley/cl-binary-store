@@ -1,5 +1,12 @@
 (in-package :cl-binary-store)
 
+(defsection @objects (:title "STRUCTURE-OBJECTS / STANDARD-OBJECTS")
+  (*store-class-slots* variable)
+  (serializable-object-info generic-function)
+  (specialized-object-constructor generic-function)
+  (specialized-serializer/deserializer generic-function)
+  (missing-slot condition))
+
 ;; Here we deal with `STRUCTURE-OBJECT's and `STANDARD-OBJECT's
 ;; For each object type we meet, we serialize / deserialize a
 ;; single description of it an `object-info'.  That contains the
@@ -11,8 +18,7 @@
 ;; for missing defstruct, defclass, and slots.
 
 (defvar *store-class-slots* nil
-  "If set / let to T, then slots in standard-objects with :class allocation
- will be stored, otherwise not.")
+  "If set / let to T, then slots in standard-objects with :class allocation will be stored, otherwise not.")
 
 ;; We provide three extension points to customize how objects are
 ;; serialized and deserialized.
@@ -81,8 +87,7 @@
 ;;  (lambda (storage restore-object)
 
 (defun get-slot-names (class)
-  "Return a list of slot names (symbols) skipping :class allocation slots if
- *store-class-slots* is t."
+  "Return a list of slot names (symbols) skipping :class allocation slots if *store-class-slots* is t."
   (assert class)
   (loop with store-class-slots = *store-class-slots*
 	with is-structure-object = (or (typep class 'structure-class) ;; allegro work around
@@ -99,34 +104,28 @@
 
 (defgeneric serializable-object-info (type)
   (:documentation
-   "Must return two values.  The first value must be a
- list of slot-names (symbols) which should be serialized for this
- object.
+   "Must return two values.  The first value must be a list of slot-names (symbols) which should be serialized for this object.
 
- The second value may be NIL or a function which will be
- called with each slot-name and slot-value and should return a
- serializable object (like nil) for that slot.")
+ The second value may be NIL or a function which will be called with each slot-name and slot-value and should return a serializable object (like nil) for that slot.")
   (:method (type)
     (get-slot-names (find-class type))))
 
 (defgeneric specialized-object-constructor (type)
-  (:documentation "May return a function that will be used to construct an object from
- an `object-info' structure and a simple vector of slot-values in the same order as
- (object-info-slot-names object-info):
-  (lambda (object-info slot-values) -> object)
- Be careful in the case of circular references: it may be in that case that a slot-value
- is a `fixup', in which case you have to provide a function to be called back when the
- object is fully reified.  See restore-object-to for the logic.")
+  (:documentation "May return a function that will be used to construct an object from  an `object-info` structure and a simple vector of slot-values in the same order as (object-info-slot-names object-info):
+
+        (lambda (object-info slot-values) -> object)
+
+ Be careful in the case of circular references: it may be in that case that a slot-value is a `fixup`, in which case you have to provide a function to be called back when the  object is fully reified.  See restore-object-to for the logic.")
   (:method (type)
     (declare (ignorable type))
     nil))
 
 (defgeneric specialized-serializer/deserializer (type)
-  (:documentation "Returns two values, the first value is a
- function (or nil) that will be called as a:
-  (lambda (object storage eq-refs store-object assign-new-reference-id))
- and as side effects should write to storage, etc.  The second value should be a function
- that has a signature (lambda (storage restore-object) -> object)")
+  (:documentation "Returns two values, the first value is a function (or nil) that will be called as a:
+
+        (lambda (object storage eq-refs store-object assign-new-reference-id))
+
+ and as side effects should write to storage, etc.  The second value should be a function that has a signature `(lambda (storage restore-object) -> object)`")
   (:method (type)
     (declare (ignorable type))
     (values nil nil)))
@@ -242,7 +241,12 @@
   ((slot-name :initarg :slot-name :reader missing-slot-name)
    (type :initarg :type :reader missing-slot-type)
    (data-slots :initarg :data-slots :reader missing-slot-data-slots)
-   (image-slots :initarg :image-slots :reader missing-slot-image-slots)))
+   (image-slots :initarg :image-slots :reader missing-slot-image-slots))
+  (:documentation "Signalled when a slot is missing from a standard-object or structure-object.  Provides several restarts to deal with this situation.  This can come up when you changed object definitions or structures after saving data with them in it.
+
+DISCARD: ignore the data for this slot for all objects of this type in the file.
+
+MAP-TO-NEW-SLOT-NAME: put this value into a different slot in the object"))
 
 (defmethod print-object ((obj missing-slot) stream)
   (format stream "Missing slot ~S in ~S, data file has slots ~A, current image has slots ~A"
