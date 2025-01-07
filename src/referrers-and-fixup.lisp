@@ -79,6 +79,13 @@
             (t nil)))
         (gethash object references))))
 
+(declaim (inline store-new-reference-indicator))
+(defun store-new-reference-indicator (storage)
+  "Write an indicator that we should assign a reference id to the next object; that is place
+ it in the restore reference-vector (and increment the ref-id counter)."
+  (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+    (set-sap-ref-8 sap offset +new-reference-indicator-code+)))
+
 (declaim (inline referenced-already))
 (defun referenced-already (object storage references assign-new-reference-id)
   "Returns T if OBJECT is in REFERENCES and writes out a reference to it to storage.
@@ -234,13 +241,6 @@
 			      :add-new-reference ,add-new-reference)
        (progn
 	 ,@body)))
-
-(declaim (inline store-new-reference-indicator))
-(defun store-new-reference-indicator (storage)
-  "Write an indicator that we should assign a reference id to the next object; that is place
- it in the restore reference-vector (and increment the ref-id counter)."
-  (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
-    (set-sap-ref-8 sap offset +new-reference-indicator-code+)))
 
 (declaim (inline restore-new-reference-indicator))
 (defun restore-new-reference-indicator (references restore-object)

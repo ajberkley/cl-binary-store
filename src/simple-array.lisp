@@ -121,6 +121,49 @@
 	     (assert (>= num-bytes-remaining 0))
 	     (setf (write-storage-offset storage) (truly-the fixnum (+ offset write-length))))))))
 
+(declaim (inline chunked/write))
+(defun chunked/write (storage num-bytes function)
+  (declare (optimize (speed 3) (safety 1)))
+  "Used when we cannot do this directly from the sap"
+  (let ((storage-size (write-storage-max storage)))
+    (declare (type (and (integer 1) fixnum) storage-size))
+    (loop
+      with num-bytes-remaining fixnum = num-bytes
+      with data-start-bytes fixnum = 0
+      while (> num-bytes-remaining 0)
+      do
+	 (let ((write-length/bytes (min storage-size num-bytes-remaining)))
+	   (ensure-enough-room-to-write storage write-length/bytes)
+	   (let ((sap-offset (write-storage-offset storage))
+		 (sap (write-storage-sap storage)))
+	     (funcall function sap sap-offset data-start-bytes
+		      (the fixnum (+ data-start-bytes write-length/bytes)))
+	     (incf data-start-bytes write-length/bytes)
+	     (setf (write-storage-offset storage) (truly-the fixnum
+						    (+ sap-offset write-length/bytes)))
+	     (decf num-bytes-remaining write-length/bytes))))))
+
+(declaim (inline chunked/read))
+(defun chunked/read (storage num-bytes function)
+  (declare (optimize (speed 3) (safety 1)))
+  (let ((storage-size (read-storage-max storage)))
+    (declare (type (and (integer 1) fixnum) storage-size))
+    (loop
+      with num-bytes-remaining fixnum = num-bytes
+      with data-start-bytes fixnum = 0
+      while (> num-bytes-remaining 0)
+      do
+	 (let ((read-length/bytes (min storage-size num-bytes-remaining)))
+	   (ensure-enough-data storage read-length/bytes)
+	   (let ((sap-offset (read-storage-offset storage))
+		 (sap (read-storage-sap storage)))
+	     (funcall function sap sap-offset data-start-bytes
+		      (the fixnum (+ data-start-bytes read-length/bytes)))
+	     (incf data-start-bytes read-length/bytes)
+	     (setf (read-storage-offset storage) (truly-the fixnum
+						    (+ sap-offset read-length/bytes)))
+	     (decf num-bytes-remaining read-length/bytes))))))
+
 (declaim (notinline store-simple-base-string))
 (defun store-simple-base-string (string storage &optional references assign-new-reference-id)
   (declare (optimize (speed 3) (safety 1)) (type simple-base-string string))
@@ -230,49 +273,6 @@
     (ecase code
       (#.+simple-base-string-code+ (restore-simple-base-string storage))
       (#.+simple-string-code+ (restore-simple-string storage)))))
-
-(declaim (inline chunked/write))
-(defun chunked/write (storage num-bytes function)
-  (declare (optimize (speed 3) (safety 1)))
-  "Used when we cannot do this directly from the sap"
-  (let ((storage-size (write-storage-max storage)))
-    (declare (type (and (integer 1) fixnum) storage-size))
-    (loop
-      with num-bytes-remaining fixnum = num-bytes
-      with data-start-bytes fixnum = 0
-      while (> num-bytes-remaining 0)
-      do
-	 (let ((write-length/bytes (min storage-size num-bytes-remaining)))
-	   (ensure-enough-room-to-write storage write-length/bytes)
-	   (let ((sap-offset (write-storage-offset storage))
-		 (sap (write-storage-sap storage)))
-	     (funcall function sap sap-offset data-start-bytes
-		      (the fixnum (+ data-start-bytes write-length/bytes)))
-	     (incf data-start-bytes write-length/bytes)
-	     (setf (write-storage-offset storage) (truly-the fixnum
-						    (+ sap-offset write-length/bytes)))
-	     (decf num-bytes-remaining write-length/bytes))))))
-
-(declaim (inline chunked/read))
-(defun chunked/read (storage num-bytes function)
-  (declare (optimize (speed 3) (safety 1)))
-  (let ((storage-size (read-storage-max storage)))
-    (declare (type (and (integer 1) fixnum) storage-size))
-    (loop
-      with num-bytes-remaining fixnum = num-bytes
-      with data-start-bytes fixnum = 0
-      while (> num-bytes-remaining 0)
-      do
-	 (let ((read-length/bytes (min storage-size num-bytes-remaining)))
-	   (ensure-enough-data storage read-length/bytes)
-	   (let ((sap-offset (read-storage-offset storage))
-		 (sap (read-storage-sap storage)))
-	     (funcall function sap sap-offset data-start-bytes
-		      (the fixnum (+ data-start-bytes read-length/bytes)))
-	     (incf data-start-bytes read-length/bytes)
-	     (setf (read-storage-offset storage) (truly-the fixnum
-						    (+ sap-offset read-length/bytes)))
-	     (decf num-bytes-remaining read-length/bytes))))))
 
 (defmacro make-writer/reader (size-bits signed &key name-override reader array-type)
   (let* ((writer (not reader))

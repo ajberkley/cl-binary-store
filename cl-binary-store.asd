@@ -11,19 +11,23 @@
   :components ((:file "features")
 	       (:file "cl-binary-store")
 	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))
-	       (:file "codespaces" :depends-on ("features"))
+	       (:file "codespaces" :depends-on ("features" "unsigned-bytes"))
 	       (:file "sbcl-special-hash-tables" :if-feature :sbcl)
 	       (:file "type-discrimination")
 	       (:file "object-info")
 	       (:file "basic-codespace-codes")
 	       (:file "reference-coding" :depends-on ("basic-codespace-codes"))
-	       (:file "actions" :depends-on ("storage" "features" "basic-codespace-codes"))
+	       (:file "actions" :depends-on ("storage" "features" "basic-codespace-codes"
+                                                       "unsigned-bytes"))
 	       (:file "basic-codespace" :depends-on ("sbcl-special-hash-tables"
 						     "type-discrimination"
 						     "features" "codespaces"
 						     "actions" "object-info"
 						     "basic-codespace-codes" "cons"
-						     "reference-coding"))
+						     "reference-coding"
+                                                     "unsigned-bytes"
+                                                     "referrers-and-fixup"
+                                                     "numbers"))
 	       (:file "sap-ref")
 	       (:file "storage" :depends-on ("features" "cl-binary-store" "sap-ref"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
@@ -40,7 +44,8 @@
 								"features"))
 	       (:file "sbcl-utilities" :if-feature :sbcl :depends-on ("features"))
 	       (:file "simple-array"
-		:depends-on ("referrers-and-fixup" "numbers" "features" "sap-ref"))
+		:depends-on ("referrers-and-fixup" "numbers" "features" "sap-ref" "storage"
+                                                   "unsigned-bytes"))
 	       (:file "simple-vector" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 								    "features" "numbers"))
 	       (:file "symbols" :depends-on ("unsigned-bytes" "referrers-and-fixup"
