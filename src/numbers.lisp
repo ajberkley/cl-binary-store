@@ -52,6 +52,50 @@
  been stored by STORE-UB32."
   (- (restore-ub32 storage)))
 
+(declaim (inline store-only-fixnum))
+(defun store-only-fixnum (fixnum storage &optional (tag +fixnum-code+))
+  (declare #-debug-cbs (optimize (speed 3) (safety 0)) (type fixnum fixnum)
+	   (type (or null write-storage) storage))
+  (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
+    (when tag
+      (set-sap-ref-8 sap offset tag)
+      (incf offset))
+    (set-signed-sap-ref-64 sap offset fixnum)))
+
+(declaim (inline store-tagged-unsigned-fixnum))
+(defun store-tagged-unsigned-fixnum (fixnum storage)
+  "Store and tag a number from 0 to max-positive-fixnum.
+ You can call `restore-tagged-unsigned-fixnum' to restore it (or restore-object).  Do
+ not call this except during the actual storage phase."
+  (declare (optimize (speed 3) (safety 1))
+	   (type fixnum fixnum) (type write-storage storage))
+  (if (<= fixnum +maximum-untagged-unsigned-integer+)
+      (store-ub8/no-tag (truly-the fixnum (+ fixnum +small-integer-zero-code+)) storage)
+      (if (< fixnum 256)
+          (store-ub8/tag (truly-the fixnum fixnum) storage)
+          (if (< fixnum 65536)
+	      (store-ub16 fixnum storage)
+	      (if (< fixnum #.(expt 2 32))
+	          (store-ub32 fixnum storage)
+	          (store-only-fixnum fixnum storage))))))
+
+(declaim (inline store-tagged-unsigned-fixnum/interior))
+(defun store-tagged-unsigned-fixnum/interior (fixnum storage)
+  "Use this paired with restore-tagged-unsigned-fixnum if you are inside another tagged
+ region for storing unsigned numbers.  Somewhat more dense as we only need tags 0-3 for
+ tagging unsigned numbers."
+  (declare (type fixnum fixnum) (type write-storage storage))
+  (if (<= fixnum +interior-coded-max-integer+)
+      (store-ub8/no-tag (+ +first-direct-unsigned-integer-interior-code+ fixnum)
+			storage) ;; direct coded
+      (let ((fixnum (- fixnum +interior-coded-max-integer+ 1))) ;; code shifted
+	(if (< fixnum 256)
+            (store-ub8/tag (truly-the fixnum fixnum) storage)
+            (if (< fixnum 65536)
+		(store-ub16 fixnum storage)
+		(if (< fixnum #.(expt 2 32))
+	            (store-ub32 fixnum storage)
+	            (store-only-fixnum fixnum storage)))))))
 
 (declaim (inline restore-fixnum))
 (defun restore-fixnum (storage)
@@ -62,15 +106,21 @@
     (setf (read-storage-offset storage) (truly-the fixnum (+ offset 8)))
     (truly-the fixnum fixnum)))
 
-(declaim (inline store-only-fixnum))
-(defun store-only-fixnum (fixnum storage &optional (tag +fixnum-code+))
-  (declare #-debug-cbs (optimize (speed 3) (safety 0)) (type fixnum fixnum)
-	   (type (or null write-storage) storage))
-  (with-write-storage (storage :offset offset :reserve-bytes (if tag 9 8) :sap sap)
-    (when tag
-      (set-sap-ref-8 sap offset tag)
-      (incf offset))
-    (set-signed-sap-ref-64 sap offset fixnum)))
+(declaim (inline store-fixnum))
+(defun store-fixnum (fixnum storage)
+  "Store and tag a fixnum; if inside another tag"
+  (declare (type fixnum fixnum) (optimize (speed 3) (safety 1)) (type write-storage storage))
+  (if (>= fixnum 0)
+      (store-tagged-unsigned-fixnum fixnum storage)
+      (if (>= fixnum +minimum-untagged-signed-integer+)
+	  (store-ub8/no-tag (+ fixnum +small-integer-zero-code+) storage)
+          (if (> fixnum -256)
+	      (store-sb8 fixnum storage)
+	      (if (> fixnum -65536)
+                  (store-sb16 fixnum storage)
+                  (if (> fixnum #.(- (expt 2 32)))
+		      (store-sb32 fixnum storage)
+		      (store-only-fixnum fixnum storage)))))))
 
 ;; Bignum code is based on code from the CL-STORE package which is
 ;; Copyright (c) 2004 Sean Ross
@@ -194,20 +244,6 @@
   (complex (funcall restore-object)
 	   (funcall restore-object)))
 
-(defun store-complex (complex storage store-object)
-  (declare (type complex complex) (type (or null write-storage) storage))
-  (typecase complex
-    ;; We do not try to match double-floats in complex numbers to others... (except 0d0)
-    ((complex double-float) (store-complex-double-float complex storage))
-    ((complex single-float) (store-complex-single-float complex storage))
-    (t
-     (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
-       (set-sap-ref-8 sap offset +complex-code+))
-     (locally (declare (type function store-object))
-       ;; We know it's a number, but overhead is small
-       (funcall store-object (realpart complex))
-       (funcall store-object (imagpart complex))))))
-
 (declaim (inline restore-complex-double-float))
 (defun restore-complex-double-float (storage)
   (declare (optimize (speed 3) (safety 1)))
@@ -236,41 +272,19 @@
   (store-single-float (realpart complex-single-float) storage nil)
   (store-single-float (imagpart complex-single-float) storage nil))
 
-(declaim (inline store-tagged-unsigned-fixnum))
-(defun store-tagged-unsigned-fixnum (fixnum storage)
-  "Store and tag a number from 0 to max-positive-fixnum.
- You can call `restore-tagged-unsigned-fixnum' to restore it (or restore-object).  Do
- not call this except during the actual storage phase."
-  (declare (optimize (speed 3) (safety 1))
-	   (type fixnum fixnum) (type write-storage storage))
-  (if (<= fixnum +maximum-untagged-unsigned-integer+)
-      (store-ub8/no-tag (truly-the fixnum (+ fixnum +small-integer-zero-code+)) storage)
-      (if (< fixnum 256)
-          (store-ub8/tag (truly-the fixnum fixnum) storage)
-          (if (< fixnum 65536)
-	      (store-ub16 fixnum storage)
-	      (if (< fixnum #.(expt 2 32))
-	          (store-ub32 fixnum storage)
-	          (store-only-fixnum fixnum storage))))))
-
-(declaim (inline store-tagged-unsigned-fixnum/interior))
-(defun store-tagged-unsigned-fixnum/interior (fixnum storage)
-  "Use this paired with restore-tagged-unsigned-fixnum if you are inside another tagged
- region for storing unsigned numbers.  Somewhat more dense as we only need tags 0-3 for
- tagging unsigned numbers."
-  (declare (type fixnum fixnum) (type write-storage storage))
-  (if (<= fixnum +interior-coded-max-integer+)
-      (store-ub8/no-tag (+ +first-direct-unsigned-integer-interior-code+ fixnum)
-			storage) ;; direct coded
-      (let ((fixnum (- fixnum +interior-coded-max-integer+ 1))) ;; code shifted
-	(if (< fixnum 256)
-            (store-ub8/tag (truly-the fixnum fixnum) storage)
-            (if (< fixnum 65536)
-		(store-ub16 fixnum storage)
-		(if (< fixnum #.(expt 2 32))
-	            (store-ub32 fixnum storage)
-	            (store-only-fixnum fixnum storage)))))))
-
+(defun store-complex (complex storage store-object)
+  (declare (type complex complex) (type (or null write-storage) storage))
+  (typecase complex
+    ;; We do not try to match double-floats in complex numbers to others... (except 0d0)
+    ((complex double-float) (store-complex-double-float complex storage))
+    ((complex single-float) (store-complex-single-float complex storage))
+    (t
+     (with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
+       (set-sap-ref-8 sap offset +complex-code+))
+     (locally (declare (type function store-object))
+       ;; We know it's a number, but overhead is small
+       (funcall store-object (realpart complex))
+       (funcall store-object (imagpart complex))))))
 
 (declaim (inline restore-tagged-unsigned-fixnum/interior))
 (defun restore-tagged-unsigned-fixnum/interior (storage)
@@ -321,22 +335,6 @@
 	  (#.+sb8-code+ (restore-sb8 storage))
 	  (#.+sb16-code+ (restore-sb16 storage))
 	  (#.+sb32-code+ (restore-sb32 storage))))))
-
-(declaim (inline store-fixnum))
-(defun store-fixnum (fixnum storage)
-  "Store and tag a fixnum; if inside another tag"
-  (declare (type fixnum fixnum) (optimize (speed 3) (safety 1)) (type write-storage storage))
-  (if (>= fixnum 0)
-      (store-tagged-unsigned-fixnum fixnum storage)
-      (if (>= fixnum +minimum-untagged-signed-integer+)
-	  (store-ub8/no-tag (+ fixnum +small-integer-zero-code+) storage)
-          (if (> fixnum -256)
-	      (store-sb8 fixnum storage)
-	      (if (> fixnum -65536)
-                  (store-sb16 fixnum storage)
-                  (if (> fixnum #.(- (expt 2 32)))
-		      (store-sb32 fixnum storage)
-		      (store-only-fixnum fixnum storage)))))))
 
 (declaim (inline store-tagged-unsigned-integer))
 

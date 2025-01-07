@@ -20,9 +20,9 @@
 	       (:file "actions" :depends-on ("storage" "features" "basic-codespace-codes"
                                                        "unsigned-bytes"))
 	       (:file "basic-codespace" :depends-on ("sbcl-special-hash-tables"
-						     "type-discrimination"
+						     "type-discrimination" "hash-table"
 						     "features" "codespaces"
-						     "actions" "object-info"
+						     "actions" "object-info" "pathname"
 						     "basic-codespace-codes" "cons"
 						     "reference-coding"
                                                      "unsigned-bytes"
@@ -41,7 +41,7 @@
                (:file "magic-numbers" :depends-on ("actions" "numbers"))
 	       (:file "end-action" :depends-on ("actions" "numbers"))
 	       (:file "cons" :depends-on ("referrers-and-fixup" "numbers" "unsigned-bytes"
-								"features"))
+								"features" "symbols"))
 	       (:file "sbcl-utilities" :if-feature :sbcl :depends-on ("features"))
 	       (:file "simple-array"
 		:depends-on ("referrers-and-fixup" "numbers" "features" "sap-ref" "storage"
@@ -54,7 +54,7 @@
 							    "referrers-and-fixup" "features"))
 	       (:file "pathname" :depends-on ("referrers-and-fixup" "symbols" "numbers"
 								    "unsigned-bytes" "features"))
-	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes" "features"))
+	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes" "features" "symbols"))
 	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes" "features" "codespaces"))
 	       (:file "user" :depends-on ("basic-codespace" "cons" "storage" "features" "magic-numbers" "reference-count" "end-action")))
   :license :BSD-3
