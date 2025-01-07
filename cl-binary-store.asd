@@ -27,7 +27,7 @@
 						     "reference-coding"
                                                      "unsigned-bytes"
                                                      "referrers-and-fixup"
-                                                     "numbers"))
+                                                     "numbers" "objects"))
 	       (:file "sap-ref")
 	       (:file "storage" :depends-on ("features" "cl-binary-store" "sap-ref"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
