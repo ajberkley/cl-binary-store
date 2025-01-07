@@ -22,14 +22,14 @@
 						     "type-discrimination"
 						     "features" "codespaces"
 						     "actions" "object-info"
-						     "basic-codespace-codes"
+						     "basic-codespace-codes" "cons"
 						     "reference-coding"))
 	       (:file "sap-ref")
 	       (:file "storage" :depends-on ("features" "cl-binary-store" "sap-ref"))
 	       (:file "unsigned-bytes" :depends-on ("storage" "features" "cl-binary-store"
-							      "basic-codespace" "sap-ref"))
+							      "basic-codespace-codes" "sap-ref"))
 	       (:file "referrers-and-fixup" :depends-on ("unsigned-bytes" "features"
-									  "basic-codespace"))
+									  "basic-codespace-codes"))
 	       (:file "numbers" :depends-on ("unsigned-bytes" "referrers-and-fixup"
 							      "features" "sap-ref"
 							      "basic-codespace-codes"))
@@ -51,7 +51,7 @@
 								    "unsigned-bytes" "features"))
 	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes" "features"))
 	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes" "features" "codespaces"))
-	       (:file "user" :depends-on ("basic-codespace" "storage" "features" "magic-numbers" "reference-count" "end-action")))
+	       (:file "user" :depends-on ("basic-codespace" "cons" "storage" "features" "magic-numbers" "reference-count" "end-action")))
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))
 
