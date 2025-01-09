@@ -40,4 +40,4 @@ jobs:
       - name: Install Rove
         run: ros install parachute
       - name: Run tests
-        run: ros run -e '(quicklisp:quickload :cl-binary-store) (quicklisp:quickload :cl-binary-store/tests) (setf *exit-on-test-failures* t) (parachute:test :cl-binary-store-tests)'
+        run: ros run -e '(quicklisp:quickload :cl-binary-store) (quicklisp:quickload :cl-binary-store/tests) (defparameter *exit-on-test-failures* t) (parachute:test :cl-binary-store-tests)'
