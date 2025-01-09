@@ -1,12 +1,13 @@
 (in-package :cl-binary-store)
 
-;; USER CODES START AT 225 and end at 255
+;; USER CODES START AT 225 and end at 250
 ;; [0 33] for various objects
 ;; [35 63] for small reference ids coded in the tag byte
 ;; [64 127] for 14 bit reference codes stored in the tag byte and one additional byte
 ;; [128 191] for 22 bit reference codes stored in the tag byte and two additional bytes
 ;; [192 224] for small integers [-16 16]
-;; [225 255] for user codes
+;; [225 250] for user codes
+;; [251 255] reserved for bug fixing, extensions
 
 (defconstant +ub8-code+ 0)
 (defconstant +ub16-code+ 1)

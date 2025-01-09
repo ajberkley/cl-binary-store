@@ -281,6 +281,10 @@ I suggest just piping the output through gzip if you need the smallest possible 
 
 We generate the codespace code through a maze of macros and functions in [codespaces.lisp](src/codespaces.lisp), so if something isn't doing what you want, it is easiest to inspect cl-binary-store::\*codespaces\* and look at the codespace objects that are built and then look at the slots RESTORE-OBJECTS-SOURCE-CODE and STORE-OBJECTS-SOURCE-CODE (which are what are used to build the restore-objects and store-objects functions in the codespace).  These can be compiled at the repl or put into a file and compiled so that you can get full debugging of store-objects / restore-objects.
 
+## Basic codespace and user codes
+
+The basic codespace (the default) has magic number #x001 and uses all 8 bit codes up to 224 inclusive.  User space for codes is 225-250 inclusive, and codes 251-255 are reserved for extensions.  See [example-extension-codespace.lisp](src/example-extension-codespace.lisp) for how to add user codes.
+
 ## Benchmarking
 
 For my use case (>1GB of messy data and objects), cl-binary-store is almost 10x faster than CL-STORE on restore, and 2.5x faster for storing.  It's comparable to hyperluminal-mem when not tracking references / circularity.
