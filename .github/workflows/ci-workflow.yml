@@ -22,6 +22,8 @@ jobs:
         exclude:
           - os: macos-latest
             lisp: ccl-bin/1.13
+          - os: macos-latest
+            lisp: ecl/24.5.10
     env:
       LISP: ${{ matrix.lisp }}
     steps:
