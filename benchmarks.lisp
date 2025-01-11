@@ -25,7 +25,7 @@
                         ""))))))))))
 
 
-#-(or allegro abcl lispworks) ;; crashes on abcl
+#-(or allegro abcl lispworks windows) ;; crashes on abcl
 (defun test-hlmem-on-data (data &key (repeats 20))
   (let* ((words (hyperluminal-mem:msize 0 data))
          (output-size (/ (* 8 words) 1e6)))
@@ -134,7 +134,7 @@
           (dotimes (x repeats) (cl-store:restore "blarg.bin")))))))
 
 (defun test-on-data (data &key (hlmem t) (cl-store t) (cl-binary-store t) (conspack t))
-  #-(or allegro abcl lispworks)
+  #-(or allegro abcl lispworks windows)
   (when hlmem
     (test-hlmem-on-data data))
   (when cl-binary-store
@@ -244,15 +244,15 @@
 (conspack:defencoding bench-blarg
   a b)
 
-#-allegro
+#-(or allegro windows)
 (defmethod hyperluminal-mem:msize-object ((b bench-blarg) index)
   (hyperluminal-mem:msize* index (bench-blarg-a b) (bench-blarg-b b)))
 
-#-allegro
+#-(or allegro windows)
 (defmethod hyperluminal-mem:mwrite-object ((b bench-blarg) ptr index end-index)
   (hyperluminal-mem:mwrite* ptr index end-index (bench-blarg-a b) (bench-blarg-b b)))
 
-#-allegro
+#-(or allegro windows)
 (defmethod hyperluminal-mem:mread-object ((type (eql 'bench-blarg)) ptr index end-index &key)
   (hyperluminal-mem:with-mread* (a b new-index) (ptr index end-index)
     (values
