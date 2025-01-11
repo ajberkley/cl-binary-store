@@ -442,7 +442,7 @@
   (let ((data1 (make-array 398423 :initial-element 3))
         (data2 (make-list 1234 :initial-element "hi")))
     (multiple-value-bind (d1 d2)
-        (restore (store "/tmp/blarg-test-cl-store.bin" (list data1 data2) :as-separate-objects t))
+        (restore (store "blarg-test-cl-store.bin" (list data1 data2) :as-separate-objects t))
       (is 'equalp data1 d1)
       (is 'equalp data2 d2))))
 
@@ -634,10 +634,10 @@
 		   (make-array 123 :element-type '(signed-byte 32) :initial-element -123984))))
   (define-test test-interop-write
     ;; this writes a file with a bunch of stuff
-    (store "/tmp/blarg.bin" stuff)
-    (is 'equalp (restore "/tmp/blarg.bin") stuff))
+    (store "blarg.bin" stuff)
+    (is 'equalp (restore "blarg.bin") stuff))
   (define-test test-interop-read
-    (is 'equalp (restore "/tmp/blarg.bin") stuff)))
+    (is 'equalp (restore "blarg.bin") stuff)))
 
 (define-test test-max-to-read/write
   (let* ((n 100000)
