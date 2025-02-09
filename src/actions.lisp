@@ -30,7 +30,9 @@
  value which is :ignore, :end, or nil if the object is to be
  collected for the user.  The second value only works if the
  object is a top level object (that is one of the objects in
- the call to store (store nil obj-a obj-b (make-instance 'end-action))"))
+ the call to store (store nil obj-a obj-b (make-instance 'end-action))")
+  (:method ((command t) (storage t) (references t) (restore-object t))
+    (unexpected-data "Expected an action command" command))) 
 
 (defgeneric store-action (action storage store-object)
   (:documentation "Call during the serialization phase.  You can

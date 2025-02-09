@@ -15,11 +15,13 @@
 
 (defun restore-pathname (restore-object)
   (declare (type function restore-object))
-  (make-pathname
-   :host #+sbcl (funcall restore-object)
-	 #-sbcl (funcall restore-object)
-   :device (funcall restore-object)
-   :directory (funcall restore-object)
-   :name (funcall restore-object)
-   :type (funcall restore-object)
-   :version (funcall restore-object)))
+  (handler-case
+      (make-pathname
+       :host #+sbcl (funcall restore-object)
+       #-sbcl (funcall restore-object)
+       :device (funcall restore-object)
+       :directory (funcall restore-object)
+       :name (funcall restore-object)
+       :type (funcall restore-object)
+       :version (funcall restore-object))
+    (error (e) (unexpected-data "pathname" e))))

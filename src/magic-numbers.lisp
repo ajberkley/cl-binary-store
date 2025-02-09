@@ -23,9 +23,11 @@
   (let ((magic-number (funcall restore-object)))
     (let ((codespace (gethash magic-number *codespaces*)))
       (unless codespace
-	(error "Unsupported codespace version #x~X, we have ~{~x~X~^ ~}~%"
-	       magic-number (loop for key being the hash-keys of *codespaces*
-				  collect key)))
+	(error 'invalid-input-data
+               :format-control "Unsupported codespace version #x~X, we have ~{~x~X~^ ~}~%"
+               :format-arguments (list
+	                          magic-number (loop for key being the hash-keys of *codespaces*
+				                     collect key))))
       (cond
 	((not (eq *current-codespace* codespace))
 	 (cond
@@ -38,9 +40,11 @@
 	    (setf *version-being-read* magic-number)
 	    (restore-objects storage))
 	   (t
-	    (error "Switching codespace away from #x~X (~A) is DISALLOWED"
-		   (codespace-magic-number *current-codespace*)
-		   (codespace-name *current-codespace*)))))
+	    (error 'invalid-input-data
+                   :format-control "Switching codespace away from #x~X (~A) is DISALLOWED"
+                   :format-arguments (list
+		                      (codespace-magic-number *current-codespace*)
+		                      (codespace-name *current-codespace*))))))
 	(t
 	 (setf *version-being-read* magic-number)
 	 (format t "Deserializing from version #x~X (~A)~%"

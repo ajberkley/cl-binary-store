@@ -107,6 +107,13 @@
 	    (read-storage-offset s) (read-storage-max s)
             (read-storage-sap s))))
 
+(define-condition too-much-data (invalid-input-data)
+  ((bytes-read :initarg :bytes :reader too-much-data-bytes)
+   (max-bytes :initarg :max-bytes :reader too-much-data-max-bytes))
+  (:documentation "Tried to read / write more than allowed amount of data.  If you choose
+ any of the continue options, the current operation will continue (which might be a make-array
+ or make-list call which may exceed what you input)"))
+
 (defun ask-for-new-amount ()
   (format t "Enter a new number of allowed bytes: ")
   (list (read)))
@@ -117,7 +124,9 @@
      (when max
        (when (> (the fixnum ,total-bytes) (the fixnum max))
 	 (restart-case
-	     (error 'too-much-data :max-bytes max :bytes ,total-bytes)
+	     (error 'too-much-data :format-control "TOO-MUCH-DATA: ~A bytes, allowed ~A bytes"
+                                   :format-arguments (list max ,total-bytes)
+                                   :max-bytes max :bytes ,total-bytes)
 	   (double-allowed-amount ()
 	     :report "Double allowed amount"
 	     (setf ,max-byte-place (the fixnum (* 2 (the fixnum ,max-byte-place)))))
@@ -156,17 +165,6 @@
 		    (unless done (print-update now "Finished ") (setf done t))
 		    (print-update now))))))
        ,@body)))
-
-(define-condition too-much-data (error)
-  ((bytes-read :initarg :bytes :reader too-much-data-bytes)
-   (max-bytes :initarg :max-bytes :reader too-much-data-max-bytes))
-  (:documentation "Tried to read / write more than allowed amount of data.  If you choose
- any of the continue options, the current operation will continue (which might be a make-array
- or make-list call which may exceed what you input)"))
-
-(defmethod print-object ((obj too-much-data) str)
-  (format str "TOO-MUCH-DATA: ~A bytes, allowed ~A bytes" (too-much-data-bytes obj)
-	  (too-much-data-max-bytes obj)))
 
 (defun make-read-into-storage/stream (stream)
   (declare (optimize (speed 3) (safety 1)))
@@ -341,8 +339,9 @@
 			 (read-storage-offset read-storage)
 			 (read-storage-max read-storage)))))
 
-(define-condition out-of-data (simple-error)
+(define-condition out-of-data (invalid-input-data)
   ()
+  (:default-initargs :format-control "Out of data")
   (:documentation "Ran out of data while expecting more while reading /deserializing"))
 
 (defun refill-read-storage (storage bytes return-nil-on-eof)
@@ -360,7 +359,7 @@
 				  (read-storage-offset storage) (read-storage-max storage)
 				  (- (read-storage-max storage) (read-storage-offset storage))
 				  bytes)
-	      (error 'out-of-data :format-control "Out of data")))
+	      (error 'out-of-data)))
         t)))
 
 (declaim (#-debug-cbs inline #+debug-cbs notinline ensure-enough-data))

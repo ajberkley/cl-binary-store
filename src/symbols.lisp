@@ -45,7 +45,7 @@
 	   (storage-write-byte storage +uninterned-symbol-code+)
 	   (store-string/no-refs (symbol-name symbol) storage)))))))
 
-(define-condition missing-package-during-restore (error)
+(define-condition missing-package-during-restore (maybe-expected-error)
   ((symbol-string :initarg :symbol-string :reader missing-package-symbol-string)
    (package-string :initarg :package-string :reader missing-package-package-string)))
 
@@ -75,12 +75,18 @@
 	  (intern symbol-string new-package-string)
 	  (signal-missing-package symbol-string package-string)))))
 
+(declaim (inline ensure-string))
+(defun ensure-string (maybe-string)
+  (if (stringp maybe-string)
+      maybe-string
+      (progn (unexpected-data "string" maybe-string) "")))
+
 (declaim (inline restore-symbol))
 (defun restore-symbol (storage restore-object)
   "Do not call me directly because if you called store-symbol you may have
  ended up writing a reference to the symbol object instead of the symbol object."
   (let* ((symbol-string (restore-string storage))
-	 (package-string (funcall (the function restore-object))) ;; might be a reference
+	 (package-string (ensure-string (funcall (the function restore-object)))) ;; might be a reference
 	 (package (find-package package-string)))
       (if package
 	  (values (intern symbol-string package))

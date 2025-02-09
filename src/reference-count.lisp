@@ -17,8 +17,9 @@
   (store-tagged-unsigned-fixnum (write-reference-count-reference-count action) storage))
 
 (defmethod action ((code (eql +set-reference-action-code+)) storage references restore-object)
-  (let ((num-refs (funcall restore-object)))
+  (let ((num-refs (restore-tagged-unsigned-fixnum storage)))
     #+info-cbs(format t "This file has ~A references~%" num-refs)
+    (check-if-too-much-data (read-storage-max-to-read storage) (* 8 num-refs))
     (values (setf (references-vector references) (make-array num-refs :initial-element nil))
 	    :ignore)))
 

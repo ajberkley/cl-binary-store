@@ -63,7 +63,7 @@
   "How many bits per element when reading back in data.  We may be reading data that
  was stored from an array type that does not exist in the reader implementation, so
  consider this a definition of our serialization scheme."
-  (ecase encoded-element-type
+  (case encoded-element-type
     (0 (values 'bit 1))
     (1 (values 'base-char 8))
     (2 (values 'character 32))
@@ -83,7 +83,9 @@
     (16 (values '(unsigned-byte 31) 32))
     (17 (values '(unsigned-byte 32) 32))
     (18 (values '(unsigned-byte 62) 64))
-    (19 (values '(unsigned-byte 64) 64))))
+    (19 (values '(unsigned-byte 64) 64))
+    (otherwise
+     (unexpected-data "encoded element type" encoded-element-type))))
 
 (defconstant +first-direct-unsigned-integer+ 20)
 (defconstant +max-direct-encoded-unsigned-integer+ (- 255 +first-direct-unsigned-integer+))
@@ -92,16 +94,20 @@
 (defun make-simple-array-from-encoded-element-type (storage encoded-element-type num-elts &optional array-dimensions)
   "Returns (values new-array array-bytes)"
   (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 8) encoded-element-type)
-	   (type (unsigned-byte 59) num-elts))
-  (multiple-value-bind (type actual-bits)
-      (encoded-element-type-to-type/packing encoded-element-type)
-    (let ((total-bytes (ceiling (the fixnum
-			  (* num-elts
-			     (the (integer 0 64) actual-bits)))
-				8)))
-      (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
-      (values (make-array (or array-dimensions num-elts) :element-type type)
-	      total-bytes))))
+           (type fixnum num-elts))
+  (unless (<= num-elts (ash most-positive-fixnum -3))
+    (unexpected-data (format nil "num-elts smaller than ~A" (ash most-positive-fixnum -3)) num-elts))
+  (let ((num-elts num-elts))
+    (declare (type (unsigned-byte 59) num-elts))
+    (multiple-value-bind (type actual-bits)
+        (encoded-element-type-to-type/packing encoded-element-type)
+      (let ((total-bytes (ceiling (the fixnum
+			               (* num-elts
+			                  (the (integer 0 64) actual-bits)))
+				  8)))
+        (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
+        (values (make-array (or array-dimensions num-elts) :element-type type)
+	        total-bytes)))))
 
 #+sbcl
 (defun write-sap-data-to-storage (sap num-bytes storage)
@@ -192,20 +198,23 @@
 (declaim (notinline restore-simple-base-string))
 (defun restore-simple-base-string (storage)
   (declare (optimize (speed 3) (safety 1)))
-  (let* ((num-bytes (restore-tagged-unsigned-fixnum/interior storage))
-	 (string (make-string num-bytes :element-type 'base-char)))
-    (chunked/read storage num-bytes
-		  (lambda (sap sap-offset-original string-start string-end)
-		    #+sbcl
-		    (with-pinned-objects (string)
-		      (copy-sap (vector-sap string) string-start sap sap-offset-original
-				(- string-end string-start)))
-		    #-sbcl
-		    (loop
-		      for idx fixnum from string-start below string-end
-		      for sap-offset fixnum from sap-offset-original
-		      do (setf (aref string idx) (code-char (sap-ref-8 sap sap-offset))))))
-    string))
+  (let ((num-bytes (restore-tagged-unsigned-fixnum/interior storage)))
+    (unless (and (typep num-bytes 'fixnum) (>= num-bytes 0))
+      (unexpected-data "unsigned fixnum" num-bytes))
+    (check-if-too-much-data (read-storage-max-to-read storage) num-bytes)
+    (let ((string (make-string num-bytes :element-type 'base-char)))
+      (chunked/read storage num-bytes
+		    (lambda (sap sap-offset-original string-start string-end)
+		      #+sbcl
+		      (with-pinned-objects (string)
+		        (copy-sap (vector-sap string) string-start sap sap-offset-original
+				  (- string-end string-start)))
+		      #-sbcl
+		      (loop
+		        for idx fixnum from string-start below string-end
+		        for sap-offset fixnum from sap-offset-original
+		        do (setf (aref string idx) (code-char (sap-ref-8 sap sap-offset))))))
+      string)))
 
 (declaim (notinline store-simple-string))
 (defun store-simple-string (string storage &optional references assign-new-reference-id)
@@ -241,16 +250,22 @@
 (defun restore-simple-string (storage)
   (declare (optimize (speed 3) (safety 1)))
   (let* ((num-bytes (restore-tagged-unsigned-fixnum/interior storage)))
-    (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
-      (declare (dynamic-extent a))
-      (chunked/read storage num-bytes
-		    (lambda (sap offset string-start string-end)
-		      #+sbcl (with-pinned-objects (a)
-			       (copy-sap (vector-sap a) string-start sap offset (- string-end string-start)))
-		      #-sbcl (loop for sap-offset from offset
-				   for string-offset from string-start below string-end
-				   do (setf (aref a string-offset) (sap-ref-8 sap sap-offset)))))
-      (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes))))
+    (check-if-too-much-data (read-storage-max-to-read storage) num-bytes)
+    (labels ((read/decode (a)
+               (chunked/read storage num-bytes
+		             (lambda (sap offset string-start string-end)
+		               #+sbcl (with-pinned-objects (a)
+			                (copy-sap (vector-sap a) string-start sap offset (- string-end string-start)))
+		               #-sbcl (loop for sap-offset from offset
+				            for string-offset from string-start below string-end
+				            do (setf (aref a string-offset) (sap-ref-8 sap sap-offset)))))
+               (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes)))
+      (if (< num-bytes 65536)
+          (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
+            (declare (dynamic-extent a))
+            (read/decode a))
+          (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
+            (read/decode a))))))
 
 (declaim (notinline store-string))
 (defun store-string (string storage references assign-new-reference-id)
@@ -270,9 +285,12 @@
  so that means they must have been stored with store-string/no-refs"
   (declare (optimize (speed 3) (safety 1)))
   (let ((code (restore-ub8 storage)))
-    (ecase code
+    (case code
       (#.+simple-base-string-code+ (restore-simple-base-string storage))
-      (#.+simple-string-code+ (restore-simple-string storage)))))
+      (#.+simple-string-code+ (restore-simple-string storage))
+      (otherwise
+       (cerror "USE-EMPTY-STRING" 'invalid-input-data :format-control "While restoring a string expected one of ~A, found ~A" :format-arguments (list #.(format nil "(~A ~A)" +simple-string-code+ +simple-base-string-code+) code))
+       ""))))
 
 (defmacro make-writer/reader (size-bits signed &key name-override reader array-type)
   (let* ((writer (not reader))

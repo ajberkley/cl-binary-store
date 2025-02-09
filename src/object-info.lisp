@@ -8,13 +8,14 @@
 ;; of the slot-name vector as a reference id.)
 
 (declaim (inline object-info-class object-info-slot-names object-info-type
-		 object-info-specialized-constructor
-		 object-info-slot-value-filter-func
-		 object-info-specialized-serializer
-		 object-info-specialized-deserializer
-		 object-info-use-initialize-instance
-		 object-info-ref-id
-		 make-object-info))
+                 object-info-specialized-constructor
+                 object-info-slot-value-filter-func
+                 object-info-specialized-serializer
+                 object-info-specialized-deserializer
+                 object-info-use-initialize-instance
+                 object-info-ref-id
+                 make-object-info
+                 object-info-p))
 (defstruct object-info
   (class (find-class 'structure-object))
   (slot-names #() :type simple-vector)

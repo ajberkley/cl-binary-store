@@ -37,9 +37,14 @@
 (defun decode-reference-tagged (number)
   "Number ranges from -16 to wherever.  This uses the reference-tag byte plus the tagged integer
  which can be anywhere from 1 byte direct tagged to arbitrarily large."
-  (declare (optimize (speed 3) (safety 1)) (type fixnum number))
-  (the fixnum
-    (+ (- +minimum-untagged-signed-integer+) number 1 +reference-two-byte-max-ref-id+)))
+  (declare (optimize (speed 3) (safety 1)))
+  (if (and (typep number 'fixnum) (>= number +minimum-untagged-signed-integer+)
+           (<= number #.(expt 2 54))) ;; arbitrary 1 TB limit on number of references!
+      (truly-the fixnum
+           (+ (- +minimum-untagged-signed-integer+)
+              (truly-the fixnum number)
+              1 +reference-two-byte-max-ref-id+))
+      (unexpected-data "fixnum" number)))
 
 (declaim (inline encode-reference-direct))
 (defun encode-reference-direct (ref-index)

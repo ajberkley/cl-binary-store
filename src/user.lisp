@@ -182,13 +182,16 @@
 	(*allow-codespace-switching* allow-codespace-switching)
 	(*max-to-read* max-to-read)
 	(*read-version* read-version))
-    (etypecase place
-      ((or string pathname)
-       (restore-from-file place))
-      (stream
-       (restore-from-stream place))
-      (vector
-       (restore-from-vector place)))))
+    (handler-case
+        (etypecase place
+          ((or string pathname)
+           (restore-from-file place))
+          (stream
+           (restore-from-stream place))
+          (vector
+           (restore-from-vector place)))
+      (babel:character-decoding-error (e)
+        (unexpected-data "UTF-8 data" e)))))
 
 (defun store (place data &key (track-references *track-references*)
 			   (support-shared-list-structures *support-shared-list-structures*)

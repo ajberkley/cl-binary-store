@@ -103,6 +103,8 @@
   (ensure-enough-data storage 8)
   (let* ((offset (read-storage-offset storage))
 	 (fixnum (signed-sap-ref-64 (read-storage-sap storage) offset)))
+    (unless (typep fixnum 'fixnum)
+      (unexpected-data "fixnum" fixnum))
     (setf (read-storage-offset storage) (truly-the fixnum (+ offset 8)))
     (truly-the fixnum fixnum)))
 
@@ -220,10 +222,20 @@
 	    (incf offset))
 	  (set-sap-ref-double sap offset double-float)))))
 
+(declaim (inline ensure-integer))
+(defun ensure-integer (x)
+  (unless (integerp x)
+    (unexpected-data "integer" x))
+  x)
+
 (defun restore-ratio (restore-object)
   (declare (optimize (speed 3) (safety 1)) (type function restore-object))
-  (/ (the integer (funcall restore-object))
-     (the integer (funcall restore-object))))
+  (let ((a (ensure-integer (funcall restore-object)))
+        (b (ensure-integer (funcall restore-object))))
+    (declare (type integer a b))
+    (unless (> b 0)
+      (unexpected-data "integer > 0" b))
+    (/ (the integer a) (the integer b))))
 
 (defun store-ratio (ratio storage num-eq-refs assign-new-reference-id)
   "Nominally we don't need to do references here, but if someone has two bignums and takes
@@ -239,10 +251,16 @@
       (store-integer (numerator ratio))
       (store-integer (denominator ratio)))))
 
+(declaim (inline ensure-real))
+(defun ensure-real (x)
+  (unless (typep x 'real)
+    (unexpected-data "real" x))
+  x)
+
 (defun restore-complex (restore-object)
   (declare (type function restore-object))
-  (complex (funcall restore-object)
-	   (funcall restore-object)))
+  (complex (ensure-real (funcall restore-object))
+           (ensure-real (funcall restore-object))))
 
 (declaim (inline restore-complex-double-float))
 (defun restore-complex-double-float (storage)
@@ -296,12 +314,17 @@
     (if (>= tag +first-direct-unsigned-integer-interior-code+)
 	(- tag +first-direct-unsigned-integer-interior-code+)
 	(truly-the fixnum
-	     (+ (ecase tag
-		  (#.+ub8-code+ (restore-ub8 storage))
-		  (#.+ub16-code+ (restore-ub16 storage))
-		  (#.+ub32-code+ (restore-ub32 storage))
-		  (#.+fixnum-code+ (restore-fixnum storage)))
-		+interior-coded-max-integer+ 1)))))
+	  (+ (case tag
+	       (#.+ub8-code+ (restore-ub8 storage))
+	       (#.+ub16-code+ (restore-ub16 storage))
+	       (#.+ub32-code+ (restore-ub32 storage))
+	       (#.+fixnum-code+
+                (let ((fixnum (restore-fixnum storage)))
+                  (unless (>= fixnum 0)
+                    (unexpected-data "unsigned fixnum" fixnum))
+                  (truly-the fixnum fixnum)))
+               (otherwise (unexpected-data "tag for unsigned fixnum" tag)))
+	     +interior-coded-max-integer+ 1)))))
 
 (declaim (ftype (function (read-storage)
 			  #+sbcl (values fixnum &optional)
@@ -313,11 +336,12 @@
   (let ((tag (restore-ub8 storage)))
     (if (<= +small-integer-zero-code+ tag +last-small-integer-code+)
 	(- tag +small-integer-zero-code+)
-	(ecase tag
+	(case tag
 	  (#.+ub8-code+ (restore-ub8 storage))
 	  (#.+ub16-code+ (restore-ub16 storage))
 	  (#.+ub32-code+ (restore-ub32 storage))
-	  (#.+fixnum-code+ (restore-fixnum storage))))))
+	  (#.+fixnum-code+ (restore-fixnum storage))
+          (otherwise (unexpected-data "tag for unsigned fixnum" tag))))))
 
 (declaim (ftype (function (read-storage)
 			  #+sbcl (values fixnum &optional)
@@ -327,14 +351,15 @@
   (let ((tag (restore-ub8 storage)))
     (if (<= +first-small-integer-code+ tag +last-small-integer-code+)
 	(- tag +small-integer-zero-code+)
-	(ecase tag
+	(case tag
 	  (#.+ub8-code+ (restore-ub8 storage))
 	  (#.+ub16-code+ (restore-ub16 storage))
 	  (#.+ub32-code+ (restore-ub32 storage))
 	  (#.+fixnum-code+ (restore-fixnum storage))
 	  (#.+sb8-code+ (restore-sb8 storage))
 	  (#.+sb16-code+ (restore-sb16 storage))
-	  (#.+sb32-code+ (restore-sb32 storage))))))
+	  (#.+sb32-code+ (restore-sb32 storage))
+          (otherwise (unexpected-data "tag for fixnum" tag))))))
 
 (declaim (inline store-tagged-unsigned-integer))
 

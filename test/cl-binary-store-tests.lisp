@@ -145,7 +145,7 @@
 				       (bit (random 1))
 				       (fixnum #+(or ccl allegro)
 					       (random (- (expt 2 59) (expt 2 58)))
-					       #-ccl
+					       #-(or ccl allegro)
 					       (random (- (expt 2 62) (expt 2 61))))
 				       (base-char #\a)
 				       (character #\b)
@@ -657,3 +657,28 @@
 	     (when estimated-output-size
 	       (fail (store nil input :max-to-write (- estimated-output-size 1000))))
 	     (finish (store nil input :max-to-write (round (* 1.1 (or estimated-output-size 1024))))))))
+
+(define-test fuzzing
+    (labels ((try (input)
+               (with-open-file
+                   (str "fuzzing-input"
+                        :element-type '(unsigned-byte 8)
+                        :direction :output :if-exists :supersede :if-does-not-exist :create)
+                 (write-sequence input str))
+               (finish
+                (handler-case
+                    (restore input :max-to-read #+sbcl (floor (sb-ext:dynamic-space-size) 3)
+                                                #-sbcl 100000000)
+                  (invalid-input-data ())))
+               (delete-file "fuzzing-input")))
+      (when (probe-file "fuzzing-input")
+        (try
+         (with-open-file (str "fuzzing-input" :element-type '(unsigned-byte 8)
+                                              :direction :input)
+           (let ((a (make-array (file-length str))))
+             (read-sequence a str)
+             a))))
+      (loop repeat 10
+            with input = (make-array (random 1000000) :element-type '(unsigned-byte 8))
+            do (loop for i fixnum below (length input) do (setf (aref input i) (random 256)))
+            do (try input))))

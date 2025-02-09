@@ -28,7 +28,7 @@
 	(sap-ref-8 (read-storage-sap storage) offset)
       (setf (read-storage-offset storage) (truly-the fixnum (+ 1 offset))))))
 
-(declaim (inline restore-ub16))
+(declaim (#-debug-cbs inline #+debug-cbs notinline restore-ub16))
 (defun restore-ub16 (storage)
   "Restore a (unsigned-byte 16) from STORAGE which has previously been stored
  by STORE-UB16."

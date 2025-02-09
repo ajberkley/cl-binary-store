@@ -142,16 +142,20 @@
 (defun restore-list/known-length (storage restore-object)
   (declare (optimize (speed 3) (safety 0)))
   (let* ((length (restore-tagged-unsigned-fixnum/interior storage)))
-    (check-if-too-much-data (read-storage-max-to-read storage)
-			    (truly-the fixnum 
-			      (+ (read-storage-total-read storage)
-				 (truly-the fixnum (* 16 length)))))
-    (let* ((head (make-list length))
-	   (cons head))
-      (dotimes (count (1- length))
-	(restore-object-to (car cons) restore-object)
-	(setf cons (cdr cons)))
-      ;; Support dotted end of list
-      (restore-object-to (car cons) restore-object)
-      (restore-object-to (cdr cons) restore-object)
-      head)))
+    (unless (and (<= 0 length (ash most-positive-fixnum -4))
+                 (<=
+                  (ash length 4)
+                  (truly-the fixnum
+                    (- (read-storage-max-to-read storage) (read-storage-total-read storage)))))
+      (error 'too-much-data :max-bytes (read-storage-max-to-read storage)
+                            :bytes (+ (ash length 4) (read-storage-total-read storage))))
+    (when (> length 0)
+      (let* ((head (make-list length))
+	     (cons head))
+        (dotimes (count (1- length))
+	  (restore-object-to (car cons) restore-object)
+	  (setf cons (cdr cons)))
+        ;; Support dotted end of list
+        (restore-object-to (car cons) restore-object)
+        (restore-object-to (cdr cons) restore-object)
+        head))))
