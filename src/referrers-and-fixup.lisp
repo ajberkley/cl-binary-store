@@ -48,7 +48,7 @@
  have seen so far, and a running count ref-id of assigned ids.  Nominally
  the array size is hinted at the start of restore, but the code allows it
  to grow if needed."
-  (vector (make-array nil) :type simple-vector)
+  (vector (make-array 0) :type simple-vector)
   (ref-id 0 :type fixnum)) ;; ref-ids run from 1 to infinity; they are incf'ed from here
 
 (declaim (inline check-reference))
