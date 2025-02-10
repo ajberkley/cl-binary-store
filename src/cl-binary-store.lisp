@@ -200,7 +200,29 @@
    #:*allow-codespace-switching*
    #:*max-to-write*
    #:*max-to-read*
-   #:*output-magic-number*))
+   #:*output-magic-number*
+
+   ;; Conditions
+   #:invalid-input-data
+   #:too-much-data
+   #:maybe-expected-error))
 
 
 (in-package :cl-binary-store)
+
+(define-condition invalid-input-data (simple-error)
+  ())
+
+(defun unexpected-data (expected &optional (data nil data-provided-p))
+  (error 'invalid-input-data
+         :format-control "Expected ~A~A"
+         :format-arguments (list expected
+                                 (if data-provided-p
+                                     ;; be careful not to provide anything
+                                     ;; that cannot be printed trivially here!
+                                     (format nil ", found ~A" data)
+                                     ""))))
+
+(define-condition maybe-expected-error (invalid-input-data)
+  ()
+  (:documentation "Things like MISSING-PACKAGE-DURING-RESTORE, MISSING-SLOT"))

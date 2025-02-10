@@ -110,6 +110,11 @@
    #:serializable-object-info
    #:specialized-object-constructor
    #:specialized-serializer/deserializer
+
+   ;; More conditions
+   #:invalid-input-data
+   #:too-much-data
+   #:maybe-expected-error
    ))
 
 (in-package #:cl-binary-store-user)

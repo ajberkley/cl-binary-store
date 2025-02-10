@@ -191,7 +191,7 @@
 	(loop for name across slot-names
 	      do (store-symbol name storage eq-refs store-object assign-new-reference-id))))))
 
-(define-condition object-type-not-found (error)
+(define-condition object-type-not-found (maybe-expected-error)
   ((object-info :initarg :object-info :reader object-type-not-found-object-info)))
 
 (defmethod print-object ((obj object-type-not-found) str)
@@ -237,7 +237,7 @@
 	do (signal-object-type-not-found object-info)
 	finally (return class)))
 
-(define-condition missing-slot (error)
+(define-condition missing-slot (maybe-expected-error)
   ((slot-name :initarg :slot-name :reader missing-slot-name)
    (type :initarg :type :reader missing-slot-type)
    (data-slots :initarg :data-slots :reader missing-slot-data-slots)
@@ -290,42 +290,48 @@
   (let* ((num-slots (restore-tagged-fixnum storage)))
     (if (< num-slots 0) ; it's a reference id, look it up in our implicit tracking table
 	(gethash num-slots implicit-eql-refs)
-        (let ((slot-name-vector (make-array num-slots))
-	      (type (funcall restore-object))
-	      (ref-id (- (the fixnum (incf (the fixnum (car implicit-ref-id)))))))
-	  ;; No circularity possible below as these are symbols
-	  (loop for idx fixnum from 0 below num-slots
-		do (setf (svref slot-name-vector idx) (funcall restore-object)))
-	  (multiple-value-bind (specialized-serializer specialized-deserializer)
-	      (specialized-serializer/deserializer type)
-	    (declare (ignore specialized-serializer))
-	    (let ((specialized-constructor (specialized-object-constructor type)))
-	      (cond
-		((or specialized-constructor specialized-deserializer)
-		 (maybe-store-to-reference-table
-		  (make-object-info :class nil :type type
-				    :specialized-constructor specialized-constructor
-				    :specialized-deserializer specialized-deserializer
-				    :slot-names slot-name-vector
-				    :ref-id ref-id)
-		  implicit-eql-refs))
-		(t
-		 (let* ((si (maybe-store-to-reference-table
-			     (make-object-info
-			      :type type :slot-names slot-name-vector :ref-id ref-id)
-			     implicit-eql-refs))
-			(class (really-find-class si)))
-		   (setf (object-info-class si) class)
-		   (setf (object-info-type si) (class-name class))
-		   (let ((image-slot-names (get-slot-names class)))
-		     ;; Now validate that the slot-names we restored are a subset of
-		     ;; those in the current image object	    
-		     (setf (object-info-specialized-constructor si)
-			   (validate-slot-names type slot-name-vector image-slot-names))
-		     ;; The order of slot names may be different, use the order
-		     ;; stored in the file!
-		     (setf (object-info-slot-names si) slot-name-vector))
-		   si)))))))))
+        (progn
+          (if (> num-slots (ash most-positive-fixnum -3))
+              (unexpected-data "too many slots in object-info" num-slots)
+              (check-if-too-much-data (read-storage-max-to-read storage) (* 8 num-slots)))
+          (let ((slot-name-vector (make-array num-slots))
+	        (type (funcall restore-object))
+	        (ref-id (- (the fixnum (incf (the fixnum (car implicit-ref-id)))))))
+            (unless (symbolp type)
+              (unexpected-data "expected a symbol"))
+	    ;; No circularity possible below as these are symbols
+	    (loop for idx fixnum from 0 below num-slots
+		  do (setf (svref slot-name-vector idx) (funcall restore-object)))
+	    (multiple-value-bind (specialized-serializer specialized-deserializer)
+	        (specialized-serializer/deserializer type)
+	      (declare (ignore specialized-serializer))
+	      (let ((specialized-constructor (specialized-object-constructor type)))
+	        (cond
+		  ((or specialized-constructor specialized-deserializer)
+		   (maybe-store-to-reference-table
+		    (make-object-info :class nil :type type
+				      :specialized-constructor specialized-constructor
+				      :specialized-deserializer specialized-deserializer
+				      :slot-names slot-name-vector
+				      :ref-id ref-id)
+		    implicit-eql-refs))
+		  (t
+		   (let* ((si (maybe-store-to-reference-table
+			       (make-object-info
+			        :type type :slot-names slot-name-vector :ref-id ref-id)
+			       implicit-eql-refs))
+			  (class (really-find-class si)))
+		     (setf (object-info-class si) class)
+		     (setf (object-info-type si) (class-name class))
+		     (let ((image-slot-names (get-slot-names class)))
+		       ;; Now validate that the slot-names we restored are a subset of
+		       ;; those in the current image object	    
+		       (setf (object-info-specialized-constructor si)
+			     (validate-slot-names type slot-name-vector image-slot-names))
+		       ;; The order of slot names may be different, use the order
+		       ;; stored in the file!
+		       (setf (object-info-slot-names si) slot-name-vector))
+		     si))))))))))
 	
 (defun get-object-info (object object-info implicit-ref-id)
   (let ((type (type-of object)))
@@ -379,26 +385,28 @@
 
 (defun restore-standard/structure-object (storage restore-object)
   (declare (type function restore-object) (ignorable storage) (optimize speed safety))
-  (let* ((object-info (funcall restore-object))
-	 (specialized-deserializer (object-info-specialized-deserializer object-info))
-	 (constructor (object-info-specialized-constructor object-info)))
-    (cond
-      (specialized-deserializer
-       (funcall specialized-deserializer storage restore-object))
-      (constructor
-       (let* ((slot-names (object-info-slot-names object-info))
-	      (num-slots (length slot-names))
-	      (slot-values (make-list num-slots)))
-	 (declare (dynamic-extent slot-values) (type (unsigned-byte 16) num-slots))
-	 (loop for value on slot-values
-	       do (setf (car value) (funcall restore-object)))
-	 (funcall constructor object-info slot-values)))
-      (t
-       (let* ((class (object-info-class object-info))
-	      (obj (allocate-instance class)))
-	 (if (typep class 'structure-class)
-	     (loop for name across (object-info-slot-names object-info)
-		   do (restore-object-to (slot-value obj name) restore-object))
-	     (loop for name across (object-info-slot-names object-info)
-		   do (restore-object-to (slot-value* obj name) restore-object)))
-	 obj)))))
+  (let ((object-info (funcall restore-object)))
+    (unless (object-info-p object-info)
+      (unexpected-data "expected an object-info"))
+    (let* ((specialized-deserializer (object-info-specialized-deserializer object-info))
+	   (constructor (object-info-specialized-constructor object-info)))
+      (cond
+        (specialized-deserializer
+         (funcall specialized-deserializer storage restore-object))
+        (constructor
+         (let* ((slot-names (object-info-slot-names object-info))
+	        (num-slots (length slot-names))
+	        (slot-values (make-list num-slots)))
+	   (declare (dynamic-extent slot-values) (type (unsigned-byte 16) num-slots))
+	   (loop for value on slot-values
+	         do (setf (car value) (funcall restore-object)))
+	   (funcall constructor object-info slot-values)))
+        (t
+         (let* ((class (object-info-class object-info))
+	        (obj (allocate-instance class)))
+	   (if (typep class 'structure-class)
+	       (loop for name across (object-info-slot-names object-info)
+		     do (restore-object-to (slot-value obj name) restore-object))
+	       (loop for name across (object-info-slot-names object-info)
+		     do (restore-object-to (slot-value* obj name) restore-object)))
+	   obj))))))

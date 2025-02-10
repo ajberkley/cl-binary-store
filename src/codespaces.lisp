@@ -530,8 +530,8 @@
 	 (t (case ,code-to-dispatch-on
 	      ,@numeric-dispatch-codes
 	      (otherwise
-	       (error 'simple-error :format-control "Unknown code ~A found in stream"
-				    :format-arguments (list ,code-to-dispatch-on)))))))))
+	       (error 'invalid-input-data :format-control "Unknown code ~A found in stream"
+				          :format-arguments (list ,code-to-dispatch-on)))))))))
 
 (defun store-objects (storage &rest stuff)
   "Store all the objects in stuff to storage.  Do not call this directly without let'ing
@@ -549,6 +549,7 @@
  *read-version*."
   (declare (type read-storage storage))
   (let ((codespace *current-codespace*))
-    (assert codespace nil
-	    "Unknown codespace to restore objects with... is *read-version* not correct?")
+    (unless codespace
+      (error 'invalid-input-data :format-control
+	    "Unknown codespace to restore objects with... is *read-version* not correct?"))
     (funcall (codespace-restore-objects codespace) storage)))

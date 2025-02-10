@@ -63,7 +63,7 @@
   "How many bits per element when reading back in data.  We may be reading data that
  was stored from an array type that does not exist in the reader implementation, so
  consider this a definition of our serialization scheme."
-  (ecase encoded-element-type
+  (case encoded-element-type
     (0 (values 'bit 1))
     (1 (values 'base-char 8))
     (2 (values 'character 32))
@@ -83,7 +83,9 @@
     (16 (values '(unsigned-byte 31) 32))
     (17 (values '(unsigned-byte 32) 32))
     (18 (values '(unsigned-byte 62) 64))
-    (19 (values '(unsigned-byte 64) 64))))
+    (19 (values '(unsigned-byte 64) 64))
+    (otherwise
+     (unexpected-data "encoded element type"))))
 
 (defconstant +first-direct-unsigned-integer+ 20)
 (defconstant +max-direct-encoded-unsigned-integer+ (- 255 +first-direct-unsigned-integer+))
@@ -92,16 +94,19 @@
 (defun make-simple-array-from-encoded-element-type (storage encoded-element-type num-elts &optional array-dimensions)
   "Returns (values new-array array-bytes)"
   (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 8) encoded-element-type)
-	   (type (unsigned-byte 59) num-elts))
-  (multiple-value-bind (type actual-bits)
-      (encoded-element-type-to-type/packing encoded-element-type)
-    (let ((total-bytes (ceiling (the fixnum
-			  (* num-elts
-			     (the (integer 0 64) actual-bits)))
-				8)))
-      (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
-      (values (make-array (or array-dimensions num-elts) :element-type type)
-	      total-bytes))))
+           (type fixnum num-elts))
+  (unless (<= num-elts (ash most-positive-fixnum -7))
+    (unexpected-data "num-elts too big"))
+  (let ((num-elts num-elts))
+    (multiple-value-bind (type actual-bits)
+        (encoded-element-type-to-type/packing encoded-element-type)
+      (let ((total-bytes (ceiling (the fixnum
+			               (* num-elts
+			                  (the (integer 0 64) actual-bits)))
+				  8)))
+        (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
+        (values (make-array (or array-dimensions num-elts) :element-type type)
+	        total-bytes)))))
 
 #+sbcl
 (defun write-sap-data-to-storage (sap num-bytes storage)
@@ -192,20 +197,23 @@
 (declaim (notinline restore-simple-base-string))
 (defun restore-simple-base-string (storage)
   (declare (optimize (speed 3) (safety 1)))
-  (let* ((num-bytes (restore-tagged-unsigned-fixnum/interior storage))
-	 (string (make-string num-bytes :element-type 'base-char)))
-    (chunked/read storage num-bytes
-		  (lambda (sap sap-offset-original string-start string-end)
-		    #+sbcl
-		    (with-pinned-objects (string)
-		      (copy-sap (vector-sap string) string-start sap sap-offset-original
-				(- string-end string-start)))
-		    #-sbcl
-		    (loop
-		      for idx fixnum from string-start below string-end
-		      for sap-offset fixnum from sap-offset-original
-		      do (setf (aref string idx) (code-char (sap-ref-8 sap sap-offset))))))
-    string))
+  (let ((num-bytes (restore-tagged-unsigned-fixnum/interior storage)))
+    (unless (>= num-bytes 0)
+      (unexpected-data "unexpected negative length for simple-base-string"))
+    (check-if-too-much-data (read-storage-max-to-read storage) num-bytes)
+    (let ((string (make-string num-bytes :element-type 'base-char)))
+      (chunked/read storage num-bytes
+		    (lambda (sap sap-offset-original string-start string-end)
+		      #+sbcl
+		      (with-pinned-objects (string)
+		        (copy-sap (vector-sap string) string-start sap sap-offset-original
+				  (- string-end string-start)))
+		      #-sbcl
+		      (loop
+		        for idx fixnum from string-start below string-end
+		        for sap-offset fixnum from sap-offset-original
+		        do (setf (aref string idx) (code-char (sap-ref-8 sap sap-offset))))))
+      string)))
 
 (declaim (notinline store-simple-string))
 (defun store-simple-string (string storage &optional references assign-new-reference-id)
@@ -241,16 +249,26 @@
 (defun restore-simple-string (storage)
   (declare (optimize (speed 3) (safety 1)))
   (let* ((num-bytes (restore-tagged-unsigned-fixnum/interior storage)))
-    (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
-      (declare (dynamic-extent a))
-      (chunked/read storage num-bytes
-		    (lambda (sap offset string-start string-end)
-		      #+sbcl (with-pinned-objects (a)
-			       (copy-sap (vector-sap a) string-start sap offset (- string-end string-start)))
-		      #-sbcl (loop for sap-offset from offset
-				   for string-offset from string-start below string-end
-				   do (setf (aref a string-offset) (sap-ref-8 sap sap-offset)))))
-      (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes))))
+    ;; Typical implementations encode unicode as 32-bits, so lets just
+    ;; assume that and have the limit on reading by on the final memory size.
+    (unless (<= num-bytes (ash most-positive-fixnum -2))
+      (unexpected-data "string length too long"))
+    (check-if-too-much-data (read-storage-max-to-read storage) (* 4 num-bytes))
+    (labels ((read/decode (a)
+               (chunked/read storage num-bytes
+		             (lambda (sap offset string-start string-end)
+		               #+sbcl (with-pinned-objects (a)
+			                (copy-sap (vector-sap a) string-start sap offset (- string-end string-start)))
+		               #-sbcl (loop for sap-offset from offset
+				            for string-offset from string-start below string-end
+				            do (setf (aref a string-offset) (sap-ref-8 sap sap-offset)))))
+               (babel:octets-to-string a :encoding :utf-8 :start 0 :end num-bytes)))
+      (if (< num-bytes 65536)
+          (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
+            (declare (dynamic-extent a))
+            (read/decode a))
+          (let ((a (make-array num-bytes :element-type '(unsigned-byte 8))))
+            (read/decode a))))))
 
 (declaim (notinline store-string))
 (defun store-string (string storage references assign-new-reference-id)
@@ -270,9 +288,12 @@
  so that means they must have been stored with store-string/no-refs"
   (declare (optimize (speed 3) (safety 1)))
   (let ((code (restore-ub8 storage)))
-    (ecase code
+    (case code
       (#.+simple-base-string-code+ (restore-simple-base-string storage))
-      (#.+simple-string-code+ (restore-simple-string storage)))))
+      (#.+simple-string-code+ (restore-simple-string storage))
+      (otherwise
+       (cerror "USE-EMPTY-STRING" 'invalid-input-data :format-control "While restoring a string expected one of ~A, found ~A" :format-arguments (list #.(format nil "(~A ~A)" +simple-string-code+ +simple-base-string-code+) code))
+       ""))))
 
 (defmacro make-writer/reader (size-bits signed &key name-override reader array-type)
   (let* ((writer (not reader))
@@ -399,6 +420,23 @@
 	     ,@body
 	   (setf (read-storage-offset ,storage) (+ ,original-offset ,reserve-bytes)))))))
 
+(defmacro sap-ref-fixnum (sap offset)
+  "This is hideous.  On SBCL we have stored the data fixnum encoded, which means shifted up
+ by one so we shift it back to generate an 'unencoded' fixnum.  We would normally just have
+ blitted things back into the array without telling sbcl what we are doing, but in the
+ presence of potentially malicious data, we have to make sure that our numbers are fixnums,
+ so we shift them back down which makes it impossible for malicious actor to put bogus dat
+ in the array sap.  On non sbcl we just check to make sure things are fixnums because we
+ did not blit the data out"
+  #+sbcl
+  `(ash (signed-sap-ref-64 ,sap ,offset) -1)
+  #-sbcl
+  (let ((a (gensym)))
+    `(let ((,a (signed-sap-ref-64 ,sap ,offset)))
+       (if (typep ,a 'fixnum)
+           ,a
+           (unexpected-data "non fixnum in fixnum array")))))
+
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize (speed 3) (safety 1)))
   (let ((num-elts (restore-tagged-unsigned-fixnum/interior storage)))
@@ -431,18 +469,32 @@
 		  (32 (reader 32 t))
 		  (64 (reader 64 t))))))
 	    (t
-	     (ecase type
+	     (case type
 	       (bit (reader 1 nil))
 	       (single-float (reader 32 nil sap-ref-single (simple-array single-float (*))))
 	       (double-float (reader 64 nil sap-ref-double (simple-array double-float (*))))
-	       (fixnum (reader 64 t signed-sap-ref-64 (simple-array fixnum (*))))))))
+	       (fixnum (reader 64 t sap-ref-fixnum (simple-array fixnum (*))))
+               (otherwise (unexpected-data "array of unexpected type"))))))
         #+sbcl
 	(with-pinned-objects (sv)
-	  (let ((target-sap (vector-sap sv)))
-	    (chunked/read
-	     storage num-bytes
-	     (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
-	       (copy-sap target-sap data-start/bytes source-sap source-sap-offset (the fixnum (- data-end-bytes data-start/bytes)))))))
+          (multiple-value-bind (type bits-per-elt)
+              (encoded-element-type-to-type/packing encoded-element-info)
+            (declare (ignorable bits-per-elt))
+            (cond
+              ((eq type 'fixnum)
+               ;; We have to be careful here, as just blitting potentially malicious 64
+               ;; bit data into a simple-array fixnum (*) can cause issues.
+               ;; Now the problem is that we already "fixnum encoded" the data if it is
+               ;; correct, which means that it needs to be un-fixnum-ized
+               (reader 64 t sap-ref-fixnum (simple-array fixnum (*))))
+              (t
+	       (let ((target-sap (vector-sap sv)))
+                 ;; OK, so we have a problem here --- if the fixnums aren't actually fixnums
+                 ;; then we end up screwing things up.
+	         (chunked/read
+	          storage num-bytes
+	          (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
+	            (copy-sap target-sap data-start/bytes source-sap source-sap-offset (the fixnum (- data-end-bytes data-start/bytes))))))))))
         sv))))
 
 ;; for ccl ccl::array-data-and-offset would be fine... it's been a stable interface
@@ -493,8 +545,19 @@
 	                  (type-of sa) num-bytes array-dimensions encoded-element-info)
       	(with-pinned-objects (sa)
 	  (let ((target-sap (array-sap sa)))
-	    (chunked/read
-	     storage num-bytes
-	     (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
-	       (copy-sap target-sap data-start/bytes source-sap source-sap-offset (- data-end-bytes data-start/bytes))))))
+            (multiple-value-bind (type bits-per-elt)
+                (encoded-element-type-to-type/packing encoded-element-info)
+              (declare (ignorable bits-per-elt))
+              (cond
+                ((eq type 'fixnum)
+                 ;; We have to be careful here, as just blitting potentially malicious 64
+                 ;; bit data into a simple-array fixnum (*) can cause issues.
+                 (sb-kernel:with-array-data ((sv sa) (start) (end))
+                   (declare (ignore start end))
+                   (reader 64 t sap-ref-fixnum (simple-array fixnum (*)))))
+                (t
+	         (chunked/read
+	          storage num-bytes
+	          (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
+	            (copy-sap target-sap data-start/bytes source-sap source-sap-offset (- data-end-bytes data-start/bytes)))))))))
       sa)))

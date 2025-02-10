@@ -12,6 +12,8 @@
 (defun restore-simple-vector (storage restore-object)
   (declare (optimize speed safety))
   (let* ((num-elts (restore-tagged-unsigned-fixnum/interior storage)))
+    (unless (< num-elts (ash most-positive-fixnum -3))
+      (unexpected-data "simple vector too long"))
     (check-if-too-much-data (read-storage-max-to-read storage) (* num-elts 8))
     (let ((sv (make-array num-elts)))
       ;; It's possible that we can refer to an

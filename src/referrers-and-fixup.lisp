@@ -48,7 +48,7 @@
  have seen so far, and a running count ref-id of assigned ids.  Nominally
  the array size is hinted at the start of restore, but the code allows it
  to grow if needed."
-  (vector (make-array nil) :type simple-vector)
+  (vector (make-array 0) :type simple-vector)
   (ref-id 0 :type fixnum)) ;; ref-ids run from 1 to infinity; they are incf'ed from here
 
 (declaim (inline check-reference))
@@ -279,10 +279,18 @@
        (when storage
 	 (store-tagged-unsigned-fixnum (encode-reference-tagged ref-index) storage))))))
 
-(declaim (inline restore-reference))
+(declaim (#-debug-cbs inline #+debug-cbs notinline restore-reference))
 (defun restore-reference (ref-id references)
   "The reference has already been calculated in the dispatch code for us.
  If we are actually restoring the next object, it may not be re-ified before
  someone refers to it, so we have to store a fixup for those other objects
  to hang their reference onto."
-  (svref (references-vector references) ref-id))
+  (declare (optimize (speed 3) (safety 1)) (type (and (integer 0) fixnum) ref-id))
+  (let* ((vec (references-vector references))
+         (len (length vec)))
+    (if (>= ref-id len)
+        (progn
+          (cerror "Use NIL" 'invalid-input-data :format-control "Invalid data, reference to non-existent id ~A" :format-arguments (list ref-id))
+          nil)
+        (locally (declare (optimize (speed 3) (safety 0)))
+          (svref vec ref-id)))))

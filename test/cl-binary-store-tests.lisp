@@ -145,7 +145,7 @@
 				       (bit (random 1))
 				       (fixnum #+(or ccl allegro)
 					       (random (- (expt 2 59) (expt 2 58)))
-					       #-ccl
+					       #-(or ccl allegro)
 					       (random (- (expt 2 62) (expt 2 61))))
 				       (base-char #\a)
 				       (character #\b)
@@ -592,7 +592,8 @@
 (define-test test-bignum
   (is '= (expt 2 64) (restore (store nil (expt 2 64))))
   (is '= 12345678901234567890 (restore (store nil 12345678901234567890)))
-  (is '= -12345678901234567890 (restore (store nil -12345678901234567890))))
+  (is '= -12345678901234567890 (restore (store nil -12345678901234567890)))
+  (is '= (expt 2 123456) (restore (store nil (expt 2 123456)))))
 
 (define-test test-write-into-extant-vector
   (loop for length in '(100 #-abcl 50000)
@@ -657,3 +658,63 @@
 	     (when estimated-output-size
 	       (fail (store nil input :max-to-write (- estimated-output-size 1000))))
 	     (finish (store nil input :max-to-write (round (* 1.1 (or estimated-output-size 1024))))))))
+
+(define-test fuzzing
+    (labels ((try (input)
+               (with-open-file
+                   (str "fuzzing-input"
+                        :element-type '(unsigned-byte 8)
+                        :direction :output :if-exists :supersede :if-does-not-exist :create)
+                 (write-sequence input str))
+               (finish
+                (handler-case
+                    (restore input :max-to-read #+sbcl (floor (sb-ext:dynamic-space-size) 4)
+                                                #-sbcl 100000000)
+                  (invalid-input-data ())))
+               (delete-file "fuzzing-input")))
+      (when (probe-file "fuzzing-input")
+        (try
+         (with-open-file (str "fuzzing-input" :element-type '(unsigned-byte 8)
+                                              :direction :input)
+           (let ((a (make-array (file-length str))))
+             (read-sequence a str)
+             a))))
+      (loop repeat 100 ;;10000
+            with input = (make-array (random 100) :element-type '(unsigned-byte 8))
+            do (loop for i fixnum below (length input) do (setf (aref input i) (random 256)))
+            do (try input))
+      (loop repeat 10
+            with input = (make-array (random 1000000) :element-type '(unsigned-byte 8))
+            do (loop for i fixnum below (length input) do (setf (aref input i) (random 256)))
+            do (try input))))
+
+(define-test simple-array-fixnum
+  (let* ((n 1000)
+         (arr (coerce (loop repeat n collect (random most-positive-fixnum))
+                      '(simple-array fixnum (*)))))
+    (is 'equalp (restore (store nil arr)) arr))
+  (let* ((n 10)
+         (m 100)
+         (arr (make-array (list n m) :element-type 'fixnum :initial-contents
+                          (loop repeat n
+                                collect
+                                (loop repeat m collect (random most-positive-fixnum))))))
+    (is 'equalp (restore (store nil arr)) arr)))
+
+(define-test simple-array-fixnum-malicious
+  ;; The below is a non-fixnum claiming to be in a fixnum array
+  (finish
+   (handler-case
+       (restore #(21 5 3 127 127 127 127 127 127 127 127))
+     (invalid-input-data ())))
+  (finish
+   (handler-case
+       (restore #(21 5 3 127 127 127 127 127 127 127 127))
+     (invalid-input-data ()))))
+
+(define-test other-fuzzing-tests
+  #-ecl
+  (finish
+   (handler-case
+       (restore #(24 53 197 0 44 60 123 20))
+     (invalid-input-data ()))))

@@ -31,6 +31,10 @@
              #-sbcl (declare (ignore synchronized weakness))
 	     ;; weakness works as far as I can discern
 	     ;; because of how we do reference restoration
+             (unless (typep rehash-size '(or (integer 1 *) (float (1.0) *)))
+               (unexpected-data "rehash-size is not correct"))
+             (unless (< size (ash most-positive-fixnum -4))
+               (unexpected-data "hash table too large"))
 	     (check-if-too-much-data (read-storage-max-to-read storage)
 				     (* 16 size)) ;; an estimate
 	     (make-hash-table :test test :size size

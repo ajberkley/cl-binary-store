@@ -18,6 +18,7 @@ cl-binary-store works on 64-bit SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and L
 - Should work out of the box without any effort with an easy programmer / user interface (no need to write code for each class/struct you use!)
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 - Ability to limit amount of data written or read (safety rails)
+- Safe from malicious input (some amount of fuzz testing and code reading done, but if you want to rely on safety, please contribute!)
 
 ## General features
 
@@ -100,6 +101,8 @@ The package :cl-binary-store-user exports all the user facing interfaces above. 
 ## Missing objects, structures, and symbols
 
 If you keep files around long enough, eventually you find you have stored stuff you don't remember.  It's nice if you don't get horrible errors while loading the files.  cl-binary-store provides a good set of restarts for missing packages (create-package, rehome symbol) and for missing objects or structures (create them, use a different class) or for changes in slots (discard, change slot name).  The deserialization is extensible enough that you can put in line upgrading of objects.
+
+The two conditions signalled here are of type MAYBE-EXPECTED-ERROR and INVALID-INPUT-DATA and are MISSING-SLOT and OBJECT-TYPE-NOT-FOUND
 
 ## Extending object serialization
 
@@ -199,6 +202,10 @@ This can be used to override the restoration with a user provided codespace in c
 
 Specify what codespace to use during writing.  Use \*output-magic-number\* so the file records what was used during writing.
 
+### Conditions and malicious input
+
+cl-binary-store attempts to handle both malicious input and corrupted input reasonably.  There is by default a \*max-to-read\* of 2GB which will prevent the equivalent of zip bombs, and I have done some fuzz testing so that in general one expects to see an INVALID-INPUT-DATA error signalled if there is bad input data as opposed to crashing.  There are two types of errors one might expect, MISSING-SLOT and OBJECT-TYPE-NOT-FOUND which inherit from MAYBE-EXPECTED-ERROR which is of type INVALID-INPUT-DATA.  This allows you to either catch all INVALID-INPUT-DATA (if you just want things to work) or all INVALID-INPUT-DATA except MAYBE-EXPECTED-ERRORs (if you want some interactive recovery).  If you actually have corrupted input and wish to recover it, I suggest adding :debug-cbs to \*features\*, recompiling, and pulling the partial data out of the debugger where some of the data will be available on the stack.  It is too complicated to support corrupted data recovery and maintain high performance.
+
 ### Extending the codespace
 
 A codespace is a definition of the binary file format, they are identified with a magic / version number.  At write time the codespace is identified by \*write-version\*.  The codespace can optionally be written out to the output (\*write-magic-number\*).  Currently we have baked in a notion of tag bytes between objects that identify the type of the next object --- you could presumably switch to whatever tagging scheme you want with a bit of work on the code generation side.  We automatically build the storage time typecase dispatch, provide the basics of reference tracking, and some other niceties, and as well a dispatch case statement during restore.  This code is specialized for each codespace and built at compile / load time.  This can lead to some complexities debugging as the source code is not accessible.  To alleviate this one may define-codespace with :debug t, in which case the store and restore functions that are built are dumped to a file "codespace-debug.lisp" and loaded so the usual nice Common Lisp debugging experience can occur.  Usually you want to inline many of your functions for performance reasons (especially if you have regular data, the inlining, at least on sbcl, allows very nice performance as, for example, the first restore-object call from inside a wrapper function can be inlined --- so the list restore, for example, is not bouncing back and forth between functions).
@@ -279,7 +286,7 @@ I suggest just piping the output through gzip if you need the smallest possible 
 
 ## Debugging
 
-We generate the codespace code through a maze of macros and functions in [codespaces.lisp](src/codespaces.lisp), so if something isn't doing what you want, it is easiest to inspect cl-binary-store::\*codespaces\* and look at the codespace objects that are built and then look at the slots RESTORE-OBJECTS-SOURCE-CODE and STORE-OBJECTS-SOURCE-CODE (which are what are used to build the restore-objects and store-objects functions in the codespace).  These can be compiled at the repl or put into a file and compiled so that you can get full debugging of store-objects / restore-objects.
+We generate the codespace code through a maze of macros and functions in [codespaces.lisp](src/codespaces.lisp), so if something isn't doing what you want, it is easiest to inspect cl-binary-store::\*codespaces\* and look at the codespace objects that are built and then look at the slots RESTORE-OBJECTS-SOURCE-CODE and STORE-OBJECTS-SOURCE-CODE (which are what are used to build the restore-objects and store-objects functions in the codespace).  These can be compiled at the repl or put into a file and compiled so that you can get full debugging of store-objects / restore-objects.  To improve the debugging experience you can specify :debug t in [basic-codespace.lisp](src/basic-codespace.lisp) which will emit the code to a file for you so you get the full debugging experience.  Pushing :debug-cbs to \*features\* will also help.
 
 ## Basic codespace and user codes
 

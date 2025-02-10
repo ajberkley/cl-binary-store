@@ -64,7 +64,7 @@
   :description "Unit tests for CL-BINARY-STORE"
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :license :BSD-3
-  :depends-on (#:parachute)
+  :depends-on (#:parachute #:cl-binary-store)
   :pathname "test/"
   :components ((:file "cl-binary-store-tests"))
   :perform (test-op (o c) (uiop:symbol-call :parachute :test :cl-binary-store-tests)))
