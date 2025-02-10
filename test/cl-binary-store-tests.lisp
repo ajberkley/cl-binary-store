@@ -629,10 +629,11 @@
   (true (zerop (length (restore (store nil nil))))))
 
 (let ((stuff (list -123 -1234 -123456 -34247823946234923864 #*0101
-		   -1f0 -2d0 -1.234d0 (expt 2 64) (/ (expt 2 128) (expt 2 12))
-		   (complex 1d0 1d0)
-		   (make-array 123 :element-type 'double-float :initial-element 1.23d0)
-		   (make-array 123 :element-type '(signed-byte 32) :initial-element -123984))))
+                   -1f0 -2d0 -1.234d0 (expt 2 64) (/ (expt 2 128) (expt 2 12))
+                   (complex 1d0 1d0)
+                   (make-array 123 :element-type 'double-float :initial-element 1.23d0)
+                   (make-array 123 :element-type '(signed-byte 32) :initial-element -123984)
+                   (make-array 1 :element-type 'fixnum :initial-element (expt 2 58)))))
   (define-test test-interop-write
     ;; this writes a file with a bunch of stuff
     (store "blarg.bin" stuff)
@@ -699,7 +700,14 @@
                           (loop repeat n
                                 collect
                                 (loop repeat m collect (random most-positive-fixnum))))))
-    (is 'equalp (restore (store nil arr)) arr)))
+    (is 'equalp (restore (store nil arr)) arr))
+  #+sbcl (is 'equalp (restore #(21 5 3 0 0 0 0 0 0 0 64))
+             (make-array 1 :element-type 'fixnum :initial-element (expt 2 61)))
+  #-sbcl
+  (finish (handler-case (restore #(21 5 3 0 0 0 0 0 0 0 64))
+            (invalid-input-data ())))
+  (is 'equalp (restore #(21 5 3 0 0 0 0 0 0 0 8)) ;; everyone agrees on this, (expt 2 58)
+      (make-array 1 :element-type 'fixnum :initial-element (expt 2 58))))
 
 (define-test simple-array-fixnum-malicious
   ;; The below is a non-fixnum claiming to be in a fixnum array
