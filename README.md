@@ -18,7 +18,7 @@ cl-binary-store works on 64-bit SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and L
 - Should work out of the box without any effort with an easy programmer / user interface (no need to write code for each class/struct you use!)
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 - Ability to limit amount of data written or read (safety rails)
-- Somewhat safe from malicious input (some amount of fuzz testing and code reading done, but if you want to rely on safety, please contribute!)
+- Safe from malicious input (some amount of fuzz testing and code reading done, but if you want to rely on safety, please contribute!)
 
 ## General features
 

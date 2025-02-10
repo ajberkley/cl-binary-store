@@ -249,7 +249,11 @@
 (defun restore-simple-string (storage)
   (declare (optimize (speed 3) (safety 1)))
   (let* ((num-bytes (restore-tagged-unsigned-fixnum/interior storage)))
-    (check-if-too-much-data (read-storage-max-to-read storage) num-bytes)
+    ;; Typical implementations encode unicode as 32-bits, so lets just
+    ;; assume that and have the limit on reading by on the final memory size.
+    (unless (<= num-bytes (ash most-positive-fixnum -2))
+      (unexpected-data "string length too long"))
+    (check-if-too-much-data (read-storage-max-to-read storage) (* 4 num-bytes))
     (labels ((read/decode (a)
                (chunked/read storage num-bytes
 		             (lambda (sap offset string-start string-end)

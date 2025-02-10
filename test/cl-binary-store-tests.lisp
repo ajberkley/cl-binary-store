@@ -668,7 +668,7 @@
                  (write-sequence input str))
                (finish
                 (handler-case
-                    (restore input :max-to-read #+sbcl (floor (sb-ext:dynamic-space-size) 3)
+                    (restore input :max-to-read #+sbcl (floor (sb-ext:dynamic-space-size) 4)
                                                 #-sbcl 100000000)
                   (invalid-input-data ())))
                (delete-file "fuzzing-input")))
