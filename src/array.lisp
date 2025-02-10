@@ -1,5 +1,11 @@
 (in-package :cl-binary-store)
 
+(defun is-type-specifier-p (type-specifier)
+  "Returns true if TYPE-SPECIFIER is a valid type specifier."
+  (or #+sbcl (sb-ext:valid-type-specifier-p type-specifier)
+      #+ccl (ccl:type-specifier-p type-specifier)
+      #+ecl (c::valid-type-specifier type-specifier)))
+
 (defun restore-array (storage restore-object)
   (declare (type function restore-object) (optimize (speed 3) (safety 1)))
   (let* ((has-fill-pointer (funcall restore-object))
@@ -9,9 +15,15 @@
 	 (dimensions (loop repeat array-rank
                            collect (restore-tagged-unsigned-fixnum storage)))
 	 (displaced (funcall restore-object))
-         (array-total-size (if dimensions (reduce #'* dimensions) 0)))
+         (array-total-size (if dimensions (reduce #'* dimensions) 0))
+         (element-type (funcall restore-object)))
     (unless (and (typep array-total-size 'fixnum) (>= array-total-size 0))
       (unexpected-data "Array total size is too large"))
+    #+ecl
+    (unless element-type
+      (unexpected-data "ECL does not support empty arrays with nil element type"))
+    (unless (is-type-specifier-p element-type)
+      (unexpected-data "Invalid array element-type"))
     (check-if-too-much-data (read-storage-max-to-read storage) array-total-size)
     (labels ((check-fill-pointer (dimensions)
                (when has-fill-pointer
@@ -21,8 +33,7 @@
                    (unexpected-data "fill-pointer > vector length")))
                (values)))
       (if displaced
-	  (let ((element-type (funcall restore-object))
-	        (offset (restore-tagged-unsigned-fixnum storage))
+	  (let ((offset (restore-tagged-unsigned-fixnum storage))
 	        (displaced-to (funcall restore-object)))
             (unless (typep displaced-to 'array)
               (unexpected-data "displaced to a non array?!"))
@@ -37,9 +48,8 @@
           (progn
             (when has-fill-pointer (check-fill-pointer dimensions))
 	    (let ((array
-		    (let* ((element-type (funcall restore-object)))
-		      (make-array dimensions :element-type element-type :adjustable adjustable
-					     :fill-pointer fill-pointer))))
+		    (make-array dimensions :element-type element-type :adjustable adjustable
+					   :fill-pointer fill-pointer)))
               ;; We need to make our array first in case any of the array elements refer to it!
               ;; If we are ever referred to, then there will already be a fixup in place for
               ;; our array handled by `restore-new-reference-indicator'.

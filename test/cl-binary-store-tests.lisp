@@ -721,7 +721,6 @@
      (invalid-input-data ()))))
 
 (define-test other-fuzzing-tests
-  #-ecl
   (finish
    (handler-case
        (restore #(24 53 197 0 44 60 123 20))

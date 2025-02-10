@@ -329,9 +329,9 @@
 	       (#.+fixnum-code+
                 (let ((fixnum (restore-fixnum storage)))
                   (unless (<= 0 fixnum (- most-positive-fixnum +interior-coded-max-integer+ 1))
-                    (unexpected-data "unsigned fixnum/interior" fixnum))
+                    (unexpected-data "expected unsigned fixnum/interior" fixnum))
                   (truly-the fixnum fixnum)))
-               (otherwise (unexpected-data "tag for unsigned fixnum" tag)))
+               (otherwise (unexpected-data "expected tag for unsigned fixnum" tag)))
 	     +interior-coded-max-integer+ 1)))))
 
 (declaim (ftype (function (read-storage)
@@ -349,7 +349,7 @@
 	  (#.+ub16-code+ (restore-ub16 storage))
 	  (#.+ub32-code+ (restore-ub32 storage))
 	  (#.+fixnum-code+ (restore-fixnum storage))
-          (otherwise (unexpected-data "tag for unsigned fixnum" tag))))))
+          (otherwise (unexpected-data "expected tag for unsigned fixnum" tag))))))
 
 (declaim (ftype (function (read-storage)
 			  #+sbcl (values fixnum &optional)
@@ -367,7 +367,7 @@
 	  (#.+sb8-code+ (restore-sb8 storage))
 	  (#.+sb16-code+ (restore-sb16 storage))
 	  (#.+sb32-code+ (restore-sb32 storage))
-          (otherwise (unexpected-data "tag for fixnum" tag))))))
+          (otherwise (unexpected-data "expected tag for fixnum" tag))))))
 
 (declaim (inline store-tagged-unsigned-integer))
 

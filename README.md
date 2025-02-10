@@ -302,4 +302,4 @@ See [benchmarking.md](benchmarking.md).
 - [ ] Speed up cl-binary-store on ABCL and ECL so it is less than 10x slower than on SBCL
 - [ ] Handle specialized multi-dimensional array data on non-SBCL faster.  See babel for all the variants on with-array-data
 - [ ] Faster standard-object serialization / deserialization using direct slot location accessors
-- [ ] Handle ECL does not like array element type nil (like what happens when you have a zero size array) with invalid-data condition
+

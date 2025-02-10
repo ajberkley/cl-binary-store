@@ -213,10 +213,10 @@
 (define-condition invalid-input-data (simple-error)
   ())
 
-(defun unexpected-data (expected &optional (data nil data-provided-p))
+(defun unexpected-data (message &optional (data nil data-provided-p))
   (error 'invalid-input-data
-         :format-control "Expected ~A~A"
-         :format-arguments (list expected
+         :format-control "~A~A"
+         :format-arguments (list message
                                  (if data-provided-p
                                      ;; be careful not to provide anything
                                      ;; that cannot be printed trivially here!
