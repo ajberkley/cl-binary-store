@@ -144,13 +144,21 @@
 
 (defun restore-bignum (storage)
   (declare (optimize (speed 3) (safety 1)))
-  (let ((count (restore-tagged-fixnum storage)))
+  (let* ((count (restore-tagged-fixnum storage))
+         (num-words (abs count)))
     (declare (type fixnum count))
-    (ensure-enough-data storage (the fixnum (* 4 (abs count))))
-    (* (if (< count 0) -1 1)
-       (bits->num
-	(loop repeat (the fixnum (abs count))
-	      collect (restore-ub32 storage))))))
+    (unless (<= num-words (ash most-positive-fixnum -2))
+      (unexpected-data "number of words in bignum" num-words))
+    (check-if-too-much-data (read-storage-max-to-read storage)
+                            (truly-the fixnum (* 4 num-words)))
+    (let ((sum 0))
+      (loop
+        repeat num-words
+        for pos from 0 by 32
+        do
+           (ensure-enough-data storage 4)
+           (incf sum (* (restore-ub32 storage) (expt 2 pos))))
+      (* (if (< count 0) -1 1) sum))))
 
 (defun store-bignum (bignum storage)
   (when storage
