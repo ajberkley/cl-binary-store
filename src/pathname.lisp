@@ -24,4 +24,4 @@
        :name (funcall restore-object)
        :type (funcall restore-object)
        :version (funcall restore-object))
-    (error (e) (unexpected-data "pathname" e))))
+    (error () (unexpected-data "pathname malformed"))))

@@ -1,34 +1,35 @@
 (in-package :cl-binary-store)
 
 (defun restore-array (storage restore-object)
-  (declare (type function restore-object))
+  (declare (type function restore-object) (optimize (speed 3) (safety 1)))
   (let* ((has-fill-pointer (funcall restore-object))
 	 (fill-pointer (when has-fill-pointer (restore-tagged-unsigned-fixnum storage)))
 	 (adjustable (funcall restore-object))
 	 (array-rank (the (unsigned-byte 8) (restore-ub8 storage)))
 	 (dimensions (loop repeat array-rank
                            collect (restore-tagged-unsigned-fixnum storage)))
-	 (displaced (funcall restore-object)))
-    (check-if-too-much-data (read-storage-max-to-read storage) (reduce #'* dimensions))
+	 (displaced (funcall restore-object))
+         (array-total-size (reduce #'* dimensions)))
+    (unless (and (typep array-total-size 'fixnum) (>= array-total-size 0))
+      (unexpected-data "Array total size is too large"))
+    (check-if-too-much-data (read-storage-max-to-read storage) array-total-size)
     (labels ((check-fill-pointer (dimensions)
                (when has-fill-pointer
                  (unless (= array-rank 1)
                    (unexpected-data "found fill-pointer for a non-vector"))
-                 (unless (<= fill-pointer (length (first dimensions)))
-                   (unexpected-data (format nil "fill-pointer ~A > dimensions ~A"
-                                            fill-pointer dimensions))))))
+                 (unless (<= fill-pointer (first dimensions))
+                   (unexpected-data "fill-pointer > vector length")))
+               (values)))
       (if displaced
 	  (let ((element-type (funcall restore-object))
 	        (offset (restore-tagged-unsigned-fixnum storage))
 	        (displaced-to (funcall restore-object)))
             (unless (typep displaced-to 'array)
-              (unexpected-data "array" displaced-to))
+              (unexpected-data "displaced to a non array?!"))
             (unless (typep (array-element-type displaced-to) element-type)
-              (unexpected-data (format nil "array with element-type ~A" element-type)
-                               displaced-to))
+              (unexpected-data "array displaced to array of different element-type"))
             (unless (< offset (array-total-size displaced-to))
-              (unexpected-data (format nil "array of total size > ~A" offset)
-                               displaced-to))
+              (unexpected-data "array displaced to too small array"))
             (when has-fill-pointer (check-fill-pointer dimensions))
 	    (make-array dimensions :element-type element-type :adjustable adjustable
 				   :fill-pointer fill-pointer :displaced-to displaced-to
@@ -42,7 +43,7 @@
               ;; We need to make our array first in case any of the array elements refer to it!
               ;; If we are ever referred to, then there will already be a fixup in place for
               ;; our array handled by `restore-new-reference-indicator'.
-	      (loop for idx fixnum from 0 below (array-total-size array)
+	      (loop for idx fixnum from 0 below array-total-size
 		    do (restore-object-to (row-major-aref array idx) restore-object))
 	      array))))))
 

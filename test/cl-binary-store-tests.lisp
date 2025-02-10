@@ -592,7 +592,8 @@
 (define-test test-bignum
   (is '= (expt 2 64) (restore (store nil (expt 2 64))))
   (is '= 12345678901234567890 (restore (store nil 12345678901234567890)))
-  (is '= -12345678901234567890 (restore (store nil -12345678901234567890))))
+  (is '= -12345678901234567890 (restore (store nil -12345678901234567890)))
+  (is '= (expt 2 123456) (restore (store nil (expt 2 123456)))))
 
 (define-test test-write-into-extant-vector
   (loop for length in '(100 #-abcl 50000)
@@ -678,7 +679,23 @@
            (let ((a (make-array (file-length str))))
              (read-sequence a str)
              a))))
+      (loop repeat 100 ;;10000
+            with input = (make-array (random 100) :element-type '(unsigned-byte 8))
+            do (loop for i fixnum below (length input) do (setf (aref input i) (random 256)))
+            do (try input))
       (loop repeat 10
             with input = (make-array (random 1000000) :element-type '(unsigned-byte 8))
             do (loop for i fixnum below (length input) do (setf (aref input i) (random 256)))
             do (try input))))
+
+(define-test simple-array-fixnum-malicious
+  ;; The below is a non-fixnum claiming to be in a fixnum array
+  (finish
+   (handler-case
+       (cl-binary-store::restore #(21 5 3 127 127 127 127 127 127 127 127))
+     (invalid-input-data ())))
+  (finish
+   (handler-case
+       (cl-binary-store::restore #(21 5 3 127 127 127 127 127 127 127 127))
+     (invalid-input-data ()))))
+

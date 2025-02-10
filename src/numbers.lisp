@@ -104,7 +104,7 @@
   (let* ((offset (read-storage-offset storage))
 	 (fixnum (signed-sap-ref-64 (read-storage-sap storage) offset)))
     (unless (typep fixnum 'fixnum)
-      (unexpected-data "fixnum" fixnum))
+      (unexpected-data "expected fixnum" fixnum))
     (setf (read-storage-offset storage) (truly-the fixnum (+ offset 8)))
     (truly-the fixnum fixnum)))
 
@@ -232,17 +232,17 @@
 
 (declaim (inline ensure-integer))
 (defun ensure-integer (x)
-  (unless (integerp x)
-    (unexpected-data "integer" x))
-  x)
+  (if (integerp x)
+      x
+      (progn (unexpected-data "expected an integer") 0)))
 
 (defun restore-ratio (restore-object)
   (declare (optimize (speed 3) (safety 1)) (type function restore-object))
   (let ((a (ensure-integer (funcall restore-object)))
         (b (ensure-integer (funcall restore-object))))
     (declare (type integer a b))
-    (unless (> b 0)
-      (unexpected-data "integer > 0" b))
+    (when (= b 0)
+      (unexpected-data "ratio denominator is 0"))
     (/ (the integer a) (the integer b))))
 
 (defun store-ratio (ratio storage num-eq-refs assign-new-reference-id)
@@ -261,9 +261,9 @@
 
 (declaim (inline ensure-real))
 (defun ensure-real (x)
-  (unless (typep x 'real)
-    (unexpected-data "real" x))
-  x)
+  (if (typep x 'real)
+      x
+      (progn (unexpected-data "real") 0)))
 
 (defun restore-complex (restore-object)
   (declare (type function restore-object))
@@ -328,8 +328,8 @@
 	       (#.+ub32-code+ (restore-ub32 storage))
 	       (#.+fixnum-code+
                 (let ((fixnum (restore-fixnum storage)))
-                  (unless (>= fixnum 0)
-                    (unexpected-data "unsigned fixnum" fixnum))
+                  (unless (<= 0 fixnum (- most-positive-fixnum +interior-coded-max-integer+ 1))
+                    (unexpected-data "unsigned fixnum/interior" fixnum))
                   (truly-the fixnum fixnum)))
                (otherwise (unexpected-data "tag for unsigned fixnum" tag)))
 	     +interior-coded-max-integer+ 1)))))

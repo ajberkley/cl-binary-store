@@ -79,7 +79,7 @@
 (defun ensure-string (maybe-string)
   (if (stringp maybe-string)
       maybe-string
-      (progn (unexpected-data "string" maybe-string) "")))
+      (progn (unexpected-data "expected a string, it was not") "")))
 
 (declaim (inline restore-symbol))
 (defun restore-symbol (storage restore-object)

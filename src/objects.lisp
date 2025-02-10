@@ -291,12 +291,14 @@
     (if (< num-slots 0) ; it's a reference id, look it up in our implicit tracking table
 	(gethash num-slots implicit-eql-refs)
         (progn
-          (check-if-too-much-data (read-storage-max-to-read storage) (* 8 num-slots))
+          (if (> num-slots (ash most-positive-fixnum -3))
+              (unexpected-data "too many slots in object-info" num-slots)
+              (check-if-too-much-data (read-storage-max-to-read storage) (* 8 num-slots)))
           (let ((slot-name-vector (make-array num-slots))
 	        (type (funcall restore-object))
 	        (ref-id (- (the fixnum (incf (the fixnum (car implicit-ref-id)))))))
             (unless (symbolp type)
-              (unexpected-data "symbol" type))
+              (unexpected-data "expected a symbol"))
 	    ;; No circularity possible below as these are symbols
 	    (loop for idx fixnum from 0 below num-slots
 		  do (setf (svref slot-name-vector idx) (funcall restore-object)))
@@ -385,7 +387,7 @@
   (declare (type function restore-object) (ignorable storage) (optimize speed safety))
   (let ((object-info (funcall restore-object)))
     (unless (object-info-p object-info)
-      (unexpected-data "object-info" object-info))
+      (unexpected-data "expected an object-info"))
     (let* ((specialized-deserializer (object-info-specialized-deserializer object-info))
 	   (constructor (object-info-specialized-constructor object-info)))
       (cond

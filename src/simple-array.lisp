@@ -85,7 +85,7 @@
     (18 (values '(unsigned-byte 62) 64))
     (19 (values '(unsigned-byte 64) 64))
     (otherwise
-     (unexpected-data "encoded element type" encoded-element-type))))
+     (unexpected-data "encoded element type"))))
 
 (defconstant +first-direct-unsigned-integer+ 20)
 (defconstant +max-direct-encoded-unsigned-integer+ (- 255 +first-direct-unsigned-integer+))
@@ -95,10 +95,9 @@
   "Returns (values new-array array-bytes)"
   (declare (optimize (speed 3) (safety 1)) (type (unsigned-byte 8) encoded-element-type)
            (type fixnum num-elts))
-  (unless (<= num-elts (ash most-positive-fixnum -3))
-    (unexpected-data (format nil "num-elts smaller than ~A" (ash most-positive-fixnum -3)) num-elts))
+  (unless (<= num-elts (ash most-positive-fixnum -7))
+    (unexpected-data "num-elts too big"))
   (let ((num-elts num-elts))
-    (declare (type (unsigned-byte 59) num-elts))
     (multiple-value-bind (type actual-bits)
         (encoded-element-type-to-type/packing encoded-element-type)
       (let ((total-bytes (ceiling (the fixnum
@@ -199,8 +198,8 @@
 (defun restore-simple-base-string (storage)
   (declare (optimize (speed 3) (safety 1)))
   (let ((num-bytes (restore-tagged-unsigned-fixnum/interior storage)))
-    (unless (and (typep num-bytes 'fixnum) (>= num-bytes 0))
-      (unexpected-data "unsigned fixnum" num-bytes))
+    (unless (>= num-bytes 0)
+      (unexpected-data "unexpected negative length for simple-base-string"))
     (check-if-too-much-data (read-storage-max-to-read storage) num-bytes)
     (let ((string (make-string num-bytes :element-type 'base-char)))
       (chunked/read storage num-bytes
@@ -417,6 +416,23 @@
 	     ,@body
 	   (setf (read-storage-offset ,storage) (+ ,original-offset ,reserve-bytes)))))))
 
+(defmacro sap-ref-fixnum (sap offset)
+  "This is hideous.  On SBCL we have stored the data fixnum encoded, which means shifted up
+ by one so we shift it back to generate an 'unencoded' fixnum.  We would normally just have
+ blitted things back into the array without telling sbcl what we are doing, but in the
+ presence of potentially malicious data, we have to make sure that our numbers are fixnums,
+ so we shift them back down which makes it impossible for malicious actor to put bogus dat
+ in the array sap.  On non sbcl we just check to make sure things are fixnums because we
+ did not blit the data out"
+  #+sbcl
+  `(ash (signed-sap-ref-64 ,sap ,offset) -1)
+  #-sbcl
+  (let ((a (gensym)))
+    `(let ((,a (signed-sap-ref-64 ,sap ,offset)))
+       (if (typep ,a 'fixnum)
+           ,a
+           (unexpected-data "non fixnum in fixnum array")))))
+
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize (speed 3) (safety 1)))
   (let ((num-elts (restore-tagged-unsigned-fixnum/interior storage)))
@@ -449,18 +465,32 @@
 		  (32 (reader 32 t))
 		  (64 (reader 64 t))))))
 	    (t
-	     (ecase type
+	     (case type
 	       (bit (reader 1 nil))
 	       (single-float (reader 32 nil sap-ref-single (simple-array single-float (*))))
 	       (double-float (reader 64 nil sap-ref-double (simple-array double-float (*))))
-	       (fixnum (reader 64 t signed-sap-ref-64 (simple-array fixnum (*))))))))
+	       (fixnum (reader 64 t sap-ref-fixnum (simple-array fixnum (*))))
+               (otherwise (unexpected-data "array of unexpected type"))))))
         #+sbcl
 	(with-pinned-objects (sv)
-	  (let ((target-sap (vector-sap sv)))
-	    (chunked/read
-	     storage num-bytes
-	     (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
-	       (copy-sap target-sap data-start/bytes source-sap source-sap-offset (the fixnum (- data-end-bytes data-start/bytes)))))))
+          (multiple-value-bind (type bits-per-elt)
+              (encoded-element-type-to-type/packing encoded-element-info)
+            (declare (ignorable bits-per-elt))
+            (cond
+              ((eq type 'fixnum)
+               ;; We have to be careful here, as just blitting potentially malicious 64
+               ;; bit data into a simple-array fixnum (*) can cause issues.
+               ;; Now the problem is that we already "fixnum encoded" the data if it is
+               ;; correct, which means that it needs to be un-fixnum-ized
+               (reader 64 t sap-ref-fixnum (simple-array fixnum (*))))
+              (t
+	       (let ((target-sap (vector-sap sv)))
+                 ;; OK, so we have a problem here --- if the fixnums aren't actually fixnums
+                 ;; then we end up screwing things up.
+	         (chunked/read
+	          storage num-bytes
+	          (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
+	            (copy-sap target-sap data-start/bytes source-sap source-sap-offset (the fixnum (- data-end-bytes data-start/bytes))))))))))
         sv))))
 
 ;; for ccl ccl::array-data-and-offset would be fine... it's been a stable interface
@@ -511,8 +541,19 @@
 	                  (type-of sa) num-bytes array-dimensions encoded-element-info)
       	(with-pinned-objects (sa)
 	  (let ((target-sap (array-sap sa)))
-	    (chunked/read
-	     storage num-bytes
-	     (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
-	       (copy-sap target-sap data-start/bytes source-sap source-sap-offset (- data-end-bytes data-start/bytes))))))
+            (multiple-value-bind (type bits-per-elt)
+                (encoded-element-type-to-type/packing encoded-element-info)
+              (declare (ignorable bits-per-elt))
+              (cond
+                ((eq type 'fixnum)
+                 ;; We have to be careful here, as just blitting potentially malicious 64
+                 ;; bit data into a simple-array fixnum (*) can cause issues.
+                 (sb-kernel:with-array-data ((sv sa) (start) (end))
+                   (declare (ignore start end))
+                   (reader 64 t sap-ref-fixnum (simple-array fixnum (*)))))
+                (t
+	         (chunked/read
+	          storage num-bytes
+	          (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
+	            (copy-sap target-sap data-start/bytes source-sap source-sap-offset (- data-end-bytes data-start/bytes)))))))))
       sa)))

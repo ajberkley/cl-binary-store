@@ -19,6 +19,8 @@
 (defmethod action ((code (eql +set-reference-action-code+)) storage references restore-object)
   (let ((num-refs (restore-tagged-unsigned-fixnum storage)))
     #+info-cbs(format t "This file has ~A references~%" num-refs)
+    (unless (<= 0 num-refs (ash most-positive-fixnum -3))
+      (unexpected-data "num-refs stored in file invalid"))
     (check-if-too-much-data (read-storage-max-to-read storage) (* 8 num-refs))
     (values (setf (references-vector references) (make-array num-refs :initial-element nil))
 	    :ignore)))

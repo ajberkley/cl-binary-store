@@ -61,6 +61,7 @@
 	      (with-open-file (str "blarg.bin" :if-exists :supersede :if-does-not-exist :create
 					       :direction :output :element-type '(unsigned-byte 8))
 		(cl-binary-store:store str data))))))
+    ;;(assert (equalp (cl-binary-store:restore store) data))
     (when read
       (timed (" READ :" repeats output-size-MB)
         (dotimes (x repeats) (cl-binary-store:restore store)))

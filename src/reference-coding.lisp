@@ -44,7 +44,7 @@
            (+ (- +minimum-untagged-signed-integer+)
               (truly-the fixnum number)
               1 +reference-two-byte-max-ref-id+))
-      (unexpected-data "fixnum" number)))
+      (unexpected-data "reference tag not valid")))
 
 (declaim (inline encode-reference-direct))
 (defun encode-reference-direct (ref-index)
