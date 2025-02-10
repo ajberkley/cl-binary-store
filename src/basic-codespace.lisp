@@ -17,7 +17,7 @@
   "This is the basic codespace of cl-binary-store.")
 
 ;; Enable debug to get source code saved to a file so the debugger does the right thing
-(define-codespace ("basic codespace" +basic-codespace+ :debug t)
+(define-codespace ("basic codespace" +basic-codespace+ :debug nil)
   (register-references num-eq-refs (make-hash-table :test #'eq :size *num-eq-refs-table-size*))
   (register-references
    double-float-refs (make-hash-table :test #+sbcl #'double-float-= #-sbcl #'eql
