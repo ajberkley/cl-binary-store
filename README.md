@@ -299,12 +299,7 @@ For my use case (>1GB of messy data and objects), cl-binary-store is almost 10x 
 See [benchmarking.md](benchmarking.md).
 
 ## TODO ideas
-- [ ] A codespace for conspack or messagepack (for example; for a limited subset of types).  This is mainly as an exercise as cl-messagepack and cl-conspack are fine implementations.
-- [ ] Faster UTF-8 encoding / decoding (currently doing extra copy using sb-ext string-to-octets / octets-to-string)... probably get trivial-utf8 to export the byte-wise ops.
 - [ ] Speed up cl-binary-store on ABCL and ECL so it is less than 10x slower than on SBCL
-- [ ] Specialize store / restore functions on global settings to avoid so many parameters being passed around.
-- [ ] When using implicit reference tracking, use a vector on restore like we do for the explicit case instead of overloading the reference hash table
-- [ ] Turn versioned output on by default when reading/writing to a file
-- [ ] Short specialized arrays use three available bits for length encoding
 - [ ] Handle specialized multi-dimensional array data on non-SBCL faster.  See babel for all the variants on with-array-data
 - [ ] Faster standard-object serialization / deserialization using direct slot location accessors
+- [ ] Handle ECL does not like array element type nil (like what happens when you have a zero size array) with invalid-data condition
