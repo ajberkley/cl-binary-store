@@ -191,7 +191,7 @@
           (vector
            (restore-from-vector place)))
       (babel:character-decoding-error (e)
-        (unexpected-data "UTF-8 data" e)))))
+        (unexpected-data "Expected UTF-8 data" e)))))
 
 (defun store (place data &key (track-references *track-references*)
 			   (support-shared-list-structures *support-shared-list-structures*)
