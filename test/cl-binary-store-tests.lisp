@@ -688,6 +688,19 @@
             do (loop for i fixnum below (length input) do (setf (aref input i) (random 256)))
             do (try input))))
 
+(define-test simple-array-fixnum
+  (let* ((n 1000)
+         (arr (coerce (loop repeat n collect (random most-positive-fixnum))
+                      '(simple-array fixnum (*)))))
+    (is 'equalp (restore (store nil arr)) arr))
+  (let* ((n 10)
+         (m 100)
+         (arr (make-array (list n m) :element-type 'fixnum :initial-contents
+                          (loop repeat n
+                                collect
+                                (loop repeat m collect (random most-positive-fixnum))))))
+    (is 'equalp (restore (store nil arr)) arr)))
+
 (define-test simple-array-fixnum-malicious
   ;; The below is a non-fixnum claiming to be in a fixnum array
   (finish
