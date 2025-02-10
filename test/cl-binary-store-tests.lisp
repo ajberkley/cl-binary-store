@@ -724,4 +724,10 @@
   (finish
    (handler-case
        (restore #(24 53 197 0 44 60 123 20))
+     (invalid-input-data ())))
+  (finish
+   ;; This is a bogus element-type for an array
+   (handler-case
+       (restore
+        #(24 5 5 2 209 209 5 17 29 9 66 76 65 82 71 30 19 67 76 45 66 73 78 65 82 89 45 83 84 79 82 69 208))
      (invalid-input-data ()))))
