@@ -9,7 +9,7 @@
 	 (dimensions (loop repeat array-rank
                            collect (restore-tagged-unsigned-fixnum storage)))
 	 (displaced (funcall restore-object))
-         (array-total-size (reduce #'* dimensions)))
+         (array-total-size (if dimensions (reduce #'* dimensions) 0)))
     (unless (and (typep array-total-size 'fixnum) (>= array-total-size 0))
       (unexpected-data "Array total size is too large"))
     (check-if-too-much-data (read-storage-max-to-read storage) array-total-size)

@@ -705,10 +705,16 @@
   ;; The below is a non-fixnum claiming to be in a fixnum array
   (finish
    (handler-case
-       (cl-binary-store::restore #(21 5 3 127 127 127 127 127 127 127 127))
+       (restore #(21 5 3 127 127 127 127 127 127 127 127))
      (invalid-input-data ())))
   (finish
    (handler-case
-       (cl-binary-store::restore #(21 5 3 127 127 127 127 127 127 127 127))
+       (restore #(21 5 3 127 127 127 127 127 127 127 127))
      (invalid-input-data ()))))
 
+
+(define-test other-fuzzing-tests
+  (finish
+   (handler-case
+       (restore #(24 53 197 0 44 60 123 20))
+     (invalid-input-data ()))))
