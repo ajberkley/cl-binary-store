@@ -1,6 +1,28 @@
 (in-package :cl-binary-store)
 
-;; TODO CHECK INTEROP, DID I REVERSE BITS ON BIT VECTORS, ETC.
+;;; A quick note on serialized data format and malicious data
+;; Most of the specialized array types are generally safe, in the
+;; sense that they are densely packed --- the full double-float and
+;; single-float space is available, you could pack it with random bits
+;; and it would be fine.  Same for simple-bit-vectors, ub8, ub16,
+;; ub32, and ub64 and the equivalent signed versions.  The main place
+;; where things can go wrong are in (simple-array fixnum (*)) where
+;; the backing array is actually a 64-bit storage slot with the values
+;; fixnum encoded (shifted left one) in memory, so if you stuff a
+;; non-fixnum in, bad things happen as the data is improperly tagged!
+;; Less so for types like (unsigned-byte 7) and (unsigned-byte 15)
+;; arrays, where most implementations don't care if you do bad things
+;; to the remaining bits because the data is not stored fixnum encoded
+;; / tagged, so when getting data out of the raw array, the bits are
+;; immediately shifted turning them into a fixnum before anyone can
+;; care and their identity is lost.  Our serialized storage format for
+;; fixnums matches that of SBCL where we shift numbers up by one
+;; (mainly so that we can blit data directly during writing from an
+;; sbcl host without having to touch the data).  On all hosts,
+;; including sbcl, we have to read the data back slowly and unshift it
+;; and then let the reader lisp re-encode it in its internal fixnum
+;; representation.  Otherwise a malicious actor could stuff
+;; non-fixnums in there, which results in memory faults on sbcl.
 
 (declaim (ftype (function (t &optional (unsigned-byte 58))
 			  (values (unsigned-byte 50) (unsigned-byte 8) &optional))
@@ -295,6 +317,30 @@
        (cerror "USE-EMPTY-STRING" 'invalid-input-data :format-control "While restoring a string expected one of ~A, found ~A" :format-arguments (list #.(format nil "(~A ~A)" +simple-string-code+ +simple-base-string-code+) code))
        ""))))
 
+(defmacro sap-ref-fixnum (sap offset)
+  "This is hideous.  On SBCL we have stored the data fixnum encoded, which means shifted up
+ by one so we shift it back to generate an 'unencoded' fixnum.  We would normally just have
+ blitted things back into the array without telling sbcl what we are doing, but in the
+ presence of potentially malicious data, we have to make sure that our numbers are fixnums,
+ so we shift them back down which makes it impossible for malicious actor to put bogus dat
+ in the array sap.  On non sbcl we just check to make sure things are fixnums because we
+ did not blit the data out"
+  #+sbcl
+  `(ash (signed-sap-ref-64 ,sap ,offset) -1)
+  #-sbcl
+  (let ((a (gensym)))
+    `(let ((,a (ash (signed-sap-ref-64 ,sap ,offset) -1)))
+       (if (typep ,a 'fixnum)
+           ,a
+           (unexpected-data "non fixnum in fixnum array")))))
+
+(defmacro set-sap-ref-fixnum (sap offset value)
+  "Inside serialized specialized arrays, we store fixnums in 64-bit
+ storage spots shifted up one, that is as if all implementations just
+ used a 0 tag bit as the lowest bit."
+  ;; This isn't used on sbcl as we blit things directly
+  `(set-signed-sap-ref-64 ,sap ,offset (ash ,value 1)))
+
 (defmacro make-writer/reader (size-bits signed &key name-override reader array-type)
   (let* ((writer (not reader))
 	 (set/get (if (>= size-bits 8)
@@ -383,7 +429,7 @@
 	 (bit (writer 1 nil))
 	 (base-char (error "Should be handled by string store functions"))
 	 (character (error "Should be handled by string store functions"))
-	 (fixnum (writer 64 t set-signed-sap-ref-64 (simple-array fixnum (*))))
+	 (fixnum (writer 64 t set-sap-ref-fixnum (simple-array fixnum (*))))
 	 (single-float (writer 32 nil set-sap-ref-single (simple-array single-float (*))))
 	 (double-float (writer 64 nil set-sap-ref-double (simple-array double-float (*)))))))))
 
@@ -419,23 +465,6 @@
 	 (multiple-value-prog1
 	     ,@body
 	   (setf (read-storage-offset ,storage) (+ ,original-offset ,reserve-bytes)))))))
-
-(defmacro sap-ref-fixnum (sap offset)
-  "This is hideous.  On SBCL we have stored the data fixnum encoded, which means shifted up
- by one so we shift it back to generate an 'unencoded' fixnum.  We would normally just have
- blitted things back into the array without telling sbcl what we are doing, but in the
- presence of potentially malicious data, we have to make sure that our numbers are fixnums,
- so we shift them back down which makes it impossible for malicious actor to put bogus dat
- in the array sap.  On non sbcl we just check to make sure things are fixnums because we
- did not blit the data out"
-  #+sbcl
-  `(ash (signed-sap-ref-64 ,sap ,offset) -1)
-  #-sbcl
-  (let ((a (gensym)))
-    `(let ((,a (signed-sap-ref-64 ,sap ,offset)))
-       (if (typep ,a 'fixnum)
-           ,a
-           (unexpected-data "non fixnum in fixnum array")))))
 
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize (speed 3) (safety 1)))
