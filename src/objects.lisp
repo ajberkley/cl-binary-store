@@ -84,6 +84,8 @@
   "Return a list of slot names (symbols) skipping :class allocation slots if
  *store-class-slots* is t."
   (assert class)
+  (unless (class-finalized-p class)
+    (finalize-inheritance class))
   (loop with store-class-slots = *store-class-slots*
 	with is-structure-object = (or (typep class 'structure-class) ;; allegro work around
 				       (subtypep class 'structure-class))
