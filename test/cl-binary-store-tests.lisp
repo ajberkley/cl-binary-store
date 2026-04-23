@@ -336,16 +336,17 @@
 
 (define-test test-complex
   (let ((complex-numbers
-	  (list
-	   (complex 1 2)
-	   (complex 3f0 4f0)
-	   (complex -5d0 3d0)
-	   (complex (/ 1 2) 17)
-	   (complex 1f0 2d0))))
+          (list
+           (complex 1 2)
+           (complex 3f0 4f0)
+           (complex -5d0 3d0)
+           (complex (/ 1 2) 17)
+           (complex 1f0 2d0)
+           (complex 0d0 0d0))))
     (is 'equal
-	complex-numbers
-	(restore-from-vector
-	 (store-to-vector complex-numbers)))))
+        complex-numbers
+        (restore-from-vector
+         (store-to-vector complex-numbers)))))
 
 (define-test test-ratio
   (let ((ratios (list (/ 1 2) (/ 4 -5) (/ 1 (expt 2 93)))))

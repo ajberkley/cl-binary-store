@@ -219,7 +219,7 @@
   ;; We de-duplicate double-floats as there is no visible way to
   ;; determine this from common lisp, and it saves space in the image
   ;; and on disk if there are repeated numbers (like 0d0).
-  (if (= double-float 0d0)
+  (if (and tag (= double-float 0d0))
       (when storage
         (storage-write-byte storage +double-float-zero-code+))
       (maybe-store-reference-instead (double-float storage double-float-refs
