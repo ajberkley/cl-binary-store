@@ -735,5 +735,6 @@
 
 (define-test test-double-float-nan
   #+sbcl
-  (let ((nan #.(sb-int:with-float-traps-masked (:invalid) (/ 0.0 0.0))))
-    (is 'eql nan (restore (store nil nan)))))
+  (let ((nan #.(locally (declare (sb-ext:muffle-conditions style-warning))
+                 (sb-int:with-float-traps-masked (:invalid) (/ 0.0 0.0)))))
+    (is 'eql nan (cl-binary-store:restore (cl-binary-store:store nil nan)))))
