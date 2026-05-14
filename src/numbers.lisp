@@ -212,6 +212,24 @@
        (setf (read-storage-offset ,storage) (truly-the fixnum (+ 8 offset)))
        (setf ,slot (sap-ref-double sap offset)))))
 
+;; Mostly from org.shirakumo.float-features
+(declaim (inline double-float-nan-p))
+(defun double-float-nan-p (float)
+  (declare (type double-float float))
+  #+sbcl (declare (inline sb-ext:float-nan-p))
+  #+abcl (system:float-nan-p float)
+  #+allegro (and (excl:nanp float) t)
+  #+ccl (and (ccl::nan-or-infinity-p float)
+             (not (ccl::infinity-p float)))
+  #+clasp (ext:float-nan-p float)
+  #+cmucl (extensions:float-nan-p float)
+  #+ecl (ext:float-nan-p float)
+  #+mezzano (mezzano.extensions:float-nan-p float)
+  #+sbcl (sb-ext:float-nan-p float)
+  #+lispworks (sys::nan-p float)
+  #-(or abcl allegro ccl clasp cmucl ecl mezzano sbcl lispworks)
+  (/= float float))
+
 (declaim (inline store-double-float))
 (defun store-double-float (double-float storage double-float-refs assign-new-reference-id
 			   &optional (tag t))
@@ -219,7 +237,7 @@
   ;; We de-duplicate double-floats as there is no visible way to
   ;; determine this from common lisp, and it saves space in the image
   ;; and on disk if there are repeated numbers (like 0d0).
-  (if (and tag (= double-float 0d0))
+  (if (and tag (not (double-float-nan-p double-float)) (= double-float 0d0))
       (when storage
         (storage-write-byte storage +double-float-zero-code+))
       (maybe-store-reference-instead (double-float storage double-float-refs

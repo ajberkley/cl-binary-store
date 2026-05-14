@@ -732,3 +732,8 @@
        (restore
         #(24 5 5 2 209 209 5 17 29 9 66 76 65 82 71 30 19 67 76 45 66 73 78 65 82 89 45 83 84 79 82 69 208))
      (invalid-input-data ()))))
+
+(define-test test-double-float-nan
+  #+sbcl
+  (let ((nan #.(sb-int:with-float-traps-masked (:invalid) (/ 0.0 0.0))))
+    (is 'eql nan (restore (store nil nan)))))
