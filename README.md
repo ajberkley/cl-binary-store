@@ -1,4 +1,4 @@
-# cl-binary-store (v1.2)
+# cl-binary-store (v1.3)
 
 A super fast and customizable serializer/deserializer of Common Lisp objects to/from a very compact binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.  Specialized arrays (on SBCL) are stored/restore at lightning speed.
 
@@ -305,3 +305,4 @@ See [benchmarking.md](benchmarking.md).
 
 ## Changes
 1.2: fix saving complex double float with 0.0 inside
+1.3: fix saving double float NaN
