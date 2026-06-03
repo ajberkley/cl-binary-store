@@ -305,4 +305,7 @@ See [benchmarking.md](benchmarking.md).
 
 ## Changes
 1.2: fix saving complex double float with 0.0 inside
+
 1.3: fix saving double float NaN
+
+1.4: fix saving NaN again for multiple occurrances (de-duplication)
