@@ -3,7 +3,7 @@
 (declaim (inline double-float-=))
 (defun double-float-= (dfa dfb)
   (declare (type double-float dfa dfb))
-  (= dfa dfb))
+  (eql dfa dfb)) ;; Need eql instead of = to support NaN
 
 (declaim (inline double-float-hash))
 (defun double-float-hash (df)
