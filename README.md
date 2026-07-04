@@ -309,3 +309,5 @@ See [benchmarking.md](benchmarking.md).
 1.3: fix saving double float NaN
 
 1.4: fix saving NaN again for multiple occurrances (de-duplication)
+
+1.4.2: remove spurious error about array displaced to array of different element type
