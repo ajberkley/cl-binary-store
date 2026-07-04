@@ -37,7 +37,7 @@
 	        (displaced-to (funcall restore-object)))
             (unless (typep displaced-to 'array)
               (unexpected-data "displaced to a non array?!"))
-            (unless (typep (array-element-type displaced-to) element-type)
+            (unless (equal (array-element-type displaced-to) element-type)
               (unexpected-data "array displaced to array of different element-type"))
             (unless (< offset (array-total-size displaced-to))
               (unexpected-data "array displaced to too small array"))
