@@ -177,11 +177,11 @@
  MAX-TO-READ specifies the maximum amount of data in bytes we should load.
 
  LOAD/SAVE-PROGRESS-INDICATOR, if T, shows you some indications while loading"
-  (let ((*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*)))
-	(*load/save-progress-indicator* load/save-progress-indicator)
-	(*allow-codespace-switching* allow-codespace-switching)
-	(*max-to-read* max-to-read)
-	(*read-version* read-version))
+  (let* ((*read-version* read-version)
+         (*current-codespace* (or *current-codespace* (gethash *read-version* *codespaces*)))
+         (*load/save-progress-indicator* load/save-progress-indicator)
+         (*allow-codespace-switching* allow-codespace-switching)
+         (*max-to-read* max-to-read))
     (handler-case
         (etypecase place
           ((or string pathname)
@@ -226,10 +226,10 @@
 
  LOAD/SAVE-PROGRESS-INDICATOR, if T, shows you some indications while loading"
   (declare (optimize speed safety))
-  (let* ((magic-number (make-magic-number :number *write-version*))
-	 (*current-codespace* (gethash *write-version* *codespaces*))
-	 (*write-version* write-version)
-	 (*max-to-write* max-to-write)
+  (let* ((*write-version* write-version)
+         (magic-number (make-magic-number :number *write-version*))
+         (*current-codespace* (gethash *write-version* *codespaces*))
+         (*max-to-write* max-to-write)
 	 (*support-shared-list-structures* support-shared-list-structures)
 	 (*track-references* track-references)
 	 (*load/save-progress-indicator* load/save-progress-indicator)
