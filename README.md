@@ -1,4 +1,4 @@
-# cl-binary-store (v1.4.3)
+# cl-binary-store (v2.0.0)
 
 A super fast and customizable serializer/deserializer of Common Lisp objects to/from a very compact binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.  Specialized arrays (on SBCL) are stored/restore at lightning speed.
 
@@ -24,7 +24,7 @@ cl-binary-store works on 64-bit SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and L
 
 All number types are supported, with the addition of specialized compact and fast writers for ub8, ub16, ub32, ub64, sb8, sb16, sb32, fixnum, single-float, double-float, (complex double-float), and (complex single-float).
 
-All array types are supported, with the addition of specialized compact and very fast writers / readers for vectors and arrays of simple-bit-vectors, simple-base-string, single-floats, double-floats, fixnums, sb8, sb16, sb32, sb64, ub2, ub4, ub7, ub8, ub15, ub16, ub31, ub32, ub62, and ub64 (all these being supported by SBCL).
+All array types are supported, with the addition of specialized compact and very fast writers / readers for vectors and arrays of simple-bit-vectors, simple-base-string, single-floats, double-floats, fixnums, sb8, sb16, sb32, sb64, ub2, ub4, ub7, ub8, ub15, ub16, ub31, ub32, ub62, ub64, (complex single-float), and (complex double-float) (all of which are supported by SBCL).
 
 structure-objects and standard-objects have good default serialize/deserializers, and also conditions can be serialized/deserialized.  The object serialization / deserialization is customizable.
 
@@ -313,3 +313,10 @@ See [benchmarking.md](benchmarking.md).
 1.4.2: remove spurious error about array displaced to array of different element type
 
 1.4.3: Fix :read-version and :write-version options on store and restore to work
+
+2.0.0: Fix (complex single-float) and (complex double-float) simple-array store/restore on sbcl
+Before if you made simple arrays of this type on SBCL you would get an error while trying to
+save them.  Now it works, but it introduces a new encoding for them on disk, so pre v2 versions
+of cl-binary-store will not be able to read them, so I boosted the major number.  So, backwards
+compatibility breaking here means a cl-binary-store v1 cannot read a cl-binary-store v2 file if
+it contains (complex single-float) or (complex double-float) in it.
