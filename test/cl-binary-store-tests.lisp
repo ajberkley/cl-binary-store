@@ -738,3 +738,26 @@
   (let ((nan #.(locally (declare (sb-ext:muffle-conditions style-warning))
                  (sb-int:with-float-traps-masked (:invalid) (/ 0.0 0.0)))))
     (is 'eql nan (cl-binary-store:restore (cl-binary-store:store nil nan)))))
+
+(define-test test-simple-array-complex
+  (let* ((input (make-array
+                 10
+                 :element-type '(complex double-float)
+                 :initial-contents (loop repeat 10
+                                        collect (complex (random 1d0) (random 1d0)))))
+         (output (cl-binary-store:restore (cl-binary-store:store nil input))))
+    (is '= (length input) (length output))
+    (true (every #'= input output))
+    (is 'equal (upgraded-array-element-type (array-element-type input))
+        (upgraded-array-element-type (array-element-type output))))
+  (let* ((input (make-array
+                 10
+                 :element-type '(complex single-float)
+                 :initial-contents (loop repeat 10
+                                        collect (complex (random 1f0) (random 1f0)))))
+         (output (cl-binary-store:restore (cl-binary-store:store nil input))))
+    (is '= (length input) (length output))
+    (true (every #'= input output))
+    (is 'equal
+        (upgraded-array-element-type (array-element-type input))
+        (upgraded-array-element-type (array-element-type output)))))
