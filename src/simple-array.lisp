@@ -78,7 +78,11 @@
 	    (values (ceiling (the fixnum (* length
 					    (the fixnum (or actual-bits (second upgraded)))))
 			     8)
-		  encoded-value))))))))
+		    encoded-value)))
+         (complex
+          (ecase (second upgraded)
+            (double-float (values (* 16 length) 20))
+            (single-float (values (* 8 length) 21)))))))))
 
 (declaim (inline encoded-value-to-type/packing))
 (defun encoded-element-type-to-type/packing (encoded-element-type)
@@ -106,11 +110,10 @@
     (17 (values '(unsigned-byte 32) 32))
     (18 (values '(unsigned-byte 62) 64))
     (19 (values '(unsigned-byte 64) 64))
+    (20 (values '(complex double-float) 128))
+    (21 (values '(complex single-float) 64))
     (otherwise
      (unexpected-data "encoded element type"))))
-
-(defconstant +first-direct-unsigned-integer+ 20)
-(defconstant +max-direct-encoded-unsigned-integer+ (- 255 +first-direct-unsigned-integer+))
 
 (declaim (inline make-simple-array-from-encoded-element-type))
 (defun make-simple-array-from-encoded-element-type (storage encoded-element-type num-elts &optional array-dimensions)
@@ -124,7 +127,7 @@
         (encoded-element-type-to-type/packing encoded-element-type)
       (let ((total-bytes (ceiling (the fixnum
 			               (* num-elts
-			                  (the (integer 0 64) actual-bits)))
+			                  (the (integer 0 128) actual-bits)))
 				  8)))
         (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
         (values (make-array (or array-dimensions num-elts) :element-type type)
