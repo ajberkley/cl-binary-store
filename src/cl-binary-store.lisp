@@ -49,9 +49,9 @@
    #:restore-array
 
    #+sbcl #:store-simple-specialized-array
-   #+sbcl #:restore-simple-specialized-array
+   #:restore-simple-specialized-array
    #+sbcl #:store-simple-specialized-vector
-   #+sbcl #:restore-simple-specialized-vector
+   #:restore-simple-specialized-vector
 
    #:store-string
    #:store-string/no-refs
