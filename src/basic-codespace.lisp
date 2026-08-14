@@ -151,7 +151,7 @@
   #+sbcl
   (defstore (and (simple-array * *) (not (simple-array t *)))
       (store-simple-specialized-array obj storage) :check-for-ref-in eq-refs :call-during-reference-phase nil)
-  #+sbcl
+
   (defrestore +simple-specialized-array-code+ (restore-simple-specialized-array storage))
   
   ;; COMPLEX VECTORS AND ARRAYS

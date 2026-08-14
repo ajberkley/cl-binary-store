@@ -45,6 +45,8 @@
 	    (ext:byte16 '(unsigned-byte 16))
 	    (ext:byte32 '(unsigned-byte 32))
 	    (ext:byte64 '(unsigned-byte 64))
+            (si:complex-double-float '(complex double-float))
+            (si:complex-single-float '(complex single-float))
 	    (otherwise upgraded)))
     (case upgraded
       (bit (values (ceiling length 8) 0))
@@ -352,8 +354,8 @@
     `(locally (declare (type ,(or array-type `(simple-array ,(list (if signed 'signed-byte 'unsigned-byte) size-bits) (*))) sv))
        (,(if reader 'chunked/read 'chunked/write)
 	storage ,(if (>= size-bits 8)
-		     `(* ,(ash size-bits -3) (length sv))
-		     `(floor (* (length sv) ,size-bits) 8))
+		     `(* ,(ash size-bits -3) (array-total-size sv))
+		     `(floor (* (array-total-size sv) ,size-bits) 8))
 	(lambda (sap sap-offset data-start/bytes data-end/bytes)
 	  (declare (type fixnum sap-offset data-start/bytes data-end/bytes) (optimize (speed 3) (safety 1)))
 	  (loop for data-offset fixnum from ,(if (>= size-bits 8) `(ash data-start/bytes ,(* -1 (round (log (ash size-bits -3) 2)))) `data-start/bytes)
@@ -361,45 +363,45 @@
 		do
 		,(if reader
 		     (if (>= size-bits 8)
-			 `(setf (aref sv data-offset) (,set/get sap sap-offset))
+			 `(setf (row-major-aref sv data-offset) (,set/get sap sap-offset))
 			 `(let ((result (,set/get sap sap-offset)))
 			    (dotimes (chunk ,(/ 8 size-bits))
-			      (setf (aref sv (+ (* data-offset ,(/ 8 size-bits)) chunk)) (logand result ,(dpb 255 (byte size-bits 0) 0)))
+			      (setf (row-major-aref sv (+ (* data-offset ,(/ 8 size-bits)) chunk)) (logand result ,(dpb 255 (byte size-bits 0) 0)))
 			      (setf result (ash result ,(- size-bits))))))
 		     `(,set/get
 		       sap sap-offset
 		       ,(if (>= size-bits 8)
-			    `(aref sv data-offset)
+			    `(row-major-aref sv data-offset)
 			    `(let ((result 0))
 			       (declare (type (unsigned-byte 8) result))
 			       (dotimes (chunk ,(/ 8 size-bits))
-				 (incf result (the fixnum (ash (aref sv (+ (truly-the fixnum (* data-offset ,(/ 8 size-bits))) chunk)) (* chunk ,size-bits)))))
+				 (incf result (the fixnum (ash (row-major-aref sv (+ (truly-the fixnum (* data-offset ,(/ 8 size-bits))) chunk)) (* chunk ,size-bits)))))
 			       result))))
 		 (the fixnum (incf sap-offset ,(if (>= size-bits 8) (ash size-bits -3) 1))))))
        ;; Left over bits
        ,(when (< size-bits 8)
-	  `(let ((elt-offset (* ,(/ 8 size-bits) (floor (length sv) ,(/ 8 size-bits)))))
-	     (unless (= elt-offset (length sv))
+	  `(let ((elt-offset (* ,(/ 8 size-bits) (floor (array-total-size sv) ,(/ 8 size-bits)))))
+	     (unless (= elt-offset (array-total-size sv))
 	       ,(if reader
 		    `(progn
 		       (ensure-enough-data storage 1)
 		       (let* ((offset (read-storage-offset storage))
 			      (result (sap-ref-8 (read-storage-sap storage) offset)))
 			 (setf (read-storage-offset storage) (+ 1 offset))
-			 (loop for elt from elt-offset below (length sv)
+			 (loop for elt from elt-offset below (array-total-size sv)
 			       for count fixnum from 0 by ,size-bits
-			       do (setf (aref sv elt) (logand result ,(dpb 255 (byte size-bits 0) 0)))
+			       do (setf (row-major-aref sv elt) (logand result ,(dpb 255 (byte size-bits 0) 0)))
 				  (setf result (the fixnum (ash (the fixnum result) ,(- size-bits)))))))
 		    `(with-write-storage (storage :offset offset :reserve-bytes 1 :sap sap)
 		       (,(intern (format nil "~A~ASAP-REF-8" (if writer "SET-" "") (if signed "SIGNED-" "")))
-			sap offset (loop for elt from elt-offset below (length sv)
+			sap offset (loop for elt from elt-offset below (array-total-size sv)
 					 for count fixnum from 0 by ,size-bits
-					 summing (the fixnum (ash (the fixnum (aref sv elt)) count)) fixnum))))))))))
+					 summing (the fixnum (ash (the fixnum (row-major-aref sv elt)) count)) fixnum))))))))))
 
-(defmacro writer (bits signed &optional name-override array-type)
+(defmacro writer (bits signed &key name-override array-type)
   `(make-writer/reader ,bits ,signed :name-override ,name-override :reader nil :array-type ,array-type))
 
-(defmacro reader (bits signed &optional name-override array-type)
+(defmacro reader (bits signed &key name-override array-type)
   `(make-writer/reader ,bits ,signed :name-override ,name-override :reader t :array-type ,array-type))
 
 (defun store-elts (storage sv encoded-element-type)
@@ -426,15 +428,19 @@
 	    (8 (writer 8 t))
 	    (16 (writer 16 t))
 	    (32 (writer 32 t))
-	    (64 (writer 64 t))))))
+	    (64 (writer 64 t))))
+         (complex
+          (ecase size/bits
+            (64 (write-complex-single-float-to-storage/slow storage sv))
+            (128 (write-complex-double-float-to-storage/slow storage sv))))))
       (t
        (ecase type
 	 (bit (writer 1 nil))
 	 (base-char (error "Should be handled by string store functions"))
 	 (character (error "Should be handled by string store functions"))
-	 (fixnum (writer 64 t set-sap-ref-fixnum (simple-array fixnum (*))))
-	 (single-float (writer 32 nil set-sap-ref-single (simple-array single-float (*))))
-	 (double-float (writer 64 nil set-sap-ref-double (simple-array double-float (*)))))))))
+	 (fixnum (writer 64 t :name-override set-sap-ref-fixnum :array-type (simple-array fixnum (*))))
+	 (single-float (writer 32 nil :name-override set-sap-ref-single :array-type (simple-array single-float (*))))
+	 (double-float (writer 64 nil :name-override set-sap-ref-double :array-type (simple-array double-float (*)))))))))
 
 (defun store-simple-specialized-vector (sv storage &optional (tag t))
   (declare (optimize (speed 3) (safety 1)) (type (simple-array * (*)) sv))
@@ -470,22 +476,36 @@
 	   (setf (read-storage-offset ,storage) (+ ,original-offset ,reserve-bytes)))))))
 
 (defun read-complex-single-float-to-array/slow (storage sv)
-  (loop for idx below (length sv)
+  (loop for idx below (array-total-size sv)
         do (ensure-enough-data storage 8)
            (let ((offset (read-storage-offset storage))
                  (sap (read-storage-sap storage)))
-             (setf (aref sv idx) (complex (sap-ref-single sap offset)
-                                          (sap-ref-single sap (+ offset 4))))
+             (setf (row-major-aref sv idx) (complex (sap-ref-single sap offset)
+                                                    (sap-ref-single sap (+ offset 4))))
              (incf (read-storage-offset storage) 8))))
 
+(defun write-complex-single-float-to-storage/slow (storage sv)
+  (loop for idx below (array-total-size sv)
+        for elt = (row-major-aref sv idx)
+        do (with-write-storage (storage :offset offset :reserve-bytes 8 :sap sap)
+             (set-sap-ref-single sap offset (realpart elt))
+             (set-sap-ref-single sap (+ offset 4) (imagpart elt)))))
+
 (defun read-complex-double-float-to-array/slow (storage sv)
-  (loop for idx below (length sv)
+  (loop for idx below (array-total-size sv)
         do (ensure-enough-data storage 16)
            (let ((offset (read-storage-offset storage))
                  (sap (read-storage-sap storage)))
-             (setf (aref sv idx) (complex (sap-ref-double sap offset)
-                                          (sap-ref-double sap (+ offset 8))))
+             (setf (row-major-aref sv idx) (complex (sap-ref-double sap offset)
+                                                    (sap-ref-double sap (+ offset 8))))
              (incf (read-storage-offset storage) 16))))
+
+(defun write-complex-double-float-to-storage/slow (storage sv)
+  (loop for idx below (array-total-size sv)
+        for elt = (row-major-aref sv idx)
+        do (with-write-storage (storage :offset offset :reserve-bytes 16 :sap sap)
+             (set-sap-ref-double sap offset (realpart elt))
+             (set-sap-ref-double sap (+ offset 8) (imagpart elt)))))
 
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize (speed 3) (safety 1)))
@@ -525,9 +545,9 @@
 	    (t
 	     (case type
 	       (bit (reader 1 nil))
-	       (single-float (reader 32 nil sap-ref-single (simple-array single-float (*))))
-	       (double-float (reader 64 nil sap-ref-double (simple-array double-float (*))))
-	       (fixnum (reader 64 t sap-ref-fixnum (simple-array fixnum (*))))
+	       (single-float (reader 32 nil :name-override sap-ref-single :array-type (simple-array single-float (*))))
+	       (double-float (reader 64 nil :name-override sap-ref-double :array-type (simple-array double-float (*))))
+	       (fixnum (reader 64 t :name-override sap-ref-fixnum :array-type (simple-array fixnum (*))))
                (otherwise (unexpected-data "array of unexpected type"))))))
         #+sbcl
 	(with-pinned-objects (sv)
@@ -540,7 +560,7 @@
                ;; bit data into a simple-array fixnum (*) can cause issues.
                ;; Now the problem is that we already "fixnum encoded" the data if it is
                ;; correct, which means that it needs to be un-fixnum-ized
-               (reader 64 t sap-ref-fixnum (simple-array fixnum (*))))
+               (reader 64 t :name-override sap-ref-fixnum :array-type (simple-array fixnum (*))))
               (t
 	       (let ((target-sap (vector-sap sv)))
                  ;; OK, so we have a problem here --- if the fixnums aren't actually fixnums
@@ -608,10 +628,57 @@
                  ;; bit data into a simple-array fixnum (*) can cause issues.
                  (sb-kernel:with-array-data ((sv sa) (start) (end))
                    (declare (ignore start end))
-                   (reader 64 t sap-ref-fixnum (simple-array fixnum (*)))))
+                   (reader 64 t :name-override sap-ref-fixnum :array-type (simple-array fixnum (*)))))
                 (t
 	         (chunked/read
 	          storage num-bytes
 	          (lambda (source-sap source-sap-offset data-start/bytes data-end-bytes)
 	            (copy-sap target-sap data-start/bytes source-sap source-sap-offset (- data-end-bytes data-start/bytes)))))))))
       sa)))
+
+#-sbcl
+(defun restore-simple-specialized-array (storage)
+  (declare (optimize speed safety))
+  ;; sbcl gets confused with restore-ub8 because of the error path
+  (let* ((num-array-dimensions (the (unsigned-byte 8) (restore-ub8 storage)))
+	 (array-dimensions (loop repeat num-array-dimensions
+				 collect (restore-tagged-unsigned-fixnum storage)))
+	 (encoded-element-info (restore-ub8 storage)))
+    (multiple-value-bind (sv num-bytes)
+	(make-simple-array-from-encoded-element-type
+	 storage encoded-element-info (reduce #'* array-dimensions) array-dimensions)
+      (declare (ignorable num-bytes))
+      #+debug-cbs (format t "~&SA: ~A (~A bytes from ~A dims ~A encoded element-type)~%"
+	                  (type-of sv) num-bytes array-dimensions encoded-element-info)
+      (multiple-value-bind (type bits-per-elt)
+	  (encoded-element-type-to-type/packing encoded-element-info)
+	(cond
+	  ((consp type)
+	   (ecase (car type)
+	     (unsigned-byte
+	      (ecase bits-per-elt
+		(1 (reader 1 nil :array-type (simple-array bit *)))
+		(2 (reader 2 nil :array-type (simple-array (unsigned-byte 2) *)))   ;; supported on lispworks/sbcl
+		(4 (reader 4 nil :array-type (simple-array (unsigned-byte 4) *)))   ;; supported on lispworks/sbcl
+		(8 (reader 8 nil :array-type (simple-array (unsigned-byte 8) *)))
+		(16 (reader 16 nil :array-type (simple-array (unsigned-byte 16) *)))
+		(32 (reader 32 nil :array-type (simple-array (unsigned-byte 32) *)))
+		(64 (reader 64 nil :array-type (simple-array (unsigned-byte 64) *)))))
+	     (signed-byte
+	      (ecase bits-per-elt
+		(8 (reader 8 t :array-type (simple-array (signed-byte 8) *)))
+		(16 (reader 16 t :array-type (simple-array (signed-byte 16) *)))
+		(32 (reader 32 t :array-type (simple-array (signed-byte 32) *)))
+		(64 (reader 64 t :array-type (simple-array (signed-byte 64) *)))))
+             (complex
+              (ecase bits-per-elt
+                (64 (read-complex-single-float-to-array/slow storage sv))
+                (128 (read-complex-double-float-to-array/slow storage sv))))))
+	  (t
+	   (case type
+	     (bit (reader 1 nil :array-type (simple-array bit *)))
+	     (single-float (reader 32 nil :name-override sap-ref-single :array-type (simple-array single-float *)))
+	     (double-float (reader 64 nil :name-override sap-ref-double :array-type (simple-array double-float *)))
+	     (fixnum (reader 64 t :name-override sap-ref-fixnum :array-type (simple-array fixnum *)))
+             (otherwise (unexpected-data "array of unexpected type"))))))
+      sv)))
