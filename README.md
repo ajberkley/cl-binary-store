@@ -1,4 +1,4 @@
-# cl-binary-store (v2.0.1)
+# cl-binary-store (v2.0.2)
 
 A super fast and customizable serializer/deserializer of Common Lisp objects to/from a very compact binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.  Specialized arrays (on SBCL) are stored/restore at lightning speed.
 
@@ -320,3 +320,5 @@ save them.  Now it works, but it introduces a new encoding for them on disk, so 
 of cl-binary-store will not be able to read them, so I boosted the major number.  So, backwards
 compatibility breaking here means a cl-binary-store v1 cannot read a cl-binary-store v2 file if
 it contains (complex single-float) or (complex double-float) in it.
+
+2.0.2: Fix reading of specialized simple arrays for non-sbcl and also fix ECL for storing complex single-float and complex double-float arrays.
