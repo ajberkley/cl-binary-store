@@ -469,6 +469,24 @@
 	     ,@body
 	   (setf (read-storage-offset ,storage) (+ ,original-offset ,reserve-bytes)))))))
 
+(defun read-complex-single-float-to-array/slow (storage sv)
+  (loop for idx below (length sv)
+        do (ensure-enough-data storage 8)
+           (let ((offset (read-storage-offset storage))
+                 (sap (read-storage-sap storage)))
+             (setf (aref sv idx) (complex (sap-ref-single sap offset)
+                                          (sap-ref-single sap (+ offset 4))))
+             (incf (read-storage-offset storage) 8))))
+
+(defun read-complex-double-float-to-array/slow (storage sv)
+  (loop for idx below (length sv)
+        do (ensure-enough-data storage 16)
+           (let ((offset (read-storage-offset storage))
+                 (sap (read-storage-sap storage)))
+             (setf (aref sv idx) (complex (sap-ref-double sap offset)
+                                          (sap-ref-double sap (+ offset 8))))
+             (incf (read-storage-offset storage) 16))))
+
 (defun restore-simple-specialized-vector (storage)
   (declare (optimize (speed 3) (safety 1)))
   (let ((num-elts (restore-tagged-unsigned-fixnum/interior storage)))
@@ -499,7 +517,11 @@
 		  (8 (reader 8 t))
 		  (16 (reader 16 t))
 		  (32 (reader 32 t))
-		  (64 (reader 64 t))))))
+		  (64 (reader 64 t))))
+               (complex
+                (ecase bits-per-elt
+                  (64 (read-complex-single-float-to-array/slow storage sv))
+                  (128 (read-complex-double-float-to-array/slow storage sv))))))
 	    (t
 	     (case type
 	       (bit (reader 1 nil))
