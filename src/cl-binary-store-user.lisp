@@ -42,6 +42,7 @@
    #:out-of-space-wanted-bytes
    ;; Streams
    #:restore-from-stream
+   #:restore-from-stream/no-buffering
    #:store-to-stream
    ;; In memory ub8 vectors
    #:restore-from-vector

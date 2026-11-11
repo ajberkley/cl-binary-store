@@ -1,0 +1,41 @@
+(in-package :cl-binary-store)
+
+(defconstant +start-timing+ 123456)
+(defconstant +end-timing+ 123457)
+(defconstant +shutdown+ 123458)
+
+#+#.(cl:when (cl:find-package :usocket) t)
+(defun tcp-server (&optional (port 50007))
+  (usocket:with-socket-listener (server "127.0.0.1" port :element-type '(unsigned-byte 8))
+    (usocket:with-connected-socket (conn (usocket:socket-accept server))
+      (let* ((stream (usocket:socket-stream conn))
+             (start 0)
+             (end 0))
+        (declare (type fixnum start end))
+        (loop for i fixnum from 0
+              for obj = (cl-binary-store:restore-from-stream/single-bounded-object stream)
+              do
+                 (cond
+                   ((= obj +start-timing+)
+                    (format t "STARTING TIMING~%")
+                    (setf start (get-internal-real-time)))
+                   ((= obj +end-timing+)
+                    (setf end (get-internal-real-time))
+                    (format t "ENDING TIMING~%")
+                    (format t "~i objects took ~,6f s~%" (/ (- end start) internal-time-units-per-second)))
+                   ((= obj +shutdown+)
+                    (format t "SHUTTING DOWN~%")
+                    (format t "~i objects took ~,6f s~%" (/ (- end start) internal-time-units-per-second))
+                    (return-from tcp-server i))
+                   (t
+                    (format t "Got object ~A~%" obj))))))))
+
+#+#.(cl:when (cl:find-package :usocket) t)
+(defun tcp-client (&optional (port 50007))
+  (usocket:with-client-socket (socket stream "127.0.0.1" port :element-type '(unsigned-byte 8))
+    (cl-binary-store:store-to-stream/single-bounded-object stream +start-timing+)
+    (dotimes (i 8)
+      (cl-binary-store:store-to-stream/single-bounded-object stream i))
+    (cl-binary-store:store-to-stream/single-bounded-object stream +end-timing+)
+    (cl-binary-store:store-to-stream/single-bounded-object stream +shutdown+)
+    (finish-output stream)))

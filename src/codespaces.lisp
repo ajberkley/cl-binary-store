@@ -33,12 +33,12 @@
   "a map from magic/version-number -> `codespace'")
 
 (defvar *current-codespace* nil "a `codespace' bound by store based on
- *write-version*.  This is also bound during restore operations once we
- know the format of the data stream or is set to *read-version*.")
+ *write-version* and bound by restore based on *read-version*.  This may
+ be switched during the reading of data if the data has a specific specified
+ codespace in it.")
 
 (defvar *current-codespace/compile-time* nil
   "nil or a `codespace'.  This is bound while compiling each codespace.")
-
 
 (defun invalid (&rest rest)
   (declare (ignore rest))
@@ -53,9 +53,11 @@
   (store-global-state-info (make-hash-table :test 'eql)) ; Maps name -> `global-state'
   (restore-global-state-info (make-hash-table :test 'eql)) ; Maps name -> `global-state'
   (restore-objects-source-code nil) ; the source code that was compiled to restore-objects
+  (restore-single-object-source-code nil) ; source that was compiled to restore-single-object
   (store-objects-source-code nil) ; the source code that was compiled to make store-objects
   (restore-objects nil :type (or null function))
-  (store-objects nil :type (or null function)))
+  (store-objects nil :type (or null function))
+  (restore-single-object nil :type (or null function)))
 
 (defun deep-copy-codespace (target source-codespace)
   (setf (codespace-ref-tables target) (alexandria:copy-hash-table (codespace-ref-tables source-codespace)))
@@ -81,6 +83,26 @@
   "If T, once all objects are stored an end marker will be written to the output.
  This will trigger the end of restore (for use in cases where there
  isn't an obvious end of file)")
+
+(defun build-restore-single-object (codespace)
+  "Builds code for a function that will restore ONE object from a given storage.
+ References are not persistent between calls to this restore-object."
+  `(let* ((references-vector (make-array 2048 :initial-element nil))
+	  (references (make-references :vector references-vector))
+	  (*version-being-read* (codespace-magic-number *current-codespace*))
+	  ,@(build-global-state-let-bindings codespace :restore t))
+     (declare (dynamic-extent references references-vector))
+     ,(build-global-state-declarations codespace :restore t)
+     (labels ((restore-object2 (&optional (code (restore-ub8 storage)))
+		(let ((restore-object #'restore-object))
+                  ,(make-read-dispatch-table codespace 'code)))
+	      (restore-object (&optional (code (restore-ub8 storage)))
+		(let ((restore-object #'restore-object2))
+                  ,(make-read-dispatch-table codespace 'code))))
+       (declare (inline restore-object2)) ;; inline one level
+       (let ((code (maybe-restore-ub8 storage)))
+         (when code
+           (restore-object code))))))
 
 (defun build-restore-objects (codespace)
   "Builds the body of a function that reads tag bytes and dispatches them through a
@@ -237,6 +259,7 @@
 	  (codespace-magic-number codespace))
   (let* ((store-function-name (if debug '(defun store-objects/debug) '(lambda)))
 	 (restore-function-name (if debug '(defun restore-objects/debug) '(lambda)))
+         (restore-single-object-function-name (if debug '(defun restore-single-object/debug) '(lambda)))
 	 (declarations
 	   `(declare ,(if debug
 	        	  '(optimize (debug 3) (safety 3))
@@ -250,9 +273,15 @@
 	  `(,@restore-function-name (storage)
 	      ,declarations
               (declare (type read-storage storage))
-	     ,(macroexpand (build-restore-objects codespace)))))
+	      ,(macroexpand (build-restore-objects codespace))))
+         (restore-single-object-source-code
+           `(,@restore-single-object-function-name (storage)
+               ,declarations
+               (declare (type read-storage storage))
+               ,(macroexpand (build-restore-single-object codespace)))))
     (setf (codespace-store-objects-source-code codespace) store-objects-source-code)
-    (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)))
+    (setf (codespace-restore-objects-source-code codespace) restore-objects-source-code)
+    (setf (codespace-restore-single-object-source-code codespace) restore-single-object-source-code)))
 
 (defun compiled-p (codespace)
   (and (functionp (codespace-store-objects codespace))
@@ -260,13 +289,15 @@
 
 (defun compile-codespace (codespace debug)
   (unless (and (codespace-store-objects-source-code codespace)
-	       (codespace-restore-objects-source-code codespace))
+	       (codespace-restore-objects-source-code codespace)
+               (codespace-restore-single-object-source-code codespace))
     (build-source-code codespace debug))
   (format t "~&CL-BINARY-STORE: Compiling codespace ~A: #x~4,'0x~%"
 	  (codespace-name codespace)
 	  (codespace-magic-number codespace))
   (let ((store-objects-source-code (codespace-store-objects-source-code codespace))
-	(restore-objects-source-code (codespace-restore-objects-source-code codespace)))
+	(restore-objects-source-code (codespace-restore-objects-source-code codespace))
+        (restore-single-object-source-code (codespace-restore-single-object-source-code codespace)))
     (cond
       (debug
        (format t "~&CL-BINARY-STORE: Debugging enabled, source is in codespace-debug.lisp~%")
@@ -276,13 +307,17 @@
 			      :if-does-not-exist :create)
 	   (write restore-objects-source-code :stream str :circle nil :pretty t)
 	   (format str "~%~%")
-	   (write store-objects-source-code :stream str :circle nil :pretty t))
+	   (write store-objects-source-code :stream str :circle nil :pretty t)
+           (format str "~%~%")
+           (write restore-single-object-source-code :stream str :circle nil :pretty t))
 	 (load "codespace-debug.lisp" :verbose t))
        (setf (codespace-store-objects codespace) (fdefinition 'store-objects/debug))
-       (setf (codespace-restore-objects codespace) (fdefinition 'restore-objects/debug)))
+       (setf (codespace-restore-objects codespace) (fdefinition 'restore-objects/debug))
+       (setf (codespace-restore-single-object codespace) (fdefinition 'restore-single-object/debug)))
       (t
        (setf (codespace-store-objects codespace) (compile nil store-objects-source-code))
-       (setf (codespace-restore-objects codespace) (compile nil restore-objects-source-code)))))
+       (setf (codespace-restore-objects codespace) (compile nil restore-objects-source-code))
+       (setf (codespace-restore-single-object codespace) (compile nil restore-single-object-source-code)))))
   (format t "~&CL-BINARY-STORE: Done compiling ~A: #x~4,'0x~%"
 	  (codespace-name codespace)
 	  (codespace-magic-number codespace))
@@ -534,22 +569,33 @@
 				          :format-arguments (list ,code-to-dispatch-on)))))))))
 
 (defun store-objects (storage &rest stuff)
-  "Store all the objects in stuff to storage.  Do not call this directly without let'ing
- *current-codespace* to a valid entry in *codespaces*.  Prefer the functions in user.lisp
- which do this for you based on *write-version* and *read-version*."
+  "Store all the objects in stuff to storage.  Uses global setting *write-version* to determine
+ the codespace to use, let it if you want a different codespace."
   (declare (dynamic-extent stuff) (type write-storage storage))
-  (let ((codespace *current-codespace*))
-    (assert codespace nil "Unknown codespace to store with... is *write-version* not correct?")
-    (apply (codespace-store-objects codespace) storage stuff)))
+  (let ((*current-codespace* (gethash *write-version* *codespaces*)))
+    (assert *current-codespace* nil "Unknown codespace to store with... is *write-version* not correct?")
+    (apply (codespace-store-objects *current-codespace*) storage stuff)))
 
-(defun restore-objects (storage)
+(defun restore-objects (storage &optional (codespace (gethash *read-version* *codespaces*)))
   "Read data from storage until we run into an end of data signal, or an +end-action-code+.
  If you want to call this directly, you should let *current-codespace* to a codespace, as is
  done in the user facing functions in user.lisp which choose it based on *write-version* and
  *read-version*."
   (declare (type read-storage storage))
-  (let ((codespace *current-codespace*))
+  (let ((*current-codespace* codespace))
     (unless codespace
       (error 'invalid-input-data :format-control
-	    "Unknown codespace to restore objects with... is *read-version* not correct?"))
+	     "Unknown codespace to restore objects with... is *read-version* not correct?"))
     (funcall (codespace-restore-objects codespace) storage)))
+
+(defun restore-single-object (storage &optional (codespace (gethash *read-version* *codespaces*)))
+  "Read data from storage until we finish restoring a single object.
+ If you want to call this directly, you should let *current-codespace*
+ to a codespace, as is done in the user facing functions in user.lisp
+ which choose it based on *write-version* and *read-version*."
+  (declare (type read-storage storage))
+  (let ((*current-codespace* codespace))
+    (unless codespace
+      (error 'invalid-input-data :format-control
+	    "Unknown codespace to restore object with... is *read-version* not correct?"))
+    (funcall (codespace-restore-single-object codespace) storage)))

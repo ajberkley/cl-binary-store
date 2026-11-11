@@ -7,7 +7,9 @@
   :depends-on (#:flexi-streams
 	       #:babel
 	       #:static-vectors #:alexandria
-	       #-sbcl #:cffi)
+	       #-sbcl #:cffi
+               #-sbcl #:trivial-garbage
+               #:trivial-gray-streams)
   :components ((:file "features")
 	       (:file "cl-binary-store")
 	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))
@@ -56,7 +58,8 @@
 								    "unsigned-bytes" "features"))
 	       (:file "hash-table" :depends-on ("referrers-and-fixup" "symbols" "numbers" "unsigned-bytes" "features" "symbols"))
 	       (:file "objects" :depends-on ("symbols" "simple-vector" "referrers-and-fixup" "numbers" "unsigned-bytes" "features" "codespaces"))
-	       (:file "user" :depends-on ("basic-codespace" "cons" "storage" "features" "magic-numbers" "reference-count" "end-action")))
+	       (:file "user" :depends-on ("basic-codespace" "cons" "storage" "features" "magic-numbers" "reference-count" "end-action"))
+	       (:file "example-tcp-use" :depends-on ("user")))
   :license :BSD-3
   :in-order-to ((asdf:test-op (asdf:test-op :cl-binary-store-tests))))
 

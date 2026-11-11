@@ -57,6 +57,11 @@ Max-to-read specifies a number in bytes to signal an error after during restore 
 
  For storing to one, you don't need to know the size in advance as we throw a restartable error allow you to allocate more system memory and continue on.  See tests/cl-binary-store-tests.lisp test-sap-write/read for a silly example of how to use this.  Nominally you'll be updating mmap regions of files or something.
 
+#### (store-to-stream/single-bounded-object stream object)
+#### (restore-from-stream/single-bounded-object stream object)
+
+These are for use when you want to use cl-binary-store to communicate lisp objects across the network.  Here we send single objects at a time and prepend their size so that we can work around the lack of non-blocking IO in lisp and the complexity of stream buffering.  This requires encoding the object into memory before sending, so doubles your memory usage temporarily.  This also has some overhead on each send, so sending very small objects is not fast.
+
 ## Examples
 git clone the repo into your local quicklisp directory (usually ~/quicklisp/local-packages)
 
@@ -251,6 +256,11 @@ As a further example, we decided to disable double-float storing and restoration
     Error was: Switching codespace away from #x9999 (extension-codespace) is DISALLOWED
     Successfully read double-float when we were allowed to!
 
+## Using cl-binary-store across a socket connection
+
+There is an example in src/example-tcp-use.lisp.  The current code is not particularly
+efficient for this use case, with it taking roughly 1 us overhead.
+
 ## Why?
 
 I've been using [cl-store](https://cl-store.common-lisp.dev/) forever and it works well and meets most needs once you tweak how it serializes a bunch of things for speed.  I am usually serializing / deserializing > 1GB of data and in the end all the tweaks I've done don't make it fast enough.  The original cl-store hits about 1-2MB/sec for store and restore on the data set I use which just is too slow.
@@ -322,3 +332,5 @@ compatibility breaking here means a cl-binary-store v1 cannot read a cl-binary-s
 it contains (complex single-float) or (complex double-float) in it.
 
 2.0.2: Fix reading of specialized simple arrays for non-sbcl and also fix ECL for storing complex single-float and complex double-float arrays.
+
+2.1.2: Add support for using cl-binary-store across a socket connection.

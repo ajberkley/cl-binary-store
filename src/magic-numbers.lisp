@@ -38,7 +38,7 @@
 		    (codespace-name codespace))
 	    (setf *current-codespace* codespace)
 	    (setf *version-being-read* magic-number)
-	    (restore-objects storage))
+	    (restore-objects storage codespace))
 	   (t
 	    (error 'invalid-input-data
                    :format-control "Switching codespace away from #x~X (~A) is DISALLOWED"

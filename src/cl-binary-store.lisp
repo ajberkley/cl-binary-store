@@ -80,6 +80,10 @@
    ;; Streams
    #:restore-from-stream
    #:store-to-stream
+   ;; For use with streams with no EOF marker and that block
+   #:restore-from-stream/no-buffering
+   #:restore-from-stream/single-bounded-object
+   #:store-to-stream/single-bounded-object
    ;; In memory ub8 vectors
    #:restore-from-vector
    #:store-to-vector

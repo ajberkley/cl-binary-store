@@ -166,18 +166,75 @@
 		    (print-update now))))))
        ,@body)))
 
-(defun make-read-into-storage/stream (stream)
+(defun wait-until-data/read-one-byte (stream storage)
+  "Returns byte-read or nil if EOF"
+  (let ((byte (read-byte stream nil nil)))
+    (when byte
+      (setf (aref (read-storage-store storage) (read-storage-max storage)) byte)
+      (incf (read-storage-total-read storage))
+      (incf (read-storage-max storage)))
+    byte))
+
+(defun make-read-into-storage/stream (stream &key (unbuffered nil) (wait-until-data nil))
   (declare (optimize (speed 3) (safety 1)))
   (with-tracking-data (total-bytes update "Read ")
-    (lambda (storage)
-      (let ((seq (read-storage-store storage)))
-        (let ((new-bytes-end-at (read-sequence seq stream :start (read-storage-max storage))))
+    (lambda (storage bytes)
+      (declare (type (and (integer 0) fixnum) bytes))
+      (block lambda
+        ;; Data has been shifted so that we have room for bytes
+        (when wait-until-data
+          (let ((byte-read (wait-until-data/read-one-byte stream storage)))
+            (unless byte-read ;; eof
+              (return-from lambda 0))
+            (decf bytes)
+            (incf total-bytes)))
+        (let* ((max (read-storage-max storage))
+               (new-bytes-end-at
+                 (if (or (not unbuffered) (> bytes 0))
+                     (read-sequence (read-storage-store storage) stream
+                                    :start max :end (when unbuffered (+ bytes max)))
+                     max)))
 	  (update (- new-bytes-end-at (read-storage-max storage))
 		  (= new-bytes-end-at (read-storage-offset storage)))
 	  (setf (read-storage-total-read storage) total-bytes)
 	  (check-if-too-much-data (read-storage-max-to-read storage) total-bytes)
 	  (setf (read-storage-max storage) new-bytes-end-at)
+          #+debug-cbs (format t "Have ~A bytes available~%"
+                              (- new-bytes-end-at (read-storage-offset storage)))
 	  (truly-the fixnum (- new-bytes-end-at (read-storage-offset storage))))))))
+
+(defun make-read-into-storage/stream/known-size (stream expected-bytes &key (wait-until-data nil))
+  (declare (optimize (speed 3) (safety 1)))
+  (lambda (storage bytes)
+    (declare (type (and (integer 0) fixnum) bytes)
+             (ignorable bytes))
+    (block lambda
+      (when (<= bytes (- (read-storage-max storage) (read-storage-offset storage)))
+          (format t "Already enough data!?~%"))
+      (when wait-until-data
+        (let ((byte-read (wait-until-data/read-one-byte stream storage)))
+          (unless byte-read (return-from lambda 0)) ;; eof
+          (decf bytes)))
+      (let* ((current-end-of-buffer (read-storage-max storage))
+             (read-seq-end (min (the fixnum (- (read-storage-size storage) current-end-of-buffer))
+                                (the fixnum
+                                     (+ current-end-of-buffer
+                                        (the fixnum
+                                             (- expected-bytes
+                                                (read-storage-total-read storage)))))))
+             (new-bytes-end-at
+               (if (> read-seq-end current-end-of-buffer)
+                   (read-sequence (read-storage-store storage) stream
+                                  :start current-end-of-buffer
+                                  :end read-seq-end)
+                   read-seq-end)))
+        #+debug-cbs (format t "Wanted ~A bytes, tried reading ~A bytes, got ~A bytes~%"
+                            bytes
+                            (- read-seq-end current-end-of-buffer)
+                            (- new-bytes-end-at current-end-of-buffer))
+        (incf (read-storage-total-read storage) (- new-bytes-end-at current-end-of-buffer))
+	(setf (read-storage-max storage) new-bytes-end-at)
+	(truly-the fixnum (- new-bytes-end-at (read-storage-offset storage)))))))
 
 (defun make-write-into-storage/stream (stream)
   (declare (optimize (speed 3) (safety 1)))
@@ -251,7 +308,7 @@
 	   (let ((,storage (make-read-storage
 			    :flusher ,flusher
 			    :store ,vector
-			    :max ,(or max `(length ,vector))
+			    :max 0
 			    :sap ,(or sap `(static-vectors:static-vector-pointer ,vector))
 			    :underlying-stream ,stream
                             :size ,(or size `(length ,vector)))))
@@ -350,7 +407,9 @@
   #+dribble-cbs (format t "Asked to read ~A bytes from storage (return-nil-on-eof ~A)~%"
 		      bytes return-nil-on-eof)
   (maybe-shift-data-to-beginning-of-read-storage storage bytes)
-  (let ((num-bytes-available (the fixnum (funcall (read-storage-flusher storage) storage))))
+  (let ((num-bytes-available (the fixnum (funcall (read-storage-flusher storage) storage
+                                                  (- bytes (- (read-storage-max storage)
+                                                              (read-storage-offset storage)))))))
     (if (< num-bytes-available bytes)
         (if return-nil-on-eof
 	    nil
