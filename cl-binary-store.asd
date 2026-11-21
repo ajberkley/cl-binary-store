@@ -1,5 +1,5 @@
 (defsystem #:cl-binary-store
-  :version "1.4.0"
+  :version "2.1.0"
   :description "Fast serialization / deserialization library"
   :author "Andrew J. Berkley <ajberkley@gmail.com>"
   :long-name "Fast serialization / deserialization library"
@@ -9,7 +9,9 @@
 	       #:static-vectors #:alexandria
 	       #-sbcl #:cffi
                #-sbcl #:trivial-garbage
-               #:trivial-gray-streams)
+               #:trivial-gray-streams
+               #:usocket
+               #:cl-ppcre)
   :components ((:file "features")
 	       (:file "cl-binary-store")
 	       (:file "cl-binary-store-user" :depends-on ("cl-binary-store"))

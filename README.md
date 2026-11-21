@@ -1,8 +1,8 @@
-# cl-binary-store (v2.0.2)
+# cl-binary-store (v2.1.0)
 
 A super fast and customizable serializer/deserializer of Common Lisp objects to/from a very compact binary format.  Equality of objects, circular references, and the full Common Lisp type system are supported.  Specialized arrays (on SBCL) are stored/restore at lightning speed.
 
-> :warning: Since we support the full Common Lisp type system (in the default codespace), this is not a serializer/deserializer for communication with other types of systems.  If you want that maybe use JSON or if you want a binary format maybe [cl-conspack](https://github.com/conspack/cl-conspack) or [cl-messagepack](https://github.com/mbrezu/cl-messagepack).  Or see the TODO list for conspack or messagepack support.
+> :warning: Since we support the full Common Lisp type system (in the default codespace), this is not a general purpose serializer/deserializer for communication with other types of systems.  That said, this package includes an implementation of the protocol in Python, so you can use it for inter-op there.
 
 cl-binary-store works on 64-bit SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and Lispworks.  The SBCL implementation is the fast one.  If you care about one of the platforms tell me and I can make it faster.  Binary files are compatible between different lisps.
 
@@ -19,6 +19,7 @@ cl-binary-store works on 64-bit SBCL, ECL, CCL, ABCL, Allegro Common Lisp, and L
 - Stable API and no breaking changes (this is a standard Common Lisp goal)
 - Ability to limit amount of data written or read (safety rails)
 - Safe from malicious input (some amount of fuzz testing and code reading done, but if you want to rely on safety, please contribute!)
+- Support for interactive use across a network (sockets across which one sends/receives objects)
 
 ## General features
 
@@ -333,4 +334,4 @@ it contains (complex single-float) or (complex double-float) in it.
 
 2.0.2: Fix reading of specialized simple arrays for non-sbcl and also fix ECL for storing complex single-float and complex double-float arrays.
 
-2.1.2: Add support for using cl-binary-store across a socket connection.
+2.1.0: Add support for using cl-binary-store across a socket connection, add support for reading/writing in python

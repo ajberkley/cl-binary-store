@@ -761,3 +761,106 @@
     (is 'equal
         (upgraded-array-element-type (array-element-type input))
         (upgraded-array-element-type (array-element-type output)))))
+
+(defparameter *various-floats*
+  (list 1f0 2f0 0f0 -0f0 1d0 2d0 0d0 -0d0 pi))
+
+(defparameter *various-numbers*
+  (list
+   (- (expt 2 62) 1)
+   (- (expt 2 62))
+   (- (expt 2 32) 1)
+   (- (expt 2 32))
+   (expt 2 31)
+   (- (expt 2 31))
+   (- (expt 2 16))
+   (- 65535)
+   -256
+   -255
+   -64
+   -32
+   -17
+   -16
+   -15
+   -4
+   -3
+   0 3 4 5 15 16 17 31 32 33 63 64 65 128 255 256 65535 65536
+   (expt 2 32)))
+
+(defparameter *various-strings*
+  (list "hello" "é" (make-string 256 :initial-element #\a)
+        (make-string 65536 :initial-element #\a)
+        (make-string 65536 :initial-element #\a :element-type 'base-char)))
+
+;; These do not come back equalp
+(defparameter *various-hashtables*
+  (list
+   (let ((h (make-hash-table)))
+     (setf (gethash "blarg-key" h) "blarg-value")
+     h)))
+
+(defparameter *various-vectors*
+  (list
+   #(1 2 3 4)
+   (vector "a" "b" 3 4)
+   (vector)))
+
+(defparameter *various-arrays*
+  (vector
+   (make-array '(2 2) :initial-contents '((1f0 2f0) (3f0 4f0)))
+   (make-array 3 :initial-contents '("a" "b" 37))
+   (vector (list) (vector))))
+
+(defparameter *various-objects*
+  (list t nil))
+
+(defparameter *various-specialized-arrays*
+  (list
+   (make-array 16 :element-type '(unsigned-byte 1) :initial-element 1)
+   (make-array 16 :element-type '(unsigned-byte 2) :initial-element 2)
+   (make-array 16 :element-type '(unsigned-byte 7) :initial-element 1)
+   (make-array 16 :element-type '(unsigned-byte 8) :initial-element 1)
+   (make-array 16 :element-type '(unsigned-byte 16) :initial-element 1)
+   (make-array 16 :element-type '(unsigned-byte 31) :initial-element 1)
+   (make-array 16 :element-type '(unsigned-byte 32) :initial-element 1)
+   (make-array 16 :element-type '(unsigned-byte 64) :initial-element 1)
+   (make-array 16 :element-type '(signed-byte 8) :initial-element -1)
+   (make-array 16 :element-type '(signed-byte 16) :initial-element -30000)
+   (make-array 16 :element-type '(signed-byte 32) :initial-element -112345)
+   (make-array 16 :element-type '(signed-byte 64) :initial-element -12345567)
+   (make-array 16 :element-type 'fixnum :initial-element 1)
+   (make-array 16 :element-type 'double-float :initial-element 0d0)
+   (make-array 16 :element-type 'single-float :initial-element 0f0)
+   (make-array 16 :element-type '(complex double-float) :initial-element (complex 1d0 2d0))
+   (make-array 16 :element-type '(complex single-float) :initial-element (complex 1f0 2f0))
+   (make-array 0 :element-type '(unsigned-byte 8))
+   (make-array '(2 2) :element-type 'double-float :initial-contents '((1d0 2d0) (3d0 4d0)))))
+
+;; Circular references not supported in the python reader yet
+(defparameter *non-circular-references*
+  (let ((a '(1 2 3))
+        (b '(3 4 5)))
+    (list a b a b)))
+
+(define-test python-loopback
+  (let ((python-input "/tmp/input.cbs")
+        (python-output "/tmp/output.cbs")
+        (objects (list *various-arrays*
+                       *various-vectors*
+                       *various-floats*
+                       *various-numbers*
+                       *various-strings*
+                       *various-specialized-arrays*
+                       *various-objects*
+                       *non-circular-references*
+                       )))
+    (cl-binary-store:store python-input objects)
+    (handler-bind
+        ((error (lambda (e) (declare (ignore e)) (invoke-restart (find-restart 'continue)))))
+      (print
+       (multiple-value-list
+        (uiop:run-program (list "python3" "cl_binary_store_loopback.py"
+                                python-input python-output)
+                          :output :string :error-output :string))))
+    (let ((result (cl-binary-store:restore python-output)))
+      (is 'equalp result objects))))
